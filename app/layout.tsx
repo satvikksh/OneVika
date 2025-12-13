@@ -1,34 +1,19 @@
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-import { ThemeProvider } from './theme-provider';
-import SimpleNavbar from './components/navbar';
-import './globals.css';
+import { Providers } from "./providers";
+import Navbar from "./components/navbar";
+import "./globals.css";
 
-const inter = Inter({ subsets: ['latin'] });
-
-// Note: Metadata must be exported from a server component
-// So we define it separately
-export const metadata: Metadata = {
-  title: 'SatviksGroup - Imaginary Institute',
-  description: 'Where imagination becomes reality and dreams take shape',
+export const metadata = {
+  title: "Satvik's Group",
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
-        <ThemeProvider>
-          <>
-            <SimpleNavbar
-              isAuthenticated={false}
-            />
-            <main>{children}</main>
-          </>
-        </ThemeProvider>
+    <html lang="en">
+      <body>
+        <Providers>
+          <Navbar />
+          {children}
+        </Providers>
       </body>
     </html>
   );

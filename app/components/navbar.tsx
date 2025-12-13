@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Search, Sun, Moon, Bell, Menu, X, User, ChevronDown, LogOut, Settings, Briefcase, Home, BookOpen, Zap, Users, Image as ImageIcon } from 'lucide-react';
 import Image from "next/image";
+import { useSession, signOut } from "next-auth/react";
 
 
 // Define Types
@@ -49,7 +50,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
 }) => {
   const pathname = usePathname();
   const router = useRouter();
-  
+  const { data: session } = useSession();
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -124,7 +125,7 @@ useEffect(() => {
     { path: "/about", label: "About", icon: <BookOpen size={18} /> },
     { path: "/projects", label: "Projects", icon: <Zap size={18} /> },
     { path: "/gallery", label: "Gallery", icon: <ImageIcon size={18} /> },
-    { path: "/community", label: "Community", icon: <Users size={18} /> },
+    { path: "/feed", label: "Feed", icon: <Users size={18} /> },
   ];
 
   const filteredSuggestions = searchSuggestions.filter(suggestion =>
@@ -183,16 +184,16 @@ const handleThemeToggle = useCallback(() => {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             {/* Logo/Brand */}
-            <div className="flex-shrink-0">
+            <div className="shrink-0">
               <Link href="/" className="flex items-center space-x-3 group" onClick={() => setIsMobileMenuOpen(false)}>
-                <div className="relative w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-purple-500 to-blue-500 group-hover:from-purple-600 group-hover:to-blue-600 transition-all duration-300 shadow-lg">
+                <div className="relative w-10 h-10 rounded-full overflow-hidden bg-linear-to-br from-purple-500 to-blue-500 group-hover:from-purple-600 group-hover:to-blue-600 transition-all duration-300 shadow-lg">
                   {/* Replace with your logo */}
                   <div className="absolute inset-0 flex items-center justify-center text-white font-bold text-lg">
-                   <img src="img/logo.png" alt="" />
+                   <Image src="/img/logo.png" alt={`${title} logo`} width={40} height={40} priority className="object-cover" />
                   </div>
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-xl font-bold bg-gradient-to-r from-purple-600 to-blue-500 bg-clip-text text-transparent">
+                  <span className="text-xl font-bold bg-linear-to-r from-purple-600 to-blue-500 bg-clip-text text-transparent">
                     {title}
                   </span>
                   <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
@@ -211,7 +212,7 @@ const handleThemeToggle = useCallback(() => {
                   className={`
                     flex items-center space-x-2 px-4 py-2.5 rounded-lg transition-all duration-200
                     ${pathname === item.path
-                      ? 'bg-gradient-to-r from-purple-500/10 to-blue-500/10 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-900'
+                      ? 'bg-linear-to-r from-purple-500/10 to-blue-500/10 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-900'
                       : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
                     }
                   `}
@@ -310,7 +311,7 @@ const handleThemeToggle = useCallback(() => {
                     onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)}
                     className="flex items-center space-x-3 p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200 group"
                   >
-                    <div className="relative w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-purple-500 to-blue-500">
+                    <div className="relative w-10 h-10 rounded-full overflow-hidden bg-linear-to-br from-purple-500 to-blue-500">
                       {user.avatar ? (
                         <Image src={user.avatar} alt={user.name} fill className="object-cover" />
                       ) : (
@@ -327,12 +328,17 @@ const handleThemeToggle = useCallback(() => {
                   </button>
 
                   {/* User Dropdown Menu */}
-                  {isUserDropdownOpen && (
+                  
+                  {isUserDropdownOpen && session?.user && (
+                    
                     <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-900 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-800 overflow-hidden animate-slideDown">
                       <div className="p-4 border-b border-gray-200 dark:border-gray-800">
                         <div className="font-semibold text-gray-900 dark:text-white">{user.name}</div>
                         <div className="text-sm text-gray-500 dark:text-gray-400">{user.email}</div>
+                         <div className="flex items-center gap-3">
+                        </div>
                       </div>
+                      
                       <div className="p-2">
                         <Link
                           href="/profile"
@@ -361,10 +367,7 @@ const handleThemeToggle = useCallback(() => {
                       </div>
                       <div className="p-2 border-t border-gray-200 dark:border-gray-800">
                         <button
-                          onClick={() => {
-                            if (onLogout) onLogout();
-                            setIsUserDropdownOpen(false);
-                          }}
+                         onClick={() => signOut({ callbackUrl: "/login" })}
                           className="flex items-center space-x-3 w-full px-4 py-3 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 transition-colors"
                         >
                           <LogOut size={18} />
@@ -384,7 +387,7 @@ const handleThemeToggle = useCallback(() => {
                   </button>
                   <button
                     onClick={() => router.push('/signup')}
-                    className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-blue-500 text-white font-medium hover:from-purple-700 hover:to-blue-600 transition-all duration-200 hover:scale-105 shadow-lg hover:shadow-xl"
+                    className="px-6 py-2.5 rounded-xl bg-linear-to-r from-purple-600 to-blue-500 text-white font-medium hover:from-purple-700 hover:to-blue-600 transition-all duration-200 hover:scale-105 shadow-lg hover:shadow-xl"
                   >
                     Sign Up
                   </button>
@@ -424,7 +427,7 @@ const handleThemeToggle = useCallback(() => {
                   className={`
                     flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200
                     ${pathname === item.path
-                      ? 'bg-gradient-to-r from-purple-500/10 to-blue-500/10 text-purple-600 dark:text-purple-400'
+                      ? 'bg-linear-to-r from-purple-500/10 to-blue-500/10 text-purple-600 dark:text-purple-400'
                       : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
                     }
                   `}
@@ -524,7 +527,7 @@ const handleThemeToggle = useCallback(() => {
                     router.push('/signup');
                     setIsMobileMenuOpen(false);
                   }}
-                  className="px-6 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-blue-500 text-white font-medium hover:from-purple-700 hover:to-blue-600 transition-colors"
+                  className="px-6 py-3 rounded-xl bg-linear-to-r from-purple-600 to-blue-500 text-white font-medium hover:from-purple-700 hover:to-blue-600 transition-colors"
                 >
                   Sign Up
                 </button>

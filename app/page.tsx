@@ -7,6 +7,7 @@ import { ArrowRight, Sparkles,Globe, Infinity, Rocket, ChevronLeft, ChevronRight
 import { useTheme } from './theme-provider';
 import SimpleNavbar from './components/navbar';
 
+
 // Type definitions
 interface CardData {
   title: string;
@@ -198,8 +199,8 @@ export default function Home() {
     return variants[variant] || variants.purple;
   };
 
-  const getVariantGradient = (variant: string) => {
-    const gradients: Record<string, string> = {
+  const getVariantlinear = (variant: string) => {
+    const linears: Record<string, string> = {
       purple: "from-purple-600 to-blue-500",
       emerald: "from-emerald-600 to-green-500",
       amber: "from-amber-600 to-yellow-500",
@@ -207,7 +208,7 @@ export default function Home() {
       sky: "from-sky-600 to-cyan-500",
       gray: "from-gray-600 to-gray-500",
     };
-    return gradients[variant] || gradients.purple;
+    return linears[variant] || linears.purple;
   };
 
   return (
@@ -236,7 +237,7 @@ export default function Home() {
               <div
                 className="absolute inset-0 bg-cover bg-center transition-transform duration-700 ease-out scale-100 hover:scale-105"
                 style={{
-                  backgroundImage: `linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.5)), url(${slide.image})`,
+                  backgroundImage: `linear-linear(rgba(0,0,0,0.7), rgba(0,0,0,0.5)), url(${slide.image})`,
                 }}
               />
 
@@ -252,7 +253,7 @@ export default function Home() {
 
                     {/* Title */}
                     <h1 className="text-4xl sm:text-5xl lg:text-7xl font-bold text-white mb-4 leading-tight">
-                      <span className="bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
+                      <span className="bg-linear-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
                         {slide.title}
                       </span>
                     </h1>
@@ -278,7 +279,7 @@ export default function Home() {
                       </Link>
                       <Link
                         href="/discover"
-                        className="group px-8 py-4 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:shadow-amber-500/25 flex items-center gap-3"
+                        className="group px-8 py-4 rounded-xl bg-linear-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:shadow-amber-500/25 flex items-center gap-3"
                       >
                         <Sparkles className="w-5 h-5" />
                         <span className="font-semibold text-white">Discover Wonders</span>
@@ -327,12 +328,12 @@ export default function Home() {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-24">
           {/* Header */}
           <div className="text-center max-w-3xl mx-auto mb-16">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 mb-6">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-linear-to-r from-purple-500 to-blue-500 mb-6">
               <Rocket className="w-4 h-4" />
               <span className="text-sm font-semibold text-white">🚀 IMAGINARY INITIATIVE</span>
             </div>
             
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600 bg-clip-text text-transparent">
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 bg-linear-to-r from-purple-600 via-pink-600 to-blue-600 bg-clip-text text-transparent">
               Satvik's Imaginary Collective
             </h1>
             
@@ -397,7 +398,7 @@ export default function Home() {
                 key={index}
                 className="group p-6 rounded-2xl border border-gray-200 dark:border-gray-800 hover:border-purple-300 dark:hover:border-purple-700 transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:shadow-purple-500/10"
               >
-                <div className={`w-14 h-14 rounded-xl bg-gradient-to-br from-${feature.color}-500 to-${feature.color}-600 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
+                <div className={`w-14 h-14 rounded-xl bg-linear-to-br from-${feature.color}-500 to-${feature.color}-600 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
                   <div className="text-white">
                     {feature.icon}
                   </div>
@@ -418,7 +419,7 @@ export default function Home() {
               <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white mb-4">
                 <span className="relative">
                   Imaginary Initiatives
-                  <span className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-24 h-1 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full" />
+                  <span className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-24 h-1 bg-linear-to-r from-purple-500 to-blue-500 rounded-full" />
                 </span>
               </h2>
               <p className="text-lg text-gray-600 dark:text-gray-600 max-w-2xl mx-auto">
@@ -453,7 +454,7 @@ export default function Home() {
                       </div>
 
                       {/* Image */}
-                      <div className="absolute inset-0 bg-gradient-to-br from-gray-900/50 to-transparent">
+                      <div className="absolute inset-0 bg-linear-to-br from-gray-900/50 to-transparent">
                         <div 
                           className="w-full h-full bg-cover bg-center transition-transform duration-700 group-hover:scale-110"
                           style={{ backgroundImage: `url(${card.image})` }}
@@ -476,7 +477,7 @@ export default function Home() {
                           <span className="text-xs text-gray-500 dark:text-gray-400">Imaginary Technology</span>
                           <span className="text-sm font-semibold text-gray-900 dark:text-white">Satvik's Group</span>
                         </div>
-                        <div className={`px-4 py-2 rounded-lg bg-gradient-to-r ${getVariantGradient(card.variant)} text-white font-semibold flex items-center gap-2 group-hover:gap-3 transition-all`}>
+                        <div className={`px-4 py-2 rounded-lg bg-linear-to-r ${getVariantlinear(card.variant)} text-white font-semibold flex items-center gap-2 group-hover:gap-3 transition-all`}>
                           Enter Portal
                           <ArrowRight className="w-4 h-4" />
                         </div>
@@ -491,8 +492,8 @@ export default function Home() {
 
         {/* Call to Action Section */}
         <div className="relative py-20 md:py-32 overflow-hidden">
-          {/* Background Gradient */}
-          <div className="absolute inset-0 bg-gradient-to-br from-purple-900/20 via-blue-900/20 to-pink-900/20" />
+          {/* Background linear */}
+          <div className="absolute inset-0 bg-linear-to-br from-purple-900/20 via-blue-900/20 to-pink-900/20" />
           
           {/* Animated Background Elements */}
           <div className="absolute inset-0 overflow-hidden">
@@ -506,7 +507,7 @@ export default function Home() {
                 <div className="grid lg:grid-cols-2 gap-8 md:gap-12 items-center">
                   {/* Left Column */}
                   <div>
-                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 mb-6">
+                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-linear-to-r from-purple-500 to-blue-500 mb-6">
                       <Sparkles className="w-4 h-4" />
                       <span className="text-sm font-semibold text-white">JOIN THE REVOLUTION</span>
                     </div>
@@ -531,13 +532,13 @@ export default function Home() {
 
                   {/* Right Column */}
                   <div className="text-center">
-                    <div className="inline-flex items-center justify-center w-32 h-32 rounded-full bg-gradient-to-r from-purple-500/20 to-blue-500/20 border border-white/20 mb-6">
+                    <div className="inline-flex items-center justify-center w-32 h-32 rounded-full bg-linear-to-r from-purple-500/20 to-blue-500/20 border border-white/20 mb-6">
                       <div className="text-4xl">⚡✨🌌</div>
                     </div>
                     
                     <div className="space-y-4">
                       <h3 className="text-2xl font-semibold text-white/90">The Only Rule:</h3>
-                      <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
+                      <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold bg-linear-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
                         No Rules
                       </h1>
                     </div>
@@ -555,7 +556,7 @@ export default function Home() {
               {/* Column 1 */}
               <div>
                 <div className="flex items-center gap-3 mb-6">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-full bg-linear-to-br from-purple-500 to-blue-500 flex items-center justify-center">
                     <span className="text-white font-bold">⚡</span>
                   </div>
                   <h3 className="text-xl font-bold">Satvik's Group</h3>
@@ -623,7 +624,7 @@ export default function Home() {
                 <div className="space-y-4">
                   <Link
                     href="/apply"
-                    className="block w-full py-3 rounded-lg bg-gradient-to-r from-purple-600 to-blue-500 text-white font-semibold text-center hover:from-purple-700 hover:to-blue-600 transition-all duration-300 hover:scale-105"
+                    className="block w-full py-3 rounded-lg bg-linear-to-r from-purple-600 to-blue-500 text-white font-semibold text-center hover:from-purple-700 hover:to-blue-600 transition-all duration-300 hover:scale-105"
                   >
                     Submit Concept Proposal
                   </Link>
