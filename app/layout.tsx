@@ -1,16 +1,16 @@
-
-// src/app/layout.tsx
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
-import Navbar from './components/navbar';
-// import HomePage from './components/HomePage';
+import { ThemeProvider } from './theme-provider';
+import SimpleNavbar from './components/navbar';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
 
+// Note: Metadata must be exported from a server component
+// So we define it separately
 export const metadata: Metadata = {
-  title: 'SatviksGroup',
-  description: 'Your application description',
+  title: 'SatviksGroup - Imaginary Institute',
+  description: 'Where imagination becomes reality and dreams take shape',
 };
 
 export default function RootLayout({
@@ -19,14 +19,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
-        <Navbar />
-        <main>{children}</main>
-             {/* <HomePage mode={''} /> */}
-         
+        <ThemeProvider>
+          <>
+            <SimpleNavbar
+              isAuthenticated={false}
+            />
+            <main>{children}</main>
+          </>
+        </ThemeProvider>
       </body>
     </html>
   );
-  
 }

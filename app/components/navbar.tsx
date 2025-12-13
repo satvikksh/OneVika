@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Search, Sun, Moon, Bell, Menu, X, User, ChevronDown, LogOut, Settings, Briefcase, Home, BookOpen, Zap, Users, Image as ImageIcon } from 'lucide-react';
 import Image from "next/image";
 
+
 // Define Types
 interface User {
   name: string;
@@ -49,6 +50,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
   const pathname = usePathname();
   const router = useRouter();
   
+  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
@@ -73,6 +75,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
     { id: 5, text: "Member Directory", category: "Community" },
   ];
 
+  
   // Scroll effect
   useEffect(() => {
     const handleScroll = () => {
@@ -81,6 +84,26 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+
+  // Add this useEffect after your other useEffects:
+useEffect(() => {
+  // Check for saved theme or system preference
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    
+    const initialTheme = saved === 'light' ? 'light' : 
+                        saved === 'dark' ? 'dark' :
+                        prefersDark ? 'dark' : 'light';
+    
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setTheme(initialTheme);
+    if (initialTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+    }
+  }
+}, []);
 
   // Close dropdowns on click outside
   useEffect(() => {
@@ -128,19 +151,23 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
     setIsMobileMenuOpen(false);
   };
 
-  const handleThemeToggle = useCallback(() => {
+  // Replace the entire handleThemeToggle function:
+const handleThemeToggle = useCallback(() => {
+  const newTheme = theme === 'dark' ? 'light' : 'dark';
+  setTheme(newTheme);
+  
+  if (typeof document !== 'undefined') {
+    if (newTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('theme', newTheme);
+  } 
     if (toggleMode) {
-      toggleMode();
-    }
-    // Update document class for Tailwind dark mode
-    if (typeof document !== 'undefined') {
-      if (mode === 'dark') {
-        document.documentElement.classList.remove('dark');
-      } else {
-        document.documentElement.classList.add('dark');
-      }
-    }
-  }, [mode, toggleMode]);
+    toggleMode();
+  }
+}, [theme, toggleMode]);
 
   const unreadNotifications = notifications.filter(n => !n.read).length;
 
@@ -161,7 +188,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                 <div className="relative w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-purple-500 to-blue-500 group-hover:from-purple-600 group-hover:to-blue-600 transition-all duration-300 shadow-lg">
                   {/* Replace with your logo */}
                   <div className="absolute inset-0 flex items-center justify-center text-white font-bold text-lg">
-                    SG
+                   <img src="img/logo.png" alt="" />
                   </div>
                 </div>
                 <div className="flex flex-col">
@@ -250,17 +277,17 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
               </div>
 
               {/* Theme Toggle */}
-              <button
-                onClick={handleThemeToggle}
-                className="p-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all duration-200 hover:scale-105"
-                aria-label={`Switch to ${mode === 'dark' ? 'light' : 'dark'} mode`}
-              >
-                {mode === 'dark' ? (
-                  <Sun className="text-yellow-500" size={20} />
-                ) : (
-                  <Moon className="text-gray-700" size={20} />
-                )}
-              </button>
+         <button
+  onClick={handleThemeToggle}
+  className="p-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all duration-200 hover:scale-105"
+  aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+>
+  {theme === 'dark' ? (
+    <Sun className="text-yellow-500" size={20} />
+  ) : (
+    <Moon className="text-gray-700" size={20} />
+  )}
+</button>
 
               {/* Notifications */}
               <button
