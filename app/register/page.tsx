@@ -18,10 +18,11 @@ export default function SignupPage() {
   async function handleSubmit(e: any) {
     e.preventDefault();
 
-    const req = await fetch("/api/signup", {
+    const req = await fetch("/api/register", {
       method: "POST",
-      body: JSON.stringify(form),
-    });
+     headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(form),
+});
 
     if (req.status === 201) {
       router.push("/login");

@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sparkles, Lock, Mail, Eye, EyeOff, LogIn } from "lucide-react";
 import { useTheme } from "../theme-provider";
+import { signIn } from "next-auth/react";
 
 export default function LoginPage() {
   const { theme } = useTheme();
@@ -15,27 +16,23 @@ export default function LoginPage() {
   const [showPass, setShowPass] = useState(false);
   const [error, setError] = useState("");
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+ async function handleSubmit(e: React.FormEvent) {
+  e.preventDefault();
+  setError("");
 
-    if (!email || !password) {
-      setError("Please enter both email and password.");
-      return;
-    }
+  const res = await signIn("credentials", {
+    email,
+    password,
+    redirect: false,
+  });
 
-    // -------------------------
-    // DEMO AUTH (replace later)
-    // -------------------------
-    const fakeUser = {
-      name: email.split("@")[0],
-      email,
-      avatar: email[0].toUpperCase(),
-    };
-
-    localStorage.setItem("user", JSON.stringify(fakeUser));
-
-    router.push("/feed"); // redirect after login
+  if (res?.error) {
+    setError("Invalid email or password");
+    return;
   }
+
+  router.push("/feed");
+}
 
   return (
     <div
@@ -136,7 +133,7 @@ export default function LoginPage() {
         <p className="mt-6 text-center text-gray-600 dark:text-gray-400">
           Don't have an account?{" "}
           <a
-            href="/signup"
+            href="/register"
             className="text-purple-600 dark:text-purple-400 font-semibold hover:underline"
           >
             Create one

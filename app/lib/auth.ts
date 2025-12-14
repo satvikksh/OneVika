@@ -1,9 +1,11 @@
+import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { compare } from "bcryptjs";
 import User from "../models/User";
+import bcrypt from "bcryptjs";
 import { connectDB } from "../lib/mongodb";
+import crypto from "crypto";
 
-export const authOptions = {
+export const authOptions: NextAuthOptions = {
   session: {
     strategy: "jwt",
   },
@@ -14,47 +16,58 @@ export const authOptions = {
 
       credentials: {
         email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" },
+        password: { label: "Password", type: "password" }
       },
 
       async authorize(credentials) {
+        if (!credentials?.email || !credentials.password) {
+          return null;
+        }
+
         await connectDB();
 
-        const user = await User.findOne({ email: credentials!.email });
-        if (!user) throw new Error("User not found");
+        const user = await User.findOne({ email: credentials.email });
+        if (!user) return null;
 
-        const valid = await compare(credentials!.password, user.password);
-        if (!valid) throw new Error("Incorrect password");
+        const isValid = await bcrypt.compare(credentials.password, user.password);
+        if (!isValid) return null;
+
+        // create sessionId + signature
+        const sessionId = crypto.randomBytes(16).toString("hex");
+        const signature = crypto
+          .createHmac("sha256", process.env.SESSION_SECRET!)
+          .update(sessionId)
+          .digest("hex");
 
         return {
           id: user._id.toString(),
           name: user.name,
           email: user.email,
-          avatar: user.avatar || null,
+          sessionId,
+          signature
         };
-      },
-    }),
+      }
+    })
   ],
 
-  callbacks: {
-    async jwt({ token, user }: { token: any; user?: any }) {
-      if (user) {
-        token.id = user.id;
-        token.avatar = user.avatar;
-      }
-      return token;
-    },
-
-    async session({ session, token }: { session: any; token: any }) {
-      session.user.id = token.id;
-      session.user.avatar = token.avatar;
-      return session;
-    },
+ callbacks: {
+  async jwt({ token, user }) {
+    if (user) {
+      token.userId = user.id;
+      token.sessionId = user.sessionId;
+      token.signature = user.signature;
+      token.avatar = user.avatar;
+    }
+    return token;
   },
 
-  pages: {
-    signIn: "/login",
-  },
+  async session({ session, token }) {
+    session.user.id = token.userId as string;
+    session.user.sessionId = token.sessionId as string;
+    session.user.signature = token.signature as string;
+    session.user.avatar = token.avatar as string;
 
-  secret: process.env.NEXTAUTH_SECRET,
+    return session;
+  }
+}
 };

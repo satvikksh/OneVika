@@ -12,6 +12,8 @@ const UserSchema = new Schema(
     likedPosts: [{ type: Schema.Types.ObjectId, ref: "Post" }],
   },
   { timestamps: true }
+  
 );
+
 
 export default models.User || model("User", UserSchema);

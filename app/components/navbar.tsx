@@ -1,12 +1,28 @@
-'use client';
+"use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Search, Sun, Moon, Bell, Menu, X, User, ChevronDown, LogOut, Settings, Briefcase, Home, BookOpen, Zap, Users, Image as ImageIcon } from 'lucide-react';
+import {
+  Search,
+  Sun,
+  Moon,
+  Bell,
+  Menu,
+  X,
+  User,
+  ChevronDown,
+  LogOut,
+  Settings,
+  Briefcase,
+  Home,
+  BookOpen,
+  Zap,
+  Users,
+  Image as ImageIcon,
+} from "lucide-react";
 import Image from "next/image";
 import { useSession, signOut } from "next-auth/react";
-
 
 // Define Types
 interface User {
@@ -29,7 +45,7 @@ interface NavItem {
 
 interface SimpleNavbarProps {
   title?: string;
-  mode?: 'dark' | 'light';
+  mode?: "dark" | "light";
   toggleMode?: () => void;
   isAuthenticated?: boolean;
   user?: User;
@@ -38,20 +54,20 @@ interface SimpleNavbarProps {
   onSearch?: (searchValue: string) => void;
 }
 
-const SimpleNavbar: React.FC<SimpleNavbarProps> = ({ 
+const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
   title = "OneVika",
-  mode = 'dark',
+  mode = "dark",
   toggleMode,
   isAuthenticated = false,
   user,
   onLogin,
   onLogout,
-  onSearch
+  onSearch,
 }) => {
   const pathname = usePathname();
   const router = useRouter();
   const { data: session } = useSession();
-  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
+  const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
@@ -61,7 +77,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
   const [notifications] = useState([
     { id: 1, text: "New project update", read: false },
     { id: 2, text: "3 new members joined", read: false },
-    { id: 3, text: "Event starting soon", read: true }
+    { id: 3, text: "Event starting soon", read: true },
   ]);
 
   const searchRef = useRef<HTMLDivElement>(null);
@@ -76,48 +92,59 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
     { id: 5, text: "Member Directory", category: "Community" },
   ];
 
-  
   // Scroll effect
   useEffect(() => {
     const handleScroll = () => {
       setScrolled(window.scrollY > 10);
     };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-
   // Add this useEffect after your other useEffects:
-useEffect(() => {
-  // Check for saved theme or system preference
-  if (typeof window !== 'undefined') {
-    const saved = localStorage.getItem('theme');
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    
-    const initialTheme = saved === 'light' ? 'light' : 
-                        saved === 'dark' ? 'dark' :
-                        prefersDark ? 'dark' : 'light';
-    
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setTheme(initialTheme);
-    if (initialTheme === 'dark') {
-      document.documentElement.classList.add('dark');
+  useEffect(() => {
+    // Check for saved theme or system preference
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("theme");
+      const prefersDark = window.matchMedia(
+        "(prefers-color-scheme: dark)"
+      ).matches;
+
+      const initialTheme =
+        saved === "light"
+          ? "light"
+          : saved === "dark"
+          ? "dark"
+          : prefersDark
+          ? "dark"
+          : "light";
+
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setTheme(initialTheme);
+      if (initialTheme === "dark") {
+        document.documentElement.classList.add("dark");
+      }
     }
-  }
-}, []);
+  }, []);
 
   // Close dropdowns on click outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+      if (
+        searchRef.current &&
+        !searchRef.current.contains(event.target as Node)
+      ) {
         setShowSearchSuggestions(false);
       }
-      if (userDropdownRef.current && !userDropdownRef.current.contains(event.target as Node)) {
+      if (
+        userDropdownRef.current &&
+        !userDropdownRef.current.contains(event.target as Node)
+      ) {
         setIsUserDropdownOpen(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   const navItems: NavItem[] = [
@@ -128,9 +155,10 @@ useEffect(() => {
     { path: "/feed", label: "Feed", icon: <Users size={18} /> },
   ];
 
-  const filteredSuggestions = searchSuggestions.filter(suggestion =>
-    suggestion.text.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    suggestion.category.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredSuggestions = searchSuggestions.filter(
+    (suggestion) =>
+      suggestion.text.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      suggestion.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
@@ -153,43 +181,57 @@ useEffect(() => {
   };
 
   // Replace the entire handleThemeToggle function:
-const handleThemeToggle = useCallback(() => {
-  const newTheme = theme === 'dark' ? 'light' : 'dark';
-  setTheme(newTheme);
-  
-  if (typeof document !== 'undefined') {
-    if (newTheme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-    localStorage.setItem('theme', newTheme);
-  } 
-    if (toggleMode) {
-    toggleMode();
-  }
-}, [theme, toggleMode]);
+  const handleThemeToggle = useCallback(() => {
+    const newTheme = theme === "dark" ? "light" : "dark";
+    setTheme(newTheme);
 
-  const unreadNotifications = notifications.filter(n => !n.read).length;
+    if (typeof document !== "undefined") {
+      if (newTheme === "dark") {
+        document.documentElement.classList.add("dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+      }
+      localStorage.setItem("theme", newTheme);
+    }
+    if (toggleMode) {
+      toggleMode();
+    }
+  }, [theme, toggleMode]);
+
+  const unreadNotifications = notifications.filter((n) => !n.read).length;
 
   return (
     <>
-      <header className={`
+      <header
+        className={`
         fixed top-0 left-0 right-0 z-50 transition-all duration-300
-        ${scrolled 
-          ? 'backdrop-blur-xl bg-white/80 dark:bg-gray-900/80 border-b border-gray-200 dark:border-gray-800 py-2' 
-          : 'bg-transparent py-4'
+        ${
+          scrolled
+            ? "backdrop-blur-xl bg-white/80 dark:bg-gray-900/80 border-b border-gray-200 dark:border-gray-800 py-2"
+            : "bg-transparent py-4"
         }
-      `}>
+      `}
+      >
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             {/* Logo/Brand */}
             <div className="shrink-0">
-              <Link href="/" className="flex items-center space-x-3 group" onClick={() => setIsMobileMenuOpen(false)}>
+              <Link
+                href="/"
+                className="flex items-center space-x-3 group"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
                 <div className="relative w-10 h-10 rounded-full overflow-hidden bg-linear-to-br from-purple-500 to-blue-500 group-hover:from-purple-600 group-hover:to-blue-600 transition-all duration-300 shadow-lg">
                   {/* Replace with your logo */}
                   <div className="absolute inset-0 flex items-center justify-center text-white font-bold text-lg">
-                   <Image src="/img/logo.png" alt={`${title} logo`} width={40} height={40} priority className="object-cover" />
+                    <Image
+                      src="/img/logo.png"
+                      alt={`${title} logo`}
+                      width={40}
+                      height={40}
+                      priority
+                      className="object-cover"
+                    />
                   </div>
                 </div>
                 <div className="flex flex-col">
@@ -211,13 +253,18 @@ const handleThemeToggle = useCallback(() => {
                   href={item.path}
                   className={`
                     flex items-center space-x-2 px-4 py-2.5 rounded-lg transition-all duration-200
-                    ${pathname === item.path
-                      ? 'bg-linear-to-r from-purple-500/10 to-blue-500/10 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-900'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                    ${
+                      pathname === item.path
+                        ? "bg-linear-to-r from-purple-500/10 to-blue-500/10 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-900"
+                        : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
                     }
                   `}
                 >
-                  <span className={`transition-transform duration-200 ${pathname === item.path ? 'scale-110' : ''}`}>
+                  <span
+                    className={`transition-transform duration-200 ${
+                      pathname === item.path ? "scale-110" : ""
+                    }`}
+                  >
                     {item.icon}
                   </span>
                   <span className="font-medium">{item.label}</span>
@@ -245,7 +292,10 @@ const handleThemeToggle = useCallback(() => {
                     placeholder="Search imaginary realms..."
                     className="w-64 pl-10 pr-4 py-2.5 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm border border-gray-300 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 text-gray-900 dark:text-white"
                   />
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500" size={18} />
+                  <Search
+                    className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500"
+                    size={18}
+                  />
                 </form>
 
                 {/* Search Suggestions */}
@@ -262,7 +312,10 @@ const handleThemeToggle = useCallback(() => {
                           className="w-full text-left px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors duration-150 flex items-center justify-between group"
                         >
                           <div className="flex items-center space-x-3">
-                            <Search size={16} className="text-gray-400 group-hover:text-purple-500" />
+                            <Search
+                              size={16}
+                              className="text-gray-400 group-hover:text-purple-500"
+                            />
                             <span className="text-gray-700 dark:text-gray-300 group-hover:text-purple-600 dark:group-hover:text-purple-400">
                               {suggestion.text}
                             </span>
@@ -278,21 +331,23 @@ const handleThemeToggle = useCallback(() => {
               </div>
 
               {/* Theme Toggle */}
-         <button
-  onClick={handleThemeToggle}
-  className="p-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all duration-200 hover:scale-105"
-  aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
->
-  {theme === 'dark' ? (
-    <Sun className="text-yellow-500" size={20} />
-  ) : (
-    <Moon className="text-gray-700" size={20} />
-  )}
-</button>
+              <button
+                onClick={handleThemeToggle}
+                className="p-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all duration-200 hover:scale-105"
+                aria-label={`Switch to ${
+                  theme === "dark" ? "light" : "dark"
+                } mode`}
+              >
+                {theme === "dark" ? (
+                  <Sun className="text-yellow-500" size={20} />
+                ) : (
+                  <Moon className="text-gray-700" size={20} />
+                )}
+              </button>
 
               {/* Notifications */}
               <button
-                onClick={() => router.push('/notifications')}
+                onClick={() => router.push("/notifications")}
                 className="relative p-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all duration-200 hover:scale-105"
                 aria-label="Notifications"
               >
@@ -305,89 +360,85 @@ const handleThemeToggle = useCallback(() => {
               </button>
 
               {/* User Authentication */}
-              {isAuthenticated && user ? (
+              {session?.user ? (
                 <div className="relative" ref={userDropdownRef}>
                   <button
                     onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)}
                     className="flex items-center space-x-3 p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200 group"
                   >
                     <div className="relative w-10 h-10 rounded-full overflow-hidden bg-linear-to-br from-purple-500 to-blue-500">
-                      {user.avatar ? (
-                        <Image src={user.avatar} alt={user.name} fill className="object-cover" />
+                      {session.user.avatar ? (
+                        <Image
+                          src={session.user.avatar}
+                          alt={session.user.name || "User"}
+                          fill
+                          className="object-cover"
+                        />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-white font-semibold">
-                          {user.name.charAt(0)}
+                          {session.user.name?.charAt(0).toUpperCase()}
                         </div>
                       )}
                     </div>
+
                     <div className="hidden lg:block text-left">
-                      <div className="font-semibold text-gray-900 dark:text-white">{user.name}</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">{user.email}</div>
+                      <div className="font-semibold text-gray-900 dark:text-white">
+                        {session.user.name}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {session.user.email}
+                      </div>
                     </div>
-                    <ChevronDown className={`transition-transform duration-200 ${isUserDropdownOpen ? 'rotate-180' : ''}`} size={16} />
+
+                    <ChevronDown
+                      className={`transition-transform ${
+                        isUserDropdownOpen ? "rotate-180" : ""
+                      }`}
+                    />
                   </button>
 
-                  {/* User Dropdown Menu */}
-                  
-                  {isUserDropdownOpen && session?.user && (
-                    
-                    <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-900 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-800 overflow-hidden animate-slideDown">
-                      <div className="p-4 border-b border-gray-200 dark:border-gray-800">
-                        <div className="font-semibold text-gray-900 dark:text-white">{user.name}</div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">{user.email}</div>
-                         <div className="flex items-center gap-3">
-                        </div>
-                      </div>
-                      
-                      <div className="p-2">
-                        <Link
-                          href="/profile"
-                          className="flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                          onClick={() => setIsUserDropdownOpen(false)}
-                        >
-                          <User size={18} className="text-gray-500" />
-                          <span>Profile</span>
-                        </Link>
-                        <Link
-                          href="/settings"
-                          className="flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                          onClick={() => setIsUserDropdownOpen(false)}
-                        >
-                          <Settings size={18} className="text-gray-500" />
-                          <span>Settings</span>
-                        </Link>
-                        <Link
-                          href="/projects"
-                          className="flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                          onClick={() => setIsUserDropdownOpen(false)}
-                        >
-                          <Briefcase size={18} className="text-gray-500" />
-                          <span>My Projects</span>
-                        </Link>
-                      </div>
-                      <div className="p-2 border-t border-gray-200 dark:border-gray-800">
-                        <button
-                         onClick={() => signOut({ callbackUrl: "/login" })}
-                          className="flex items-center space-x-3 w-full px-4 py-3 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 transition-colors"
-                        >
-                          <LogOut size={18} />
-                          <span>Logout</span>
-                        </button>
-                      </div>
+                  {/* Dropdown */}
+                  {isUserDropdownOpen && (
+                    <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-900 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+                      <Link
+                        href="/profile"
+                        className="flex items-center gap-3 px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-800"
+                      >
+                        <User size={18} />
+                        <span>Profile</span>
+                      </Link>
+
+                      <Link
+                        href="/settings"
+                        className="flex items-center gap-3 px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-800"
+                      >
+                        <Settings size={18} />
+                        <span>Settings</span>
+                      </Link>
+
+                      <button
+                        onClick={() => signOut({ callbackUrl: "/login" })}
+                        className="flex items-center gap-3 w-full px-4 py-3 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400"
+                      >
+                        <LogOut size={18} />
+                        Logout
+                      </button>
                     </div>
                   )}
                 </div>
               ) : (
+                // NOT LOGGED IN → show login/signup
                 <div className="flex items-center space-x-3">
                   <button
-                    onClick={onLogin}
-                    className="px-6 py-2.5 rounded-xl border-2 border-purple-500 text-purple-600 dark:text-purple-400 font-medium hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all duration-200 hover:scale-105"
+                    onClick={() => router.push("/login")}
+                    className="px-6 py-2.5 rounded-xl border-2 border-purple-500 text-purple-600 dark:text-purple-400 font-medium hover:bg-purple-50 dark:hover:bg-purple-900/20 transition"
                   >
                     Login
                   </button>
+
                   <button
-                    onClick={() => router.push('/signup')}
-                    className="px-6 py-2.5 rounded-xl bg-linear-to-r from-purple-600 to-blue-500 text-white font-medium hover:from-purple-700 hover:to-blue-600 transition-all duration-200 hover:scale-105 shadow-lg hover:shadow-xl"
+                    onClick={() => router.push("/signup")}
+                    className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-blue-500 text-white font-medium hover:scale-105 transition"
                   >
                     Sign Up
                   </button>
@@ -410,135 +461,176 @@ const handleThemeToggle = useCallback(() => {
           </div>
         </div>
 
-        {/* Mobile Menu */}
-        <div className={`
-          lg:hidden fixed inset-x-0 top-16 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800
-          transform transition-all duration-300 ease-in-out overflow-hidden
-          ${isMobileMenuOpen ? 'max-h-[calc(100vh-4rem)] opacity-100' : 'max-h-0 opacity-0'}
-        `}>
-          <div className="container mx-auto px-4 py-6">
-            {/* Mobile Navigation */}
-            <div className="space-y-1 mb-6">
-              {navItems.map((item) => (
-                <Link
-                  key={item.path}
-                  href={item.path}
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className={`
-                    flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200
-                    ${pathname === item.path
-                      ? 'bg-linear-to-r from-purple-500/10 to-blue-500/10 text-purple-600 dark:text-purple-400'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-                    }
-                  `}
-                >
-                  <span>{item.icon}</span>
-                  <span className="font-medium">{item.label}</span>
-                </Link>
-              ))}
-            </div>
+       {/* Mobile Menu */}
+<div
+  className={`
+    lg:hidden fixed inset-x-0 top-16
+    bg-white dark:bg-gray-900
+    border-t border-gray-200 dark:border-gray-800
+    transform transition-all duration-300 ease-in-out
+    ${isMobileMenuOpen ? "max-h-[calc(100vh-4rem)] opacity-100" : "max-h-0 opacity-0"}
+    overflow-y-auto
+  `}
+>
+  <div className="container mx-auto px-4 py-6">
 
-            {/* Mobile Search */}
-            <div className="mb-6" ref={searchRef}>
-              <form onSubmit={handleSearch} className="relative">
-                <input
-                  type="search"
-                  value={searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    setShowSearchSuggestions(true);
-                  }}
-                  onFocus={() => setShowSearchSuggestions(true)}
-                  placeholder="Search..."
-                  className="w-full pl-10 pr-4 py-3 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900 dark:text-white"
-                />
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500" size={18} />
-              </form>
+    {/* Mobile Navigation */}
+    <div className="space-y-1 mb-6">
+      {navItems.map((item) => (
+        <Link
+          key={item.path}
+          href={item.path}
+          onClick={() => setIsMobileMenuOpen(false)}
+          className={`
+            flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200
+            ${
+              pathname === item.path
+                ? "bg-linear-to-r from-purple-500/10 to-blue-500/10 text-purple-600 dark:text-purple-400"
+                : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+            }
+          `}
+        >
+          <span>{item.icon}</span>
+          <span className="font-medium">{item.label}</span>
+        </Link>
+      ))}
+    </div>
 
-              {/* Mobile Search Suggestions */}
-              {showSearchSuggestions && filteredSuggestions.length > 0 && (
-                <div className="mt-2 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
-                  {filteredSuggestions.map((suggestion) => (
-                    <button
-                      key={suggestion.id}
-                      onClick={() => handleSuggestionClick(suggestion)}
-                      className="w-full text-left px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors border-b border-gray-100 dark:border-gray-800 last:border-0"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-700 dark:text-gray-300">{suggestion.text}</span>
-                        <span className="text-xs text-gray-500 dark:text-gray-400">{suggestion.category}</span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+    {/* Mobile Search */}
+    <div className="mb-6" ref={searchRef}>
+      <form onSubmit={handleSearch} className="relative">
+        <input
+          type="search"
+          value={searchQuery}
+          onChange={(e) => {
+            setSearchQuery(e.target.value);
+            setShowSearchSuggestions(true);
+          }}
+          onFocus={() => setShowSearchSuggestions(true)}
+          placeholder="Search..."
+          className="w-full pl-10 pr-4 py-3 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 text-gray-900 dark:text-white"
+        />
+        <Search
+          className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500"
+          size={18}
+        />
+      </form>
 
-            {/* Mobile Actions */}
-            <div className="flex items-center justify-between space-x-4">
-              <button
-                onClick={handleThemeToggle}
-                className="flex-1 flex items-center justify-center space-x-2 px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-              >
-                {mode === 'dark' ? (
-                  <>
-                    <Sun size={20} />
-                    <span>Light Mode</span>
-                  </>
-                ) : (
-                  <>
-                    <Moon size={20} />
-                    <span>Dark Mode</span>
-                  </>
-                )}
-              </button>
+      {showSearchSuggestions && filteredSuggestions.length > 0 && (
+        <div className="mt-2 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+          {filteredSuggestions.map((suggestion) => (
+            <button
+              key={suggestion.id}
+              onClick={() => handleSuggestionClick(suggestion)}
+              className="w-full text-left px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors border-b last:border-0"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-gray-700 dark:text-gray-300">{suggestion.text}</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">{suggestion.category}</span>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
 
-              <button
-                onClick={() => {
-                  router.push('/notifications');
-                  setIsMobileMenuOpen(false);
-                }}
-                className="flex-1 flex items-center justify-center space-x-2 px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors relative"
-              >
-                <Bell size={20} />
-                <span>Notifications</span>
-                {unreadNotifications > 0 && (
-                  <span className="absolute top-2 right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                    {unreadNotifications}
-                  </span>
-                )}
-              </button>
-            </div>
+    {/* Mobile User Section (NEW) */}
+    {session?.user && (
+      <div className="mb-6 p-4 rounded-xl bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700">
 
-            {/* Mobile Authentication */}
-            {!isAuthenticated && (
-              <div className="mt-6 grid grid-cols-2 gap-4">
-                <button
-                  onClick={() => {
-                    if (onLogin) onLogin();
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className="px-6 py-3 rounded-xl border-2 border-purple-500 text-purple-600 dark:text-purple-400 font-medium hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors"
-                >
-                  Login
-                </button>
-                <button
-                  onClick={() => {
-                    router.push('/signup');
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className="px-6 py-3 rounded-xl bg-linear-to-r from-purple-600 to-blue-500 text-white font-medium hover:from-purple-700 hover:to-blue-600 transition-colors"
-                >
-                  Sign Up
-                </button>
+        {/* Avatar + User Info */}
+        <div className="flex items-center space-x-4">
+          <div className="relative w-14 h-14 rounded-full overflow-hidden bg-linear-to-br from-purple-500 to-blue-500">
+            {session.user.avatar ? (
+              <Image
+                src={session.user.avatar}
+                alt={session.user.name || "User"}
+                fill
+                className="object-cover"
+              />
+            ) : (
+              <div className="flex items-center justify-center text-white text-xl font-bold h-full">
+                {session.user.name?.charAt(0)}
               </div>
             )}
           </div>
+
+          <div>
+            <div className="text-lg font-semibold text-gray-900 dark:text-white">
+              {session.user.name}
+            </div>
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              {session.user.email}
+            </div>
+          </div>
         </div>
+
+        {/* Profile / Settings / Logout */}
+        <div className="mt-4 space-y-2">
+          <button
+            onClick={() => {
+              router.push("/profile");
+              setIsMobileMenuOpen(false);
+            }}
+            className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700"
+          >
+            <User size={18} />
+            <span>Profile</span>
+          </button>
+
+          <button
+            onClick={() => {
+              router.push("/settings");
+              setIsMobileMenuOpen(false);
+            }}
+            className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700"
+          >
+            <Settings size={18} />
+            <span>Settings</span>
+          </button>
+
+          <button
+            onClick={() => signOut({ callbackUrl: "/login" })}
+            className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/20"
+          >
+            <LogOut size={18} />
+            <span>Logout</span>
+          </button>
+        </div>
+      </div>
+    )}
+
+    {/* Mobile Auth (Only when NOT logged in) */}
+    {!session?.user && (
+      <div className="mt-6 grid grid-cols-2 gap-4">
+        <button
+          onClick={() => {
+            router.push("/login");
+            setIsMobileMenuOpen(false);
+          }}
+          className="px-6 py-3 rounded-xl border-2 border-purple-500 text-purple-600 dark:text-purple-400"
+        >
+          Login
+        </button>
+
+        <button
+          onClick={() => {
+            router.push("/signup");
+            setIsMobileMenuOpen(false);
+          }}
+          className="px-6 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-blue-500 text-white"
+        >
+          Sign Up
+        </button>
+      </div>
+    )}
+  </div>
+</div>
+
       </header>
 
       {/* Spacer to prevent content from hiding behind fixed navbar */}
-      <div className="h-16 lg:h-20" />
+      <div className="h-10 lg:h-10"></div>
 
       {/* Custom animations */}
       <style jsx global>{`
@@ -552,7 +644,7 @@ const handleThemeToggle = useCallback(() => {
             transform: translateY(0);
           }
         }
-        
+
         @keyframes slideDown {
           from {
             opacity: 0;
@@ -563,11 +655,11 @@ const handleThemeToggle = useCallback(() => {
             transform: translateY(0);
           }
         }
-        
+
         .animate-fadeIn {
           animation: fadeIn 0.2s ease-out;
         }
-        
+
         .animate-slideDown {
           animation: slideDown 0.2s ease-out;
         }

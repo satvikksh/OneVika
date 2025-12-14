@@ -1,4 +1,5 @@
 {
+   "types": ["next-auth", "./types/next-auth"],
   "compilerOptions": {
     "target": "ES2017",
     "lib": ["dom", "dom.iterable", "esnext"],
@@ -22,6 +23,7 @@
       "@/*": ["./*"]
     }
   },
+
   "include": [
     "next-env.d.ts",
     "**/*.ts",
@@ -31,4 +33,5 @@
     "**/*.mts"
   ],
   "exclude": ["node_modules"]
+
 }

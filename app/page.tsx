@@ -111,35 +111,35 @@ export default function Home() {
   );
 
   // Slide data
-  const slidesData: SlideData[] = useMemo(
-    () => [
-      {
-        id: 1,
-        image: "/img/cosmic-gate12.jpg",
-        title: "Welcome to Satvik's Group",
-        subtitle: "Imaginary Technology of Infinite Possibilities",
-        description: "Where imagination becomes reality and dreams take shape",
-        button: { text: "Begin Your Journey", link: "/explore", variant: "outline-light" }
-      },
-      {
-        id: 2,
-        image: "/img/neural-network.jpg",
-        title: "Beyond Reality",
-        subtitle: "Exploring Impossible Concepts",
-        description: "Join us in creating what hasn't been imagined yet",
-        button: { text: "View Projects", link: "/projects", variant: "outline-info" }
-      },
-      {
-        id: 3,
-        image: "/img/quantum-realm.jpg",
-        title: "Collective Creation",
-        subtitle: "Satvik's Visionary Collective",
-        description: "A space where creative minds converge to build new worlds",
-        button: { text: "Join The Collective", link: "/join", variant: "outline-success" }
-      }
-    ],
-    []
-  );
+  const slidesData = useMemo(
+  () => [
+    {
+      id: 1,
+      image: "/img/cosmic-gate12.jpg",
+      title: "Welcome to Satvik's Group",
+      subtitle: "Imaginary Technology of Infinite Possibilities",
+      description: "Where imagination becomes reality and dreams take shape",
+      button: { text: "Begin Your Journey", link: "/explore", variant: "light" },
+    },
+    {
+      id: 2,
+      image: "/img/neural-network.jpg",
+      title: "Beyond Reality",
+      subtitle: "Exploring Impossible Concepts",
+      description: "Join us in creating what hasn't been imagined yet",
+      button: { text: "View Projects", link: "/projects", variant: "info" },
+    },
+    {
+      id: 3,
+      image: "/img/quantum-realm.jpg",
+      title: "Collective Creation",
+      subtitle: "Satvik's Visionary Collective",
+      description: "A space where creative minds build new worlds",
+      button: { text: "Join The Collective", link: "/join", variant: "success" },
+    },
+  ],
+  []
+);
 
   // Handle window resize
   useEffect(() => {
@@ -237,7 +237,7 @@ export default function Home() {
               <div
                 className="absolute inset-0 bg-cover bg-center transition-transform duration-700 ease-out scale-100 hover:scale-105"
                 style={{
-                  backgroundImage: `linear-linear(rgba(0,0,0,0.7), rgba(0,0,0,0.5)), url(${slide.image})`,
+                  backgroundImage: `linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.5)), url(${slide.image})`,
                 }}
               />
 

@@ -206,7 +206,7 @@ export default function AboutPage() {
       projects: ['Chrono Visions', 'Stellar Forge', 'Quantum Fields'] 
     },
     { 
-      name: 'Nova', 
+      name: 'Kai Nova', 
       role: 'Head of Neural Interfaces', 
       avatar: 'KN', 
       specialty: 'Cognitive Technology', 
