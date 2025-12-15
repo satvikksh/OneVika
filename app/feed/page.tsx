@@ -32,6 +32,7 @@ export default function FeedPage() {
  useEffect(() => {
   if (!session) return;
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   setLoadingPosts(true);
 
   fetch(`/api/post?page=${page}`)
@@ -63,10 +64,10 @@ export default function FeedPage() {
   /* ============================
      OPTIMISTIC LIKE
   ============================ */
-  const toggleLike = async (postId: string) => {
+  const toggleLike = async (id: string) => {
     setPosts((prev) =>
       prev.map((p) =>
-        p._id === postId
+        p._id === id
           ? {
               ...p,
               likes: p.likes.includes(session!.user.id)
@@ -77,16 +78,23 @@ export default function FeedPage() {
       )
     );
 
-    await fetch(`/api/post/${postId}/like`, { method: "POST" });
+    await fetch(`/api/post/${id}/like`, { method: "POST" });
   };
 
   /* ============================
      DELETE POST
   ============================ */
-  const deletePost = async (postId: string) => {
-    await fetch(`/api/post/${postId}`, { method: "DELETE" });
-    setPosts((p) => p.filter((x) => x._id !== postId));
-  };
+ const deletePost = async (id: string) => {
+  const res = await fetch(`/api/post/${id}`, { method: "DELETE" });
+
+  if (!res.ok) {
+    alert("Failed to delete post");
+    return;
+  }
+
+  setPosts((prev) => prev.filter((p) => p._id !== id));
+};
+
 
   /* ============================
      LOADING SESSION
