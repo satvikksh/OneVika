@@ -7,8 +7,10 @@ import Image from "next/image";
 import { Save, Upload, Trash2, ArrowLeft } from "lucide-react";
 
 export default function EditProfilePage() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const router = useRouter();
+
+  const [loading, setLoading] = useState(true);
 
   const [form, setForm] = useState({
     name: "",
@@ -18,39 +20,82 @@ export default function EditProfilePage() {
 
   const [uploadFile, setUploadFile] = useState<File | null>(null);
 
+  /* ============================
+     LOAD PROFILE SAFELY
+  ============================ */
   useEffect(() => {
+    if (!session?.user) return;
+
     async function load() {
-      const res = await fetch("/api/user/profile");
-      const data = await res.json();
-      setForm({
-        name: data.user.name,
-        bio: data.user.bio,
-        avatar: data.user.avatar,
-      });
+      try {
+        const res = await fetch("/api/user/profile");
+
+        if (!res.ok) {
+          // console.error("Failed to load profile");
+          return;
+        }
+
+        const data = await res.json();
+
+        if (!data?.user) {
+          console.error("No user returned", data);
+          return;
+        }
+
+        setForm({
+          name: data.user.name || "",
+          bio: data.user.bio || "",
+          avatar: data.user.avatar || "",
+        });
+      } catch (err) {
+        console.error("PROFILE LOAD ERROR", err);
+      } finally {
+        setLoading(false);
+      }
     }
+
     load();
-  }, []);
+  }, [session]);
 
-  async function uploadAvatar() {
-    const fd = new FormData();
-    fd.append("file", uploadFile!);
-
-    const res = await fetch("/api/user/upload-avatar", {
-      method: "POST",
-      body: fd,
-    });
-
-    const data = await res.json();
-    setForm({ ...form, avatar: data.url });
-  }
-
+  /* ============================
+     SAVE PROFILE
+  ============================ */
   async function save() {
     await fetch("/api/user/update", {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(form),
     });
 
     router.push("/profile");
+  }
+
+  /* ============================
+     UPLOAD AVATAR (BASE64)
+  ============================ */
+  async function uploadAvatar() {
+    if (!uploadFile) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setForm((prev) => ({
+        ...prev,
+        avatar: reader.result as string,
+      }));
+      setUploadFile(null);
+    };
+    reader.readAsDataURL(uploadFile);
+  }
+
+  /* ============================
+     LOADING / AUTH GUARD
+  ============================ */
+  if (status === "loading" || loading) {
+    return <div className="text-center mt-20">Loading profile…</div>;
+  }
+
+  if (!session?.user) {
+    return <div className="text-center mt-20">Please login first.</div>;
   }
 
   return (
@@ -71,12 +116,12 @@ export default function EditProfilePage() {
             src={form.avatar}
             width={90}
             height={90}
-            className="rounded-full"
+            className="rounded-full object-cover"
             alt="avatar"
           />
         ) : (
           <div className="w-24 h-24 bg-purple-500 text-white rounded-full flex items-center justify-center text-3xl font-bold">
-            {form.name[0]}
+            {(form.name?.[0] || "U").toUpperCase()}
           </div>
         )}
 
@@ -87,6 +132,7 @@ export default function EditProfilePage() {
             <input
               type="file"
               className="hidden"
+              accept="image/*"
               onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
             />
           </label>
@@ -102,7 +148,7 @@ export default function EditProfilePage() {
 
           {form.avatar && (
             <button
-              onClick={() => setForm({ ...form, avatar: "" })}
+              onClick={() => setForm((p) => ({ ...p, avatar: "" }))}
               className="flex gap-1 items-center text-red-500"
             >
               <Trash2 size={18} /> Remove Avatar

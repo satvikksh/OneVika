@@ -18,10 +18,12 @@ export default function ProfilePage() {
 
     async function load() {
       const res = await fetch("/api/user/profile");
-      const data = await res.json();
-      setUserData(data.user);
-      setPosts(data.posts);
-      setLikedPosts(data.likedPosts);
+     const data = await res.json();
+
+setUserData(data.user ?? data);
+setPosts(Array.isArray(data.posts) ? data.posts : []);
+setLikedPosts(Array.isArray(data.likedPosts) ? data.likedPosts : []);
+
     }
 
     load();
@@ -62,7 +64,7 @@ export default function ProfilePage() {
             />
           ) : (
             <div className="w-24 h-24 rounded-full bg-linear-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white text-3xl font-bold">
-              {userData?.name[0].toUpperCase()}
+              {userData?.name?.charAt(0)?.toUpperCase() || "U"}
             </div>
           )}
 
@@ -92,10 +94,10 @@ export default function ProfilePage() {
       {/* User Posts */}
       <div className="mt-10">
         <h2 className="text-2xl font-bold mb-4">Your Posts</h2>
-        {posts.length === 0 ? (
+        {posts?.length === 0 ? (
           <p className="text-gray-500">You haven't posted anything yet.</p>
         ) : (
-          posts.map((post) => (
+          posts?.map((post) => (
             <div
               key={post._id}
               className="p-4 bg-white dark:bg-gray-900 border dark:border-gray-700 rounded-xl mb-4"
@@ -121,10 +123,10 @@ export default function ProfilePage() {
           <Heart className="text-red-500" /> Your Favorites
         </h2>
 
-        {likedPosts.length === 0 ? (
+        {likedPosts?.length === 0 ? (
           <p className="text-gray-500">No liked posts yet.</p>
         ) : (
-          likedPosts.map((post) => (
+          likedPosts?.map((post) => (
             <div
               key={post._id}
               className="p-4 bg-white dark:bg-gray-900 border dark:border-gray-700 rounded-xl mb-4"
