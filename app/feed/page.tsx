@@ -3,13 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import Image from "next/image";
-import {
-  Heart,
-  MessageCircle,
-  Sparkles,
-  LogIn,
-  Trash2,
-} from "lucide-react";
+import { Heart, MessageCircle, Sparkles, LogIn, Trash2 } from "lucide-react";
 import CreatePost from "./CreatePost";
 import { useTheme } from "../theme-provider";
 import { useSession } from "next-auth/react";
@@ -29,23 +23,23 @@ export default function FeedPage() {
   /* ============================
      FETCH POSTS (PAGINATED)
   ============================ */
- useEffect(() => {
-  if (!session) return;
+  useEffect(() => {
+    if (!session) return;
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  setLoadingPosts(true);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLoadingPosts(true);
 
-  fetch(`/api/post?page=${page}`)
-    .then((res) => res.json())
-    .then((data) => {
-      setPosts((prev) => {
-        const ids = new Set(prev.map((p) => p._id));
-        const unique = data.filter((p: any) => !ids.has(p._id));
-        return [...prev, ...unique];
-      });
-    })
-    .finally(() => setLoadingPosts(false));
-}, [session, page]);
+    fetch(`/api/post?page=${page}`)
+      .then((res) => res.json())
+      .then((data) => {
+        setPosts((prev) => {
+          const ids = new Set(prev.map((p) => p._id));
+          const unique = data.filter((p: any) => !ids.has(p._id));
+          return [...prev, ...unique];
+        });
+      })
+      .finally(() => setLoadingPosts(false));
+  }, [session, page]);
 
   /* ============================
      INFINITE SCROLL
@@ -84,17 +78,16 @@ export default function FeedPage() {
   /* ============================
      DELETE POST
   ============================ */
- const deletePost = async (id: string) => {
-  const res = await fetch(`/api/post/${id}`, { method: "DELETE" });
+  // const deletePost = async (id: string) => {
+  //   const res = await fetch(`/api/post/${id}`, { method: "DELETE" });
 
-  if (!res.ok) {
-    alert("Failed to delete post");
-    return;
-  }
+  //   if (!res.ok) {
+  //     alert("Failed to delete post");
+  //     return;
+  //   }
 
-  setPosts((prev) => prev.filter((p) => p._id !== id));
-};
-
+  //   setPosts((prev) => prev.filter((p) => p._id !== id));
+  // };
 
   /* ============================
      LOADING SESSION
@@ -136,7 +129,10 @@ export default function FeedPage() {
     <div className={`${isDark ? "dark bg-black" : "bg-gray-50"} min-h-screen`}>
       {/* HEADER */}
       <div className="py-10 text-center">
-        <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }}>
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border mb-2">
             <Sparkles className="w-4 h-4" />
             IMAGINATION FEED
@@ -150,14 +146,13 @@ export default function FeedPage() {
       <div className="max-w-2xl mx-auto px-4 pb-24">
         {/* CREATE POST */}
         <CreatePost
-         onPostCreated={(post) =>
-  setPosts((prev) => {
-    const exists = prev.some((p) => p._id === post._id);
-    if (exists) return prev;
-    return [post, ...prev];
-  })
-}
-
+          onPostCreated={(post) =>
+            setPosts((prev) => {
+              const exists = prev.some((p) => p._id === post._id);
+              if (exists) return prev;
+              return [post, ...prev];
+            })
+          }
         />
 
         {/* FEED */}
@@ -182,14 +177,14 @@ export default function FeedPage() {
                 </div>
 
                 {/* DELETE */}
-                {post.userId?._id === session.user.id && (
+                {/* {post.userId?._id === session.user.id && (
                   <button
                     onClick={() => deletePost(post._id)}
                     className="text-red-500"
                   >
                     <Trash2 size={18} />
                   </button>
-                )}
+                )} */}
               </div>
 
               {/* CONTENT */}
