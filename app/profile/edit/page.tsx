@@ -16,6 +16,7 @@ export default function EditProfilePage() {
     name: "",
     bio: "",
     avatar: "",
+    isPrivate: false,
   });
 
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -46,6 +47,7 @@ export default function EditProfilePage() {
           name: data.user.name || "",
           bio: data.user.bio || "",
           avatar: data.user.avatar || "",
+          isPrivate: data.user?.isPrivate || false, 
         });
       } catch (err) {
         console.error("PROFILE LOAD ERROR", err);
@@ -61,6 +63,9 @@ export default function EditProfilePage() {
      SAVE PROFILE
   ============================ */
   async function save() {
+    // optimistic UI
+    router.push("/profile");
+
     await fetch("/api/user/update", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -159,12 +164,16 @@ export default function EditProfilePage() {
 
       {/* Name */}
       <div className="mt-6">
-        <p className="mb-1 font-semibold">Name</p>
         <input
           value={form.name}
-          onChange={(e) => setForm({ ...form, name: e.target.value })}
-          className="w-full p-3 border dark:border-gray-700 bg-white dark:bg-gray-900 rounded-xl"
+          onChange={(e) => {
+            if (e.target.value.length <= 20)
+              setForm({ ...form, name: e.target.value });
+          }}
         />
+        <p className="text-xs text-gray-500">
+          {form.name.length}/20 characters
+        </p>
       </div>
 
       {/* Bio */}
@@ -185,4 +194,26 @@ export default function EditProfilePage() {
       </button>
     </div>
   );
+  {/* Privacy Setting */}
+<div className="mt-6">
+  <label className="flex gap-3 items-center cursor-pointer">
+    <input
+      type="checkbox"
+      checked={form.isPrivate}
+      onChange={(e) =>
+        setForm({ ...form, isPrivate: e.target.checked })
+      }
+      className="w-5 h-5 accent-purple-600"
+    />
+    <span className="font-medium text-gray-700 dark:text-gray-300">
+      Private Profile
+    </span>
+  </label>
+
+  <p className="text-sm text-gray-500 mt-1">
+    When enabled, only you can see your posts and profile.
+  </p>
+</div>
+
+  
 }

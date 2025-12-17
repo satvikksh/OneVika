@@ -14,16 +14,17 @@ export default function ProfilePage() {
   const [likedPosts, setLikedPosts] = useState<any[]>([]);
 
   useEffect(() => {
+
+    
     if (!session?.user) return;
 
     async function load() {
       const res = await fetch("/api/user/profile");
-     const data = await res.json();
+      const data = await res.json();
 
-setUserData(data.user ?? data);
-setPosts(Array.isArray(data.posts) ? data.posts : []);
-setLikedPosts(Array.isArray(data.likedPosts) ? data.likedPosts : []);
-
+      setUserData(data.user ?? data);
+      setPosts(Array.isArray(data.posts) ? data.posts : []);
+      setLikedPosts(Array.isArray(data.likedPosts) ? data.likedPosts : []);
     }
 
     load();
@@ -66,6 +67,15 @@ setLikedPosts(Array.isArray(data.likedPosts) ? data.likedPosts : []);
             <div className="w-24 h-24 rounded-full bg-linear-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white text-3xl font-bold">
               {userData?.name?.charAt(0)?.toUpperCase() || "U"}
             </div>
+          )}
+          {userData?.cover && (
+            <Image
+              src={userData.cover}
+              width={900}
+              height={300}
+              className="rounded-xl mb-6 object-cover"
+              alt="cover"
+            />
           )}
 
           <div>
