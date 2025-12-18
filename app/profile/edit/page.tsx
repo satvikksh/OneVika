@@ -77,9 +77,8 @@ export default function EditProfilePage() {
   }
 
   // 🔄 Refresh NextAuth session (VERY IMPORTANT)
-// eslint-disable-next-line react-hooks/rules-of-hooks
-const { update } = useSession();
-await update();
+  await signIn("credentials", { redirect: false });
+
   // Go back to profile page
   router.push("/profile");
 }

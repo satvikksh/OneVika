@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useUserAvatar } from "../hooks/useUserAvatar";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -67,6 +68,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
   const pathname = usePathname();
   const router = useRouter();
   const { data: session } = useSession();
+  const { avatar, loading } = useUserAvatar();
 
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -82,24 +84,82 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
   const notificationsRef = useRef<HTMLDivElement>(null);
 
   const searchSuggestions: SearchSuggestion[] = [
-    { id: 1, text: "Imaginary Projects", category: "Projects", icon: <Zap size={14} /> },
-    { id: 2, text: "Community Guidelines", category: "Docs", icon: <BookOpen size={14} /> },
-    { id: 3, text: "Upcoming Events", category: "Events", icon: <Users size={14} /> },
-    { id: 4, text: "Analytics Dashboard", category: "Analytics", icon: <BarChart size={14} /> },
-    { id: 5, text: "Recent Conversations", category: "Messages", icon: <MessageSquare size={14} /> },
+    {
+      id: 1,
+      text: "Imaginary Projects",
+      category: "Projects",
+      icon: <Zap size={14} />,
+    },
+    {
+      id: 2,
+      text: "Community Guidelines",
+      category: "Docs",
+      icon: <BookOpen size={14} />,
+    },
+    {
+      id: 3,
+      text: "Upcoming Events",
+      category: "Events",
+      icon: <Users size={14} />,
+    },
+    {
+      id: 4,
+      text: "Analytics Dashboard",
+      category: "Analytics",
+      icon: <BarChart size={14} />,
+    },
+    {
+      id: 5,
+      text: "Recent Conversations",
+      category: "Messages",
+      icon: <MessageSquare size={14} />,
+    },
   ];
 
   const notifications: Notification[] = [
-    { id: 1, title: "Project Update", description: "Your project has been reviewed", time: "2 min ago", read: false, icon: <Zap size={16} /> },
-    { id: 2, title: "New Message", description: "You have a new message from Alex", time: "1 hour ago", read: false, icon: <MessageSquare size={16} /> },
-    { id: 3, title: "Trend Alert", description: "New trends in your industry", time: "3 hours ago", read: true, icon: <TrendingUp size={16} /> },
-    { id: 4, title: "System Update", description: "New features available", time: "1 day ago", read: true, icon: <Settings size={16} /> },
+    {
+      id: 1,
+      title: "Project Update",
+      description: "Your project has been reviewed",
+      time: "2 min ago",
+      read: false,
+      icon: <Zap size={16} />,
+    },
+    {
+      id: 2,
+      title: "New Message",
+      description: "You have a new message from Alex",
+      time: "1 hour ago",
+      read: false,
+      icon: <MessageSquare size={16} />,
+    },
+    {
+      id: 3,
+      title: "Trend Alert",
+      description: "New trends in your industry",
+      time: "3 hours ago",
+      read: true,
+      icon: <TrendingUp size={16} />,
+    },
+    {
+      id: 4,
+      title: "System Update",
+      description: "New features available",
+      time: "1 day ago",
+      read: true,
+      icon: <Settings size={16} />,
+    },
   ];
 
   const navItems: NavItem[] = [
     { path: "/", label: "Home", icon: <Home size={18} /> },
     { path: "/about", label: "About", icon: <BookOpen size={18} /> },
-    { path: "/projects", label: "Projects", icon: <Zap size={18} />, badge: "New" },
+    {
+      path: "/projects",
+      label: "Projects",
+      icon: <Zap size={18} />,
+      badge: "New",
+    },
     { path: "/gallery", label: "Gallery", icon: <ImageIcon size={18} /> },
     { path: "/feed", label: "Feed", icon: <Users size={18} /> },
     { path: "/analytics", label: "Analytics", icon: <BarChart size={18} /> },
@@ -173,6 +233,8 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
     setUnreadNotifications(0);
   };
 
+  // const { data: session } = useSession();
+
   return (
     <>
       <header
@@ -192,13 +254,13 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
             >
               {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
-            
+
             <Link href="/" className="flex items-center gap-3 group">
               <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 group-hover:from-purple-600 group-hover:to-pink-600 transition-all overflow-hidden shadow-md">
-                <Image 
-                  src="/img/logo.png" 
-                  alt="logo" 
-                  width={40} 
+                <Image
+                  src="/img/logo.png"
+                  alt="logo"
+                  width={40}
                   height={40}
                   className="object-cover"
                 />
@@ -221,7 +283,13 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                     : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white"
                 }`}
               >
-                <span className={`transition-transform group-hover:scale-110 ${pathname === item.path ? "text-purple-600 dark:text-purple-400" : ""}`}>
+                <span
+                  className={`transition-transform group-hover:scale-110 ${
+                    pathname === item.path
+                      ? "text-purple-600 dark:text-purple-400"
+                      : ""
+                  }`}
+                >
                   {item.icon}
                 </span>
                 <span className="font-medium">{item.label}</span>
@@ -236,10 +304,16 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
 
           {/* Search Bar */}
           {showSearch && (
-            <div className="hidden md:flex flex-1 max-w-xl mx-6" ref={searchRef}>
+            <div
+              className="hidden md:flex flex-1 max-w-xl mx-6"
+              ref={searchRef}
+            >
               <form onSubmit={handleSearch} className="relative w-full">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                  <Search
+                    className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                    size={18}
+                  />
                   <input
                     type="text"
                     placeholder="Search projects, docs, users..."
@@ -249,7 +323,9 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                       setSearchQuery(e.target.value);
                       setShowSearchSuggestions(e.target.value.length > 0);
                     }}
-                    onFocus={() => setShowSearchSuggestions(searchQuery.length > 0)}
+                    onFocus={() =>
+                      setShowSearchSuggestions(searchQuery.length > 0)
+                    }
                   />
                   {searchQuery && (
                     <button
@@ -261,13 +337,15 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                     </button>
                   )}
                 </div>
-                
+
                 {showSearchSuggestions && searchSuggestions.length > 0 && (
                   <div className="absolute top-full mt-2 w-full bg-white dark:bg-gray-900 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-800 overflow-hidden z-50">
                     <div className="p-2">
                       {searchSuggestions
-                        .filter(suggestion => 
-                          suggestion.text.toLowerCase().includes(searchQuery.toLowerCase())
+                        .filter((suggestion) =>
+                          suggestion.text
+                            .toLowerCase()
+                            .includes(searchQuery.toLowerCase())
                         )
                         .map((suggestion) => (
                           <button
@@ -342,17 +420,29 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                         <div
                           key={notification.id}
                           className={`p-4 border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${
-                            !notification.read ? "bg-purple-50/50 dark:bg-purple-900/10" : ""
+                            !notification.read
+                              ? "bg-purple-50/50 dark:bg-purple-900/10"
+                              : ""
                           }`}
                         >
                           <div className="flex gap-3">
-                            <div className={`p-2 rounded-lg ${!notification.read ? "bg-purple-100 dark:bg-purple-900" : "bg-gray-100 dark:bg-gray-800"}`}>
+                            <div
+                              className={`p-2 rounded-lg ${
+                                !notification.read
+                                  ? "bg-purple-100 dark:bg-purple-900"
+                                  : "bg-gray-100 dark:bg-gray-800"
+                              }`}
+                            >
                               {notification.icon}
                             </div>
                             <div className="flex-1">
                               <div className="flex justify-between items-start">
-                                <h4 className="font-semibold">{notification.title}</h4>
-                                <span className="text-xs text-gray-500">{notification.time}</span>
+                                <h4 className="font-semibold">
+                                  {notification.title}
+                                </h4>
+                                <span className="text-xs text-gray-500">
+                                  {notification.time}
+                                </span>
                               </div>
                               <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                                 {notification.description}
@@ -381,45 +471,52 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                   className="flex items-center gap-3 p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                   aria-label="User menu"
                 >
-                  <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-purple-500/20 shadow-sm">
-                    {session.user.image || session.user.avatar ? (
+                  <div className="relative w-10 h-10 rounded-full overflow-hidden bg-linear-to-br from-purple-500 to-blue-500">
+                    {!loading && avatar ? (
                       <Image
-                        src={(session.user.image || session.user.avatar) as string}
-                        alt="avatar"
-                        width={40}
-                        height={40}
-                        className="object-cover w-full h-full"
+                        src={avatar}
+                        alt="User Avatar"
+                        fill
+                        className="object-cover"
                       />
                     ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold">
-                        {session.user.name?.[0] ?? "U"}
-                      </div>
+                      <span className="flex items-center justify-center w-full h-full text-white font-bold">
+                        {session?.user?.name?.[0]?.toUpperCase() ?? "U"}
+                      </span>
                     )}
                   </div>
-                  <ChevronDown className={`transition-transform ${isUserDropdownOpen ? "rotate-180" : ""}`} size={16} />
+
+                  <ChevronDown
+                    className={`transition-transform ${
+                      isUserDropdownOpen ? "rotate-180" : ""
+                    }`}
+                    size={16}
+                  />
                 </button>
 
                 {isUserDropdownOpen && (
                   <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-900 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-800 overflow-hidden z-50">
                     <div className="p-4 border-b border-gray-200 dark:border-gray-800">
                       <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-full overflow-hidden">
-                          {session.user.image || session.user.avatar ? (
+                        <div className="relative w-10 h-10 rounded-full overflow-hidden bg-linear-to-br from-purple-500 to-blue-500">
+                          {!loading && avatar ? (
                             <Image
-                              src={(session.user.image || session.user.avatar) as string}
-                              alt="avatar"
-                              width={48}
-                              height={48}
-                              className="object-cover w-full h-full"
+                              src={avatar}
+                              alt="User Avatar"
+                              fill
+                              className="object-cover"
                             />
                           ) : (
-                            <div className="w-full h-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold text-lg">
-                              {session.user.name?.[0] ?? "U"}
-                            </div>
+                            <span className="flex items-center justify-center w-full h-full text-white font-bold">
+                              {session?.user?.name?.[0]?.toUpperCase() ?? "U"}
+                            </span>
                           )}
                         </div>
+
                         <div>
-                          <p className="font-bold">{session.user.name || "User"}</p>
+                          <p className="font-bold">
+                            {session.user.name || "User"}
+                          </p>
                           <p className="text-sm text-gray-500 dark:text-gray-400">
                             {session.user.email || "No email"}
                           </p>
@@ -483,7 +580,10 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
               {showSearch && (
                 <div className="mb-4">
                   <form onSubmit={handleSearch} className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                    <Search
+                      className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                      size={18}
+                    />
                     <input
                       type="text"
                       placeholder="Search..."

@@ -6,7 +6,7 @@ import { connectDB } from "../../../lib/mongodb";
 
 export const authOptions = {
   session: {
-    strategy: "jwt",
+    strategy: "jwt", // OK, but keep token SMALL
   },
 
   providers: [
@@ -25,10 +25,13 @@ export const authOptions = {
         const user = await User.findOne({ email: credentials.email });
         if (!user) return null;
 
-        const ok = await bcrypt.compare(credentials.password, user.password);
+        const ok = await bcrypt.compare(
+          credentials.password,
+          user.password
+        );
         if (!ok) return null;
 
-        // ⚠️ RETURN MINIMAL DATA ONLY
+        // ✅ RETURN MINIMAL DATA ONLY
         return {
           id: user._id.toString(),
           name: user.name,
@@ -42,16 +45,14 @@ export const authOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
-        token.name = user.name;
-        token.email = user.email;
       }
       return token;
     },
 
     async session({ session, token }) {
-      session.user.id = token.id;
-      session.user.name = token.name;
-      session.user.email = token.email;
+      if (session.user) {
+        session.user.id = token.id;
+      }
       return session;
     },
   },
