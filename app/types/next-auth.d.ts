@@ -16,6 +16,9 @@ declare module "next-auth" {
       avatar?: string;
     } & DefaultSession["user"];
   }
+   interface User {
+    avatar?: string; // ✅
+  }
 }
 
 declare module "next-auth/jwt" {

@@ -5,6 +5,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Save, Upload, Trash2, ArrowLeft } from "lucide-react";
+import { signIn } from "next-auth/react";
+
 
 export default function EditProfilePage() {
   const { data: session, status } = useSession();
@@ -62,18 +64,25 @@ export default function EditProfilePage() {
   /* ============================
      SAVE PROFILE
   ============================ */
-  async function save() {
-    // optimistic UI
-    router.push("/profile");
+ async function save() {
+  const res = await fetch("/api/user/update", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(form),
+  });
 
-    await fetch("/api/user/update", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
-
-    router.push("/profile");
+  if (!res.ok) {
+    alert("Failed to update profile");
+    return;
   }
+
+  // 🔄 Refresh NextAuth session (VERY IMPORTANT)
+// eslint-disable-next-line react-hooks/rules-of-hooks
+const { update } = useSession();
+await update();
+  // Go back to profile page
+  router.push("/profile");
+}
 
   /* ============================
      UPLOAD AVATAR (BASE64)

@@ -1,18 +1,17 @@
-import NextAuth, { type AuthOptions } from "next-auth";
+import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import User from "../../../models/User";
 import { connectDB } from "../../../lib/mongodb";
 
-export const authOptions: AuthOptions = {
+export const authOptions = {
   session: {
     strategy: "jwt",
   },
-  secret: process.env.NEXTAUTH_SECRET,
+
   providers: [
     CredentialsProvider({
       name: "Credentials",
-
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
@@ -21,24 +20,19 @@ export const authOptions: AuthOptions = {
       async authorize(credentials) {
         await connectDB();
 
-        if (!credentials?.email || !credentials?.password) return null;
+        if (!credentials?.email || !credentials.password) return null;
 
-        const user = await User.findOne({ email: credentials.email }).lean();
-
+        const user = await User.findOne({ email: credentials.email });
         if (!user) return null;
 
-        const valid = await bcrypt.compare(credentials.password, user.password);
+        const ok = await bcrypt.compare(credentials.password, user.password);
+        if (!ok) return null;
 
-        if (!valid) return null;
-
-        // return a SAFE user object
+        // ⚠️ RETURN MINIMAL DATA ONLY
         return {
           id: user._id.toString(),
           name: user.name,
           email: user.email,
-          avatar: user.avatar || null,
-          sessionId: crypto.randomUUID(),
-          signature: crypto.randomUUID(),
         };
       },
     }),
@@ -48,16 +42,21 @@ export const authOptions: AuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
+        token.name = user.name;
+        token.email = user.email;
       }
       return token;
     },
+
     async session({ session, token }) {
-      if (session.user) {
-        session.user.id = token.id as string;
-      }
+      session.user.id = token.id;
+      session.user.name = token.name;
+      session.user.email = token.email;
       return session;
     },
   },
+
+  secret: process.env.NEXTAUTH_SECRET,
 };
 
 const handler = NextAuth(authOptions);
