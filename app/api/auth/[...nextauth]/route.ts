@@ -1,43 +1,84 @@
-import NextAuth from "next-auth";
+export const runtime = "nodejs";
+
+import NextAuth, { type NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
+
 import User from "../../../models/User";
 import { connectDB } from "../../../lib/mongodb";
 
-export const authOptions = {
+export const authOptions: NextAuthOptions = {
   session: {
-    strategy: "jwt", // OK, but keep token SMALL
+    strategy: "jwt",
   },
 
   providers: [
     CredentialsProvider({
-      name: "Credentials",
+      name: "credentials",
+
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
 
-      async authorize(credentials) {
-        await connectDB();
+   async authorize(credentials) {
+  try {
+    console.log("🔐 AUTHORIZE CALLED", credentials?.email);
 
-        if (!credentials?.email || !credentials.password) return null;
+    if (!credentials?.email || !credentials.password) {
+      console.log("❌ Missing credentials");
+      return null;
+    }
 
-        const user = await User.findOne({ email: credentials.email });
-        if (!user) return null;
+    await connectDB();
+    console.log("✅ DB connected");
 
-        const ok = await bcrypt.compare(
-          credentials.password,
-          user.password
+    const user = await User.findOne({ email: credentials.email }).lean();
+    console.log("👤 USER FOUND:", !!user);
+
+    if (!user) return null;
+    if (!user.password) {
+      console.log("❌ USER HAS NO PASSWORD FIELD");
+      return null;
+    }
+
+    console.log("🔑 DB PASSWORD:", user.password);
+
+    let isValid = false;
+
+    if (user.password.startsWith("$2")) {
+      isValid = await bcrypt.compare(
+        credentials.password,
+        user.password
+      );
+      console.log("🔐 BCRYPT MATCH:", isValid);
+    } else {
+      isValid = credentials.password === user.password;
+      console.log("🔐 PLAINTEXT MATCH:", isValid);
+
+      if (isValid) {
+        const hashed = await bcrypt.hash(credentials.password, 10);
+        await User.updateOne(
+          { _id: user._id },
+          { password: hashed }
         );
-        if (!ok) return null;
+        console.log("🔁 PASSWORD MIGRATED");
+      }
+    }
 
-        // ✅ RETURN MINIMAL DATA ONLY
-        return {
-          id: user._id.toString(),
-          name: user.name,
-          email: user.email,
-        };
-      },
+    if (!isValid) return null;
+
+    return {
+      id: user._id.toString(),
+      name: user.name,
+      email: user.email,
+    };
+  } catch (err) {
+    console.error("🔥 AUTHORIZE ERROR:", err);
+    return null;
+  }
+}
+
     }),
   ],
 
@@ -50,11 +91,15 @@ export const authOptions = {
     },
 
     async session({ session, token }) {
-      if (session.user) {
-        session.user.id = token.id;
+      if (session.user && token.id) {
+        session.user.id = token.id as string;
       }
       return session;
     },
+  },
+
+  pages: {
+    signIn: "/login",
   },
 
   secret: process.env.NEXTAUTH_SECRET,

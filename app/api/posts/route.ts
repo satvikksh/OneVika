@@ -1,9 +1,11 @@
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from "../auth/[...nextauth]/route";
-import {connectDB} from "../../lib/mongodb";
-import Post from "../../models/Post";
 
+import { authOptions } from "../../lib/authOptions";
+import { connectDB } from "../../lib/mongodb";
+import Post from "../../models/Post";
 
 /* =========================
    GET — PUBLIC FEED
@@ -17,11 +19,12 @@ export async function GET() {
         path: "userId",
         select: "name email avatar",
       })
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
 
-    return NextResponse.json(posts, { status: 200 });
+    return NextResponse.json(posts);
   } catch (err) {
-    console.error("GET POSTS ERROR:", err);
+    console.error("❌ GET POSTS ERROR:", err);
     return NextResponse.json([], { status: 500 });
   }
 }
@@ -31,23 +34,32 @@ export async function GET() {
 ========================= */
 export async function POST(req: Request) {
   try {
-    await connectDB();
-
     const session = await getServerSession(authOptions);
 
     if (!session?.user?.id) {
       return NextResponse.json(
-        { error: "Login required" },
+        { error: "Unauthorized" },
         { status: 401 }
       );
     }
 
-    const { content, image } = await req.json();
+    const body = await req.json();
+    const content = body.content?.trim() || "";
+    const images: string[] = body.images || [];
+
+    if (!content && images.length === 0) {
+      return NextResponse.json(
+        { error: "Post cannot be empty" },
+        { status: 400 }
+      );
+    }
+
+    await connectDB();
 
     const post = await Post.create({
-      content,
-      image,
       userId: session.user.id,
+      content,
+      images, // ✅ array (image/video URLs)
     });
 
     const populatedPost = await post.populate({
@@ -57,7 +69,10 @@ export async function POST(req: Request) {
 
     return NextResponse.json(populatedPost, { status: 201 });
   } catch (err) {
-    console.error("POST ERROR:", err);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    console.error("❌ POST ERROR:", err);
+    return NextResponse.json(
+      { error: "Server error" },
+      { status: 500 }
+    );
   }
 }

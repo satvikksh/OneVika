@@ -26,28 +26,35 @@ export default function LoginPage() {
     }
   }, [status, router]);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (loading) return;
+  const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setError("");
 
-    setError("");
-    setLoading(true);
+  const res = await signIn("credentials", {
+    email,
+    password,
+    redirect: false,
+  });
 
-    const res = await signIn("credentials", {
-      email,
-      password,
-      redirect: false,
-    });
-
-    setLoading(false);
-
-    if (res?.error) {
-      setError("Invalid email or password");
-      return;
-    }
-
-    router.push("/feed");
+  if (!res) {
+    setError("Something went wrong");
+    return;
   }
+
+  if (res.error) {
+    if (res.error.includes("User not found")) {
+      setError("No account found with this email");
+    } else if (res.error.includes("Invalid password")) {
+      setError("Incorrect password");
+    } else {
+      setError(res.error);
+    }
+    return;
+  }
+
+  router.push("/feed");
+};
+
 
   return (
     <div

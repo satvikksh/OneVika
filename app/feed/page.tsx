@@ -3,7 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import Image from "next/image";
-import { Heart, MessageCircle, Sparkles, LogIn, Trash2 } from "lucide-react";
+import {
+  Heart,
+  MessageCircle,
+  Sparkles,
+  LogIn,
+  Trash2,
+} from "lucide-react";
 import CreatePost from "./CreatePost";
 import { useTheme } from "../theme-provider";
 import { useSession } from "next-auth/react";
@@ -21,7 +27,7 @@ export default function FeedPage() {
   const loaderRef = useRef<HTMLDivElement | null>(null);
 
   /* ============================
-     FETCH POSTS (PAGINATED)
+     FETCH POSTS (NO PAGE PARAM)
   ============================ */
   useEffect(() => {
     if (!session) return;
@@ -29,26 +35,22 @@ export default function FeedPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoadingPosts(true);
 
-    fetch(`/api/post?page=${page}`)
+    fetch("/api/posts")
       .then((res) => res.json())
-      .then((data) => {
-        setPosts((prev) => {
-          const ids = new Set(prev.map((p) => p._id));
-          const unique = data.filter((p: any) => !ids.has(p._id));
-          return [...prev, ...unique];
-        });
-      })
+      .then((data) => setPosts(data))
       .finally(() => setLoadingPosts(false));
-  }, [session, page]);
+  }, [session]);
 
   /* ============================
-     INFINITE SCROLL
+     INFINITE SCROLL (UI ONLY)
   ============================ */
   useEffect(() => {
     if (!loaderRef.current) return;
 
     const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) setPage((p) => p + 1);
+      if (entry.isIntersecting) {
+        setPage((p) => p + 1); // future pagination
+      }
     });
 
     observer.observe(loaderRef.current);
@@ -59,38 +61,44 @@ export default function FeedPage() {
      OPTIMISTIC LIKE
   ============================ */
   const toggleLike = async (id: string) => {
+    if (!session) return;
+
     setPosts((prev) =>
       prev.map((p) =>
         p._id === id
           ? {
               ...p,
-              likes: p.likes.includes(session!.user.id)
-                ? p.likes.filter((id: string) => id !== session!.user.id)
-                : [...p.likes, session!.user.id],
+              likes: p.likes.includes(session.user.id)
+                ? p.likes.filter(
+                    (uid: string) => uid !== session.user.id
+                  )
+                : [...p.likes, session.user.id],
             }
           : p
       )
     );
 
-    await fetch(`/api/post/${id}/like`, { method: "POST" });
+    await fetch(`/api/posts/${id}/like`, { method: "POST" });
   };
 
   /* ============================
      DELETE POST
   ============================ */
-  // const deletePost = async (id: string) => {
-  //   const res = await fetch(`/api/post/${id}`, { method: "DELETE" });
+  const deletePost = async (id: string) => {
+    const res = await fetch(`/api/posts/${id}`, {
+      method: "DELETE",
+    });
 
-  //   if (!res.ok) {
-  //     alert("Failed to delete post");
-  //     return;
-  //   }
+    if (!res.ok) {
+      alert("Failed to delete post");
+      return;
+    }
 
-  //   setPosts((prev) => prev.filter((p) => p._id !== id));
-  // };
+    setPosts((prev) => prev.filter((p) => p._id !== id));
+  };
 
   /* ============================
-     LOADING SESSION
+     SESSION LOADING
   ============================ */
   if (status === "loading") {
     return (
@@ -101,7 +109,7 @@ export default function FeedPage() {
   }
 
   /* ============================
-     BLOCK FEED IF NOT LOGGED IN
+     BLOCK IF NOT LOGGED IN
   ============================ */
   if (!session) {
     return (
@@ -111,9 +119,11 @@ export default function FeedPage() {
         } min-h-screen flex flex-col items-center justify-center px-4`}
       >
         <Sparkles className="w-12 h-12 mb-4 text-purple-500" />
-        <h2 className="text-2xl font-bold mb-2">Login Required</h2>
+        <h2 className="text-2xl font-bold mb-2">
+          Login Required
+        </h2>
         <p className="text-gray-500 mb-6 text-center">
-          You must be logged in to view the imagination feed.
+          You must be logged in to view the feed.
         </p>
         <button
           onClick={() => router.push("/login")}
@@ -147,11 +157,11 @@ export default function FeedPage() {
         {/* CREATE POST */}
         <CreatePost
           onPostCreated={(post) =>
-            setPosts((prev) => {
-              const exists = prev.some((p) => p._id === post._id);
-              if (exists) return prev;
-              return [post, ...prev];
-            })
+            setPosts((prev) =>
+              prev.some((p) => p._id === post._id)
+                ? prev
+                : [post, ...prev]
+            )
           }
         />
 
@@ -170,34 +180,49 @@ export default function FeedPage() {
                   {post.userId?.name?.[0] ?? "U"}
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-bold">{post.userId?.name}</h3>
+                  <h3 className="font-bold">
+                    {post.userId?.name}
+                  </h3>
                   <p className="text-xs text-gray-500">
                     {new Date(post.createdAt).toLocaleString()}
                   </p>
                 </div>
 
-                {/* DELETE */}
-                {/* {post.userId?._id === session.user.id && (
+                {/* DELETE (OWNER ONLY) */}
+                {post.userId?._id === session.user.id && (
                   <button
                     onClick={() => deletePost(post._id)}
                     className="text-red-500"
                   >
                     <Trash2 size={18} />
                   </button>
-                )} */}
+                )}
               </div>
 
               {/* CONTENT */}
-              <p className="mb-3">{post.content}</p>
+              {post.content && (
+                <p className="mb-3">{post.content}</p>
+              )}
 
-              {post.image && (
-                <Image
-                  src={post.image}
-                  alt="Post image"
-                  width={700}
-                  height={400}
-                  className="rounded-xl mb-3"
-                />
+              {/* MEDIA (IMAGES + VIDEOS) */}
+              {post.images?.map((url: string, i: number) =>
+                url.includes("video") || url.endsWith(".mp4") ? (
+                  <video
+                    key={i}
+                    src={url}
+                    controls
+                    className="rounded-xl mb-3 w-full"
+                  />
+                ) : (
+                  <Image
+                    key={i}
+                    src={url}
+                    alt="Post media"
+                    width={700}
+                    height={400}
+                    className="rounded-xl mb-3"
+                  />
+                )
               )}
 
               {/* ACTIONS */}
@@ -206,7 +231,8 @@ export default function FeedPage() {
                   onClick={() => toggleLike(post._id)}
                   className="flex items-center gap-1 hover:text-purple-500"
                 >
-                  <Heart size={18} /> {post.likes.length}
+                  <Heart size={18} />
+                  {post.likes.length}
                 </button>
 
                 <div className="flex items-center gap-1">
@@ -214,29 +240,15 @@ export default function FeedPage() {
                   {post.comments.length}
                 </div>
               </div>
-
-              {/* COMMENTS */}
-              <input
-                placeholder="Write a comment..."
-                className="mt-3 w-full p-2 border rounded-lg"
-                onKeyDown={async (e) => {
-                  if (e.key === "Enter") {
-                    await fetch(`/api/post/${post._id}/comment`, {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ text: e.currentTarget.value }),
-                    });
-                    e.currentTarget.value = "";
-                  }
-                }}
-              />
             </motion.div>
           ))}
 
-          {/* INFINITE SCROLL LOADER */}
+          {/* LOADER */}
           <div ref={loaderRef} className="h-10" />
           {loadingPosts && (
-            <p className="text-center text-gray-400">Loading more…</p>
+            <p className="text-center text-gray-400">
+              Loading…
+            </p>
           )}
         </div>
       </div>
