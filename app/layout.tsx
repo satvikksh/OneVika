@@ -3,7 +3,7 @@ import Navbar from "./components/navbar";
 import "./globals.css";
 
 export const metadata = {
-  title: "Satvik's Group",
+  title: "OneVika",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
