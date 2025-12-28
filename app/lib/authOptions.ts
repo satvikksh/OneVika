@@ -1,11 +1,14 @@
-import { NextAuthOptions } from "next-auth";
+import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
-import User from "../models/User";
-import { dbConnect } from "../lib/mongodb";
+
+import User from "@/app/models/User";
+import { dbConnect } from "@/app/lib/mongodb";
 
 export const authOptions: NextAuthOptions = {
-  session: { strategy: "jwt" },
+  session: {
+    strategy: "jwt",
+  },
 
   providers: [
     CredentialsProvider({
@@ -17,60 +20,57 @@ export const authOptions: NextAuthOptions = {
       },
 
       async authorize(credentials) {
-        if (!credentials?.email || !credentials.password) {
-          return null;
-        }
-
-        await dbConnect();
-
-        const user = await User.findOne({ email: credentials.email });
-        if (!user) {
-          // ❌ Returning null → clean 401
-          return null;
-        }
-
-        const dbPassword = user.password;
-
-        let isValid = false;
-
-        // ✅ bcrypt password
-        if (dbPassword.startsWith("$2")) {
-          isValid = await bcrypt.compare(credentials.password, dbPassword);
-        }
-        // ✅ plaintext password (auto-migrate)
-        else {
-          isValid = credentials.password === dbPassword;
-
-          if (isValid) {
-            user.password = await bcrypt.hash(credentials.password, 10);
-            await user.save();
-            console.log("🔁 Password migrated:", user.email);
+        try {
+          if (!credentials?.email || !credentials.password) {
+            return null;
           }
-        }
 
-        if (!isValid) {
+          await dbConnect(); // ✅ runtime only
+
+          const user = await User.findOne({ email: credentials.email }).lean();
+          if (!user || !user.password) return null;
+
+          let isValid = false;
+
+          if (user.password.startsWith("$2")) {
+            isValid = await bcrypt.compare(
+              credentials.password,
+              user.password
+            );
+          } else {
+            isValid = credentials.password === user.password;
+
+            if (isValid) {
+              const hashed = await bcrypt.hash(credentials.password, 10);
+              await User.updateOne(
+                { _id: user._id },
+                { password: hashed }
+              );
+            }
+          }
+
+          if (!isValid) return null;
+
+          return {
+            id: user._id.toString(),
+            name: user.name,
+            email: user.email,
+          };
+        } catch {
           return null;
         }
-
-        return {
-          id: user._id.toString(),
-          name: user.name,
-          email: user.email,
-        };
       },
     }),
   ],
 
   callbacks: {
     async jwt({ token, user }) {
-      if (user) {
-        token.id = user.id;
-      }
+      if (user) token.id = user.id;
       return token;
     },
 
     async session({ session, token }) {
-      if (token?.id) {
+      if (session.user && token.id) {
         session.user.id = token.id as string;
       }
       return session;
