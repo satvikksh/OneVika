@@ -6,7 +6,7 @@ interface MongooseCache {
 }
 
 declare global {
-   
+  /// eslint-disable-next-line no-var
   var mongoose: MongooseCache | undefined;
 }
 
@@ -17,13 +17,11 @@ if (!cached) {
 }
 
 export async function dbConnect() {
-  if (cached!.conn) {
-    return cached!.conn;
-  }
+  if (cached!.conn) return cached!.conn;
 
   const MONGODB_URI = process.env.MONGODB_URI;
 
-  // ✅ ONLY CHECK HERE (RUNTIME)
+  // ✅ ONLY checked at runtime
   if (!MONGODB_URI) {
     throw new Error("❌ MONGODB_URI is not defined at runtime");
   }

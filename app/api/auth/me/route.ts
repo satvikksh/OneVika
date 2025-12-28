@@ -1,10 +1,11 @@
 export const dynamic = "force-dynamic";
 
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/lib/authOptions";
 import { NextResponse } from "next/server";
-import User from "@/app/models/User";
+
+import { authOptions } from "@/app/lib/authOptions";
 import { dbConnect } from "@/app/lib/mongodb";
+import User from "@/app/models/User";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -16,7 +17,8 @@ export async function GET() {
   await dbConnect();
 
   const user = await User.findOne({ email: session.user.email })
-    .select("avatar");
+    .select("avatar")
+    .lean();
 
   return NextResponse.json({
     avatar: user?.avatar || "/avatar-default.png",
