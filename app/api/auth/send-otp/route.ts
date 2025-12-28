@@ -1,10 +1,10 @@
 import { OTPStore } from "../../../lib/otpStore";
 import User from "../../../models/User";
-import { connectDB } from "../../../lib/mongodb";
+import { dbConnect } from "../../../lib/mongodb";
 
 export async function POST(req: Request) {
   const { email } = await req.json();
-  await connectDB();
+  await dbConnect();
 
   const user = await User.findOne({ email });
   if (!user) return new Response("Invalid Email", { status: 400 });

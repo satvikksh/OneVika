@@ -9,24 +9,24 @@ import {
   ChevronRight, ExternalLink, Code, Palette, Cpu,
   Database, GitMerge, Star, Mail, MapPin, TrendingUp
 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, Variants } from 'framer-motion';
 import { useTheme } from '../theme-provider';
+// -------------------------------------------------------------
+// ANIMATION VARIANTS (BUILD SAFE)
+// -------------------------------------------------------------
 
-// -------------------------------------------------------------
-// ANIMATION VARIANTS
-// -------------------------------------------------------------
-const containerVariants = {
+const containerVariants: Variants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
     transition: {
       staggerChildren: 0.1,
-      delayChildren: 0.2
-    }
-  }
+      delayChildren: 0.2,
+    },
+  },
 };
 
-const itemVariants = {
+const itemVariants: Variants = {
   hidden: { y: 20, opacity: 0 },
   visible: {
     y: 0,
@@ -34,32 +34,35 @@ const itemVariants = {
     transition: {
       type: "spring",
       stiffness: 100,
-      damping: 12
-    }
-  }
+      damping: 12,
+    },
+  },
 };
 
-const fadeInUp = {
+const fadeInUp: Variants = {
   hidden: { y: 30, opacity: 0 },
   visible: {
     y: 0,
     opacity: 1,
     transition: {
       duration: 0.6,
-      ease: "easeOut"
-    }
-  }
+      ease: [0.25, 0.1, 0.25, 1], // ✅ valid easing
+    },
+  },
 };
 
-const fadeIn = {
+const fadeIn: Variants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
-    transition: { duration: 0.8 }
-  }
+    transition: {
+      duration: 0.8,
+      ease: [0.25, 0.1, 0.25, 1],
+    },
+  },
 };
 
-const scaleUp = {
+const scaleUp: Variants = {
   hidden: { scale: 0.9, opacity: 0 },
   visible: {
     scale: 1,
@@ -67,9 +70,9 @@ const scaleUp = {
     transition: {
       type: "spring",
       stiffness: 200,
-      damping: 15
-    }
-  }
+      damping: 15,
+    },
+  },
 };
 
 // -------------------------------------------------------------
@@ -85,11 +88,15 @@ const SectionWrapper = ({ children, className = "" }: { children: React.ReactNod
 const GradientTitle = ({ children }: { children: React.ReactNode }) => (
   <motion.h2
     variants={fadeInUp}
+    initial="hidden"
+    whileInView="visible"
+    viewport={{ once: true }}
     className="text-3xl sm:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-purple-600 via-pink-500 to-blue-500 bg-clip-text text-transparent mb-8 text-center"
   >
     {children}
   </motion.h2>
 );
+
 
 const Card = ({ children, className = "", delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) => (
   <motion.div
@@ -262,7 +269,8 @@ export default function AboutPage() {
           }}
           transition={{ 
             duration: 20,
-            repeat: Infinity,
+           repeat: Number.POSITIVE_INFINITY
+,
             repeatType: "reverse"
           }}
           className="absolute -top-40 -right-40 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl"
@@ -274,7 +282,8 @@ export default function AboutPage() {
           }}
           transition={{ 
             duration: 25,
-            repeat: Infinity,
+          repeat: Number.POSITIVE_INFINITY
+,
             repeatType: "reverse"
           }}
           className="absolute -bottom-40 -left-40 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl"
@@ -303,7 +312,7 @@ export default function AboutPage() {
             className="text-4xl sm:text-5xl lg:text-7xl font-bold mb-6"
           >
             <span className="bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
-              About Satvik's Group
+              About Satvik&apos;s Group
             </span>
           </motion.h1>
 
@@ -358,13 +367,13 @@ export default function AboutPage() {
           </motion.div>
           
           <motion.p variants={itemVariants} className="text-lg text-gray-700 dark:text-gray-300 mb-4 leading-relaxed">
-            At Satvik's Group, we operate on a radical premise: <span className="font-bold text-purple-600 dark:text-purple-400">reality is optional</span>. 
+            At Satvik&apos;s Group, we operate on a radical premise: <span className="font-bold text-purple-600 dark:text-purple-400">reality is optional</span>. 
             We are not constrained by physics as we know it, by economics as they exist, or by technology as it has been built.
           </motion.p>
           
           <motion.p variants={itemVariants} className="text-lg text-gray-700 dark:text-gray-300 leading-relaxed">
             Instead, we imagine what could be, and then we build it—in concept, in code, and in collective consciousness. 
-            We create technologies that haven't been invented, solve problems that haven't been identified, and explore realms that haven't been discovered.
+            We create technologies that haven&apos;t been invented, solve problems that haven&apos;t been identified, and explore realms that haven&apos;t been discovered.
           </motion.p>
         </motion.div>
       </SectionWrapper>
@@ -580,7 +589,8 @@ export default function AboutPage() {
           }}
           transition={{ 
             duration: 15,
-            repeat: Infinity,
+           repeat: Number.POSITIVE_INFINITY
+,
             repeatType: "reverse"
           }}
           className="absolute -top-40 -right-40 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl"
@@ -592,7 +602,8 @@ export default function AboutPage() {
           }}
           transition={{ 
             duration: 20,
-            repeat: Infinity,
+           repeat: Number.POSITIVE_INFINITY
+,
             repeatType: "reverse"
           }}
           className="absolute -bottom-40 -left-40 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl"
@@ -620,7 +631,7 @@ export default function AboutPage() {
           </h2>
           
           <p className="text-xl text-white/80 mb-8 max-w-2xl mx-auto leading-relaxed">
-            Whether you're a dreamer, a builder, a thinker, or all three—there's a place for you 
+            Whether you&apos;re a dreamer, a builder, a thinker, or all three—there&apos;s a place for you 
             in our collective. Bring your wildest ideas and help us build impossible things.
           </p>
           
@@ -649,7 +660,7 @@ export default function AboutPage() {
             className="mt-12 pt-12 border-t border-white/20"
           >
             <p className="text-white/60 text-sm">
-              Satvik's Group • Imaginary Institute • Est. 2020 • ∞ Dimensions and Counting
+              Satvik&apos;s Group • Imaginary Institute • Est. 2020 • ∞ Dimensions and Counting
             </p>
           </motion.div>
         </motion.div>

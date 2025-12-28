@@ -5,7 +5,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 
 import User from "../../../models/User";
-import { connectDB } from "../../../lib/mongodb";
+import { dbConnect} from "../../../lib/mongodb";
 
 export const authOptions: NextAuthOptions = {
   session: {
@@ -30,7 +30,7 @@ export const authOptions: NextAuthOptions = {
       return null;
     }
 
-    await connectDB();
+    await dbConnect();
     console.log("✅ DB connected");
 
     const user = await User.findOne({ email: credentials.email }).lean();

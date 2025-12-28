@@ -5,14 +5,13 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Save, Upload, Trash2, ArrowLeft } from "lucide-react";
-import { signIn } from "next-auth/react";
-
 
 export default function EditProfilePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   const [form, setForm] = useState({
     name: "",
@@ -22,86 +21,74 @@ export default function EditProfilePage() {
   });
 
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [removeAvatar, setRemoveAvatar] = useState(false);
 
   /* ============================
-     LOAD PROFILE SAFELY
+     LOAD PROFILE
   ============================ */
   useEffect(() => {
     if (!session?.user) return;
 
-    async function load() {
+    (async () => {
       try {
         const res = await fetch("/api/user/profile");
-
-        if (!res.ok) {
-          // console.error("Failed to load profile");
-          return;
-        }
+        if (!res.ok) return;
 
         const data = await res.json();
-
-        if (!data?.user) {
-          console.error("No user returned", data);
-          return;
-        }
+        if (!data?.user) return;
 
         setForm({
-          name: data.user.name || "",
-          bio: data.user.bio || "",
-          avatar: data.user.avatar || "",
-          isPrivate: data.user?.isPrivate || false, 
+          name: data.user.name ?? "",
+          bio: data.user.bio ?? "",
+          avatar: data.user.avatar ?? "",
+          isPrivate: Boolean(data.user.isPrivate),
         });
       } catch (err) {
         console.error("PROFILE LOAD ERROR", err);
       } finally {
         setLoading(false);
       }
-    }
-
-    load();
+    })();
   }, [session]);
 
   /* ============================
-     SAVE PROFILE
+     SAVE PROFILE (NO DATA LOSS)
   ============================ */
- async function save() {
-  const res = await fetch("/api/user/update", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(form),
-  });
+  async function save() {
+    try {
+      setSaving(true);
 
-  if (!res.ok) {
-    alert("Failed to update profile");
-    return;
-  }
+      const formData = new FormData();
+      formData.append("name", form.name);
+      formData.append("bio", form.bio);
+      formData.append("isPrivate", String(form.isPrivate));
 
-  // 🔄 Refresh NextAuth session (VERY IMPORTANT)
-  await signIn("credentials", { redirect: false });
+      if (uploadFile) {
+        formData.append("file", uploadFile);
+      }
 
-  // Go back to profile page
-  router.push("/profile");
-}
+      if (removeAvatar) {
+        formData.append("removeAvatar", "true");
+      }
 
-  /* ============================
-     UPLOAD AVATAR (BASE64)
-  ============================ */
-  async function uploadAvatar() {
-    if (!uploadFile) return;
+      const res = await fetch("/api/user/update", {
+        method: "POST",
+        body: formData,
+      });
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setForm((prev) => ({
-        ...prev,
-        avatar: reader.result as string,
-      }));
-      setUploadFile(null);
-    };
-    reader.readAsDataURL(uploadFile);
+      if (!res.ok) {
+        alert("Failed to update profile");
+        return;
+      }
+
+      router.push("/profile");
+    } finally {
+      setSaving(false);
+    }
   }
 
   /* ============================
-     LOADING / AUTH GUARD
+     GUARDS
   ============================ */
   if (status === "loading" || loading) {
     return <div className="text-center mt-20">Loading profile…</div>;
@@ -111,6 +98,9 @@ export default function EditProfilePage() {
     return <div className="text-center mt-20">Please login first.</div>;
   }
 
+  /* ============================
+     UI
+  ============================ */
   return (
     <div className="max-w-xl mx-auto p-6">
       <button
@@ -124,7 +114,7 @@ export default function EditProfilePage() {
 
       {/* Avatar */}
       <div className="flex items-center gap-6">
-        {form.avatar ? (
+        {form.avatar && !removeAvatar ? (
           <Image
             src={form.avatar}
             width={90}
@@ -146,22 +136,19 @@ export default function EditProfilePage() {
               type="file"
               className="hidden"
               accept="image/*"
-              onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+              onChange={(e) => {
+                setUploadFile(e.target.files?.[0] || null);
+                setRemoveAvatar(false);
+              }}
             />
           </label>
 
-          {uploadFile && (
-            <button
-              onClick={uploadAvatar}
-              className="px-3 py-1 bg-blue-500 text-white rounded-xl"
-            >
-              Upload
-            </button>
-          )}
-
           {form.avatar && (
             <button
-              onClick={() => setForm((p) => ({ ...p, avatar: "" }))}
+              onClick={() => {
+                setRemoveAvatar(true);
+                setUploadFile(null);
+              }}
               className="flex gap-1 items-center text-red-500"
             >
               <Trash2 size={18} /> Remove Avatar
@@ -173,11 +160,12 @@ export default function EditProfilePage() {
       {/* Name */}
       <div className="mt-6">
         <input
+          className="w-full p-2 border rounded"
           value={form.name}
-          onChange={(e) => {
-            if (e.target.value.length <= 20)
-              setForm({ ...form, name: e.target.value });
-          }}
+          onChange={(e) =>
+            e.target.value.length <= 20 &&
+            setForm({ ...form, name: e.target.value })
+          }
         />
         <p className="text-xs text-gray-500">
           {form.name.length}/20 characters
@@ -190,38 +178,31 @@ export default function EditProfilePage() {
         <textarea
           value={form.bio}
           onChange={(e) => setForm({ ...form, bio: e.target.value })}
-          className="w-full p-3 border dark:border-gray-700 bg-white dark:bg-gray-900 rounded-xl h-32"
+          className="w-full p-3 border rounded-xl h-32"
         />
       </div>
 
+      {/* Privacy */}
+      <div className="mt-6">
+        <label className="flex gap-3 items-center cursor-pointer">
+          <input
+            type="checkbox"
+            checked={form.isPrivate}
+            onChange={(e) =>
+              setForm({ ...form, isPrivate: e.target.checked })
+            }
+          />
+          <span className="font-medium">Private Profile</span>
+        </label>
+      </div>
+
       <button
+        disabled={saving}
         onClick={save}
-        className="mt-6 flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700"
+        className="mt-6 flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-xl disabled:opacity-60"
       >
-        <Save size={20} /> Save Changes
+        <Save size={20} /> {saving ? "Saving..." : "Save Changes"}
       </button>
     </div>
   );
-  {/* Privacy Setting */}
-<div className="mt-6">
-  <label className="flex gap-3 items-center cursor-pointer">
-    <input
-      type="checkbox"
-      checked={form.isPrivate}
-      onChange={(e) =>
-        setForm({ ...form, isPrivate: e.target.checked })
-      }
-      className="w-5 h-5 accent-purple-600"
-    />
-    <span className="font-medium text-gray-700 dark:text-gray-300">
-      Private Profile
-    </span>
-  </label>
-
-  <p className="text-sm text-gray-500 mt-1">
-    When enabled, only you can see your posts and profile.
-  </p>
-</div>
-
-  
 }

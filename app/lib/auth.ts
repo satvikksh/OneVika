@@ -2,7 +2,7 @@ import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import User from "../models/User";
-import { connectDB } from "../lib/mongodb";
+import { dbConnect } from "../lib/mongodb";
 
 export const authOptions: NextAuthOptions = {
   session: {
@@ -22,7 +22,7 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials?.email || !credentials.password) return null;
 
-        await connectDB();
+        await dbConnect();
         const user = await User.findOne({ email: credentials.email });
         if (!user) return null;
 
@@ -33,7 +33,7 @@ export const authOptions: NextAuthOptions = {
           id: user._id.toString(),
           name: user.name,
           email: user.email,
-          avatar: user.avatar ?? null,
+          avatar: user.avatar,
         };
       },
     }),
@@ -55,7 +55,7 @@ export const authOptions: NextAuthOptions = {
         session.user.id = token.id as string;
         session.user.name = token.name as string;
         session.user.email = token.email as string;
-        session.user.avatar = token.avatar as string | null;
+        session.user.avatar = token.avatar as string;
       }
       return session;
     },

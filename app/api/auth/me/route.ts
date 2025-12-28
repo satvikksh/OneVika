@@ -2,7 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "../[...nextauth]/route";
 import { NextResponse } from "next/server";
 import User from "../../../models/User";
-import { connectDB } from "../../../lib/mongodb";
+import { dbConnect } from "../../../lib/mongodb";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -11,7 +11,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  await connectDB();
+  await dbConnect();
 
   const user = await User.findOne({ email: session.user.email })
     .select("avatar");

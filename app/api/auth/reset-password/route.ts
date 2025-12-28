@@ -1,11 +1,11 @@
 import User from "../../../models/User";
-import { connectDB } from "../../../lib/mongodb";
+import { dbConnect } from "../../../lib/mongodb";
 import { OTPStore } from "../../../lib/otpStore";
 import { hash } from "bcryptjs";
 
 export async function POST(req: Request) {
   const { email, otp, pass } = await req.json();
-  await connectDB();
+  await dbConnect();
 
   const record = OTPStore[email];
   if (!record || record.otp !== otp)

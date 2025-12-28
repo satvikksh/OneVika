@@ -2,7 +2,7 @@ import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import User from "../models/User";
-import { connectDB } from "../lib/mongodb";
+import { dbConnect } from "../lib/mongodb";
 
 export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt" },
@@ -21,7 +21,7 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        await connectDB();
+        await dbConnect();
 
         const user = await User.findOne({ email: credentials.email });
         if (!user) {

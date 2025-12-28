@@ -214,12 +214,7 @@ export default function Home() {
   return (
     <>
       {/* Add SimpleNavbar here */}
-      <SimpleNavbar 
-        mode={theme}
-        toggleMode={toggleTheme}
-        isAuthenticated={false}
-      />
-      
+      <SimpleNavbar />
       <div className={`min-h-screen ${isDarkMode ? 'dark bg-gray-900' : 'bg-gray-50'}`}>
         {/* Carousel Section */}
         <div className="relative h-[85vh] md:h-[90vh] overflow-hidden" ref={carouselRef}>

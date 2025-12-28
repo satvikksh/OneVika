@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 
 import { authOptions } from "../../lib/authOptions";
-import { connectDB } from "../../lib/mongodb";
+import { dbConnect } from "../../lib/mongodb";
 import Post from "../../models/Post";
 
 /* =========================
@@ -12,7 +12,7 @@ import Post from "../../models/Post";
 ========================= */
 export async function GET() {
   try {
-    await connectDB();
+    await dbConnect();
 
     const posts = await Post.find()
       .populate({
@@ -54,7 +54,7 @@ export async function POST(req: Request) {
       );
     }
 
-    await connectDB();
+    await dbConnect();
 
     const post = await Post.create({
       userId: session.user.id,
