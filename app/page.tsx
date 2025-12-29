@@ -2,11 +2,21 @@
 
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import Link from "next/link";
-import { ArrowRight, Sparkles,Globe, Infinity, Rocket, ChevronLeft, ChevronRight, BookOpen,} from "lucide-react";
+import {
+  ArrowRight,
+  Sparkles,
+  Globe,
+  Infinity,
+  Rocket,
+  ChevronLeft,
+  ChevronRight,
+  BookOpen,
+} from "lucide-react";
 // import Image from "next/image";
-import { useTheme } from './theme-provider';
-import SimpleNavbar from './components/navbar';
-
+import { useTheme } from "./theme-provider";
+import SimpleNavbar from "./components/navbar";
+import { useSession } from "next-auth/react";
+import { Lock } from "lucide-react";
 
 // Type definitions
 interface CardData {
@@ -38,13 +48,16 @@ interface SlideData {
 export default function Home() {
   // Get theme from useTheme hook
   const { theme, toggleTheme } = useTheme();
-  const isDarkMode = theme === 'dark';
-  
+  const isDarkMode = theme === "dark";
+
+  const { data: session, status } = useSession();
+  const isLoggedIn = !!session?.user;
+
   // State
   const [windowWidth, setWindowWidth] = useState<number>(1024);
   const [currentSlide, setCurrentSlide] = useState<number>(0);
   const [autoplay, setAutoplay] = useState<boolean>(true);
-  
+
   // Refs
   const carouselRef = useRef<HTMLDivElement>(null);
   const autoplayRef = useRef<NodeJS.Timeout | null>(null);
@@ -59,7 +72,7 @@ export default function Home() {
         link: "/cosmic-archives",
         variant: "purple",
         category: "Interdimensional",
-        tag: "✨ Exclusive"
+        tag: "✨ Exclusive",
       },
       {
         title: "Neural Nexus",
@@ -68,7 +81,7 @@ export default function Home() {
         link: "/neural-nexus",
         variant: "emerald",
         category: "Psychic Tech",
-        tag: "🧠 Advanced"
+        tag: "🧠 Advanced",
       },
       {
         title: "Quantum Constructs",
@@ -77,7 +90,7 @@ export default function Home() {
         link: "/quantum-constructs",
         variant: "amber",
         category: "Reality Engineering",
-        tag: "⚡ Experimental"
+        tag: "⚡ Experimental",
       },
       {
         title: "Chrono Visions",
@@ -86,7 +99,7 @@ export default function Home() {
         link: "/chrono-visions",
         variant: "rose",
         category: "Temporal Studies",
-        tag: "⏳ Restricted"
+        tag: "⏳ Restricted",
       },
       {
         title: "Aether Gardens",
@@ -95,7 +108,7 @@ export default function Home() {
         link: "/aether-gardens",
         variant: "sky",
         category: "Botanical Wonders",
-        tag: "🌿 Living"
+        tag: "🌿 Living",
       },
       {
         title: "Stellar Forge",
@@ -104,7 +117,7 @@ export default function Home() {
         link: "/stellar-forge",
         variant: "gray",
         category: "Astro-Creation",
-        tag: "⭐ Epic"
+        tag: "⭐ Epic",
       },
     ],
     []
@@ -112,34 +125,42 @@ export default function Home() {
 
   // Slide data
   const slidesData = useMemo(
-  () => [
-    {
-      id: 1,
-      image: "/img/cosmic-gate12.jpg",
-      title: "Welcome to Satvik's Group",
-      subtitle: "Imaginary Technology of Infinite Possibilities",
-      description: "Where imagination becomes reality and dreams take shape",
-      button: { text: "Begin Your Journey", link: "/explore", variant: "light" },
-    },
-    {
-      id: 2,
-      image: "/img/neural-network.jpg",
-      title: "Beyond Reality",
-      subtitle: "Exploring Impossible Concepts",
-      description: "Join us in creating what hasn't been imagined yet",
-      button: { text: "View Projects", link: "/projects", variant: "info" },
-    },
-    {
-      id: 3,
-      image: "/img/quantum-realm.jpg",
-      title: "Collective Creation",
-      subtitle: "Satvik's Visionary Collective",
-      description: "A space where creative minds build new worlds",
-      button: { text: "Join The Collective", link: "/join", variant: "success" },
-    },
-  ],
-  []
-);
+    () => [
+      {
+        id: 1,
+        image: "/img/cosmic-gate12.jpg",
+        title: "Welcome to Satvik's Group",
+        subtitle: "Imaginary Technology of Infinite Possibilities",
+        description: "Where imagination becomes reality and dreams take shape",
+        button: {
+          text: "Begin Your Journey",
+          link: "/explore",
+          variant: "light",
+        },
+      },
+      {
+        id: 2,
+        image: "/img/neural-network.jpg",
+        title: "Beyond Reality",
+        subtitle: "Exploring Impossible Concepts",
+        description: "Join us in creating what hasn't been imagined yet",
+        button: { text: "View Projects", link: "/projects", variant: "info" },
+      },
+      {
+        id: 3,
+        image: "/img/quantum-realm.jpg",
+        title: "Collective Creation",
+        subtitle: "Satvik's Visionary Collective",
+        description: "A space where creative minds build new worlds",
+        button: {
+          text: "Join The Collective",
+          link: "/join",
+          variant: "success",
+        },
+      },
+    ],
+    []
+  );
 
   // Handle window resize
   useEffect(() => {
@@ -173,7 +194,9 @@ export default function Home() {
   };
 
   const prevSlide = () => {
-    setCurrentSlide((prev) => (prev - 1 + slidesData.length) % slidesData.length);
+    setCurrentSlide(
+      (prev) => (prev - 1 + slidesData.length) % slidesData.length
+    );
     if (autoplayRef.current) {
       clearInterval(autoplayRef.current);
     }
@@ -189,9 +212,12 @@ export default function Home() {
   // Get variant color classes
   const getVariantClasses = (variant: string) => {
     const variants: Record<string, string> = {
-      purple: "bg-purple-500/10 border-purple-500/20 text-purple-600 dark:text-purple-400",
-      emerald: "bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400",
-      amber: "bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400",
+      purple:
+        "bg-purple-500/10 border-purple-500/20 text-purple-600 dark:text-purple-400",
+      emerald:
+        "bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400",
+      amber:
+        "bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400",
       rose: "bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400",
       sky: "bg-sky-500/10 border-sky-500/20 text-sky-600 dark:text-sky-400",
       gray: "bg-gray-500/10 border-gray-500/20 text-gray-600 dark:text-gray-400",
@@ -215,15 +241,22 @@ export default function Home() {
     <>
       {/* Add SimpleNavbar here */}
       <SimpleNavbar />
-      <div className={`min-h-screen ${isDarkMode ? 'dark bg-gray-900' : 'bg-gray-50'}`}>
+      <div
+        className={`min-h-screen ${
+          isDarkMode ? "dark bg-gray-900" : "bg-gray-50"
+        }`}
+      >
         {/* Carousel Section */}
-        <div className="relative h-[85vh] md:h-[90vh] overflow-hidden" ref={carouselRef}>
+        <div
+          className="relative h-[85vh] md:h-[90vh] overflow-hidden"
+          ref={carouselRef}
+        >
           {/* Slides */}
           {slidesData.map((slide, index) => (
             <div
               key={slide.id}
               className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${
-                index === currentSlide ? 'opacity-100 z-10' : 'opacity-0 z-0'
+                index === currentSlide ? "opacity-100 z-10" : "opacity-0 z-0"
               }`}
               onMouseEnter={() => setAutoplay(false)}
               onMouseLeave={() => setAutoplay(true)}
@@ -243,7 +276,9 @@ export default function Home() {
                     {/* Badge */}
                     <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-sm border border-white/20">
                       <Sparkles className="w-4 h-4" />
-                      <span className="text-sm font-semibold text-white">IMAGINARY INITIATIVE</span>
+                      <span className="text-sm font-semibold text-white">
+                        IMAGINARY INITIATIVE
+                      </span>
                     </div>
 
                     {/* Title */}
@@ -269,7 +304,9 @@ export default function Home() {
                         href={slide.button.link}
                         className="group px-8 py-4 rounded-xl bg-white/10 backdrop-blur-sm border border-white/20 hover:bg-white/20 transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:shadow-purple-500/25 flex items-center gap-3"
                       >
-                        <span className="font-semibold text-white">{slide.button.text}</span>
+                        <span className="font-semibold text-white">
+                          {slide.button.text}
+                        </span>
                         <ArrowRight className="w-5 h-5 text-white group-hover:translate-x-1 transition-transform" />
                       </Link>
                       <Link
@@ -277,7 +314,9 @@ export default function Home() {
                         className="group px-8 py-4 rounded-xl bg-linear-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:shadow-amber-500/25 flex items-center gap-3"
                       >
                         <Sparkles className="w-5 h-5" />
-                        <span className="font-semibold text-white">Discover Wonders</span>
+                        <span className="font-semibold text-white">
+                          Discover Wonders
+                        </span>
                       </Link>
                     </div>
                   </div>
@@ -310,8 +349,8 @@ export default function Home() {
                 onClick={() => goToSlide(index)}
                 className={`w-2 h-2 rounded-full transition-all duration-300 ${
                   index === currentSlide
-                    ? 'w-8 bg-white'
-                    : 'bg-white/50 hover:bg-white/80'
+                    ? "w-8 bg-white"
+                    : "bg-white/50 hover:bg-white/80"
                 }`}
                 aria-label={`Go to slide ${index + 1}`}
               />
@@ -325,15 +364,21 @@ export default function Home() {
           <div className="text-center max-w-3xl mx-auto mb-16">
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-linear-to-r from-purple-500 to-blue-500 mb-6">
               <Rocket className="w-4 h-4" />
-              <span className="text-sm font-semibold text-white">🚀 IMAGINARY INITIATIVE</span>
+              <span className="text-sm font-semibold text-white">
+                🚀 IMAGINARY INITIATIVE
+              </span>
             </div>
-            
+
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 bg-linear-to-r from-purple-600 via-pink-600 to-blue-600 bg-clip-text text-transparent">
               Satvik's Imaginary Collective
             </h1>
-            
+
             <p className="text-xl lg:text-2xl text-gray-700 dark:text-gray-300 mb-8 leading-relaxed">
-              Building <span className="font-bold text-purple-600 dark:text-purple-400">impossible things</span> in a world that doesn't exist
+              Building{" "}
+              <span className="font-bold text-purple-600 dark:text-purple-400">
+                impossible things
+              </span>{" "}
+              in a world that doesn't exist
             </p>
 
             {/* Action Buttons */}
@@ -362,8 +407,9 @@ export default function Home() {
             </div>
 
             <p className="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-              Imaginary Technology is a conceptual space where boundaries don't exist.
-              Founded by {"Satvik's Group"} as a thought experiment turned creative engine.
+              Imaginary Technology is a conceptual space where boundaries don't
+              exist. Founded by {"Satvik's Group"} as a thought experiment
+              turned creative engine.
             </p>
           </div>
 
@@ -374,29 +420,29 @@ export default function Home() {
                 icon: <Globe className="w-8 h-8" />,
                 title: "No Limits",
                 description: "Physics, logic, and reality are optional here",
-                color: "purple"
+                color: "purple",
               },
               {
                 icon: <Sparkles className="w-8 h-8" />,
                 title: "Pure Creation",
                 description: "Bringing impossible ideas to conceptual life",
-                color: "pink"
+                color: "pink",
               },
               {
                 icon: <Infinity className="w-8 h-8" />,
                 title: "Infinite Scale",
                 description: "From micro-realms to entire imaginary universes",
-                color: "blue"
-              }
+                color: "blue",
+              },
             ].map((feature, index) => (
               <div
                 key={index}
                 className="group p-6 rounded-2xl border border-gray-200 dark:border-gray-800 hover:border-purple-300 dark:hover:border-purple-700 transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:shadow-purple-500/10"
               >
-                <div className={`w-14 h-14 rounded-xl bg-linear-to-br from-${feature.color}-500 to-${feature.color}-600 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
-                  <div className="text-white">
-                    {feature.icon}
-                  </div>
+                <div
+                  className={`w-14 h-14 rounded-xl bg-linear-to-br from-${feature.color}-500 to-${feature.color}-600 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}
+                >
+                  <div className="text-white">{feature.icon}</div>
                 </div>
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
                   {feature.title}
@@ -418,29 +464,30 @@ export default function Home() {
                 </span>
               </h2>
               <p className="text-lg text-gray-600 dark:text-gray-600 max-w-2xl mx-auto">
-                Explore our ongoing conceptual projects. Each represents an exploration into
-                what could exist if reality were more... flexible.
+                Explore our ongoing conceptual projects. Each represents an
+                exploration into what could exist if reality were more...
+                flexible.
               </p>
             </div>
 
             {/* Project Cards Grid */}
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {cardsData.map((card, index) => (
-                <Link
-                  key={index}
-                  href={card.link}
-                  className="group block"
-                >
+                <div key={index} className="group relative">
                   <div className="h-full rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-800 hover:border-purple-300 dark:hover:border-purple-700 transition-all duration-500 hover:scale-[1.02] hover:shadow-2xl hover:shadow-purple-500/10">
                     {/* Card Header with Image */}
                     <div className="relative h-48 overflow-hidden">
                       {/* Tag */}
                       <div className="absolute top-3 left-3 z-10">
-                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getVariantClasses(card.variant)}`}>
+                        <span
+                          className={`px-3 py-1 rounded-full text-xs font-semibold ${getVariantClasses(
+                            card.variant
+                          )}`}
+                        >
                           {card.tag}
                         </span>
                       </div>
-                      
+
                       {/* Category */}
                       <div className="absolute bottom-3 left-3 z-10">
                         <span className="px-3 py-1 rounded-full text-xs font-semibold bg-black/50 backdrop-blur-sm text-white">
@@ -450,7 +497,7 @@ export default function Home() {
 
                       {/* Image */}
                       <div className="absolute inset-0 bg-linear-to-br from-gray-900/50 to-transparent">
-                        <div 
+                        <div
                           className="w-full h-full bg-cover bg-center transition-transform duration-700 group-hover:scale-110"
                           style={{ backgroundImage: `url(${card.image})` }}
                         />
@@ -469,17 +516,36 @@ export default function Home() {
                       {/* Footer */}
                       <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-800">
                         <div className="flex flex-col">
-                          <span className="text-xs text-gray-500 dark:text-gray-400">Imaginary Technology</span>
-                          <span className="text-sm font-semibold text-gray-900 dark:text-white">Satvik's Group</span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            Imaginary Technology
+                          </span>
+                          <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                            Satvik's Group
+                          </span>
                         </div>
-                        <div className={`px-4 py-2 rounded-lg bg-linear-to-r ${getVariantlinear(card.variant)} text-white font-semibold flex items-center gap-2 group-hover:gap-3 transition-all`}>
-                          Enter Portal
-                          <ArrowRight className="w-4 h-4" />
-                        </div>
+                        {isLoggedIn ? (
+                          <Link
+                            href={card.link}
+                            className={`px-4 py-2 rounded-lg bg-linear-to-r ${getVariantlinear(
+                              card.variant
+                            )} text-white font-semibold flex items-center gap-2 group-hover:gap-3 transition-all`}
+                          >
+                            Enter Portal
+                            <ArrowRight className="w-4 h-4" />
+                          </Link>
+                        ) : (
+                          <Link
+                            href="/login"
+                            className="px-4 py-2 rounded-lg bg-gray-700 text-gray-300 font-semibold flex items-center gap-2 cursor-pointer hover:bg-gray-600 transition"
+                          >
+                            <Lock className="w-4 h-4" />
+                            Login Required
+                          </Link>
+                        )}
                       </div>
                     </div>
                   </div>
-                </Link>
+                </div>
               ))}
             </div>
           </div>
@@ -489,7 +555,7 @@ export default function Home() {
         <div className="relative py-20 md:py-32 overflow-hidden">
           {/* Background linear */}
           <div className="absolute inset-0 bg-linear-to-br from-purple-900/20 via-blue-900/20 to-pink-900/20" />
-          
+
           {/* Animated Background Elements */}
           <div className="absolute inset-0 overflow-hidden">
             <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl" />
@@ -504,18 +570,21 @@ export default function Home() {
                   <div>
                     <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-linear-to-r from-purple-500 to-blue-500 mb-6">
                       <Sparkles className="w-4 h-4" />
-                      <span className="text-sm font-semibold text-white">JOIN THE REVOLUTION</span>
+                      <span className="text-sm font-semibold text-white">
+                        JOIN THE REVOLUTION
+                      </span>
                     </div>
-                    
+
                     <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-6">
                       Ready to Imagine With Us?
                     </h2>
-                    
+
                     <p className="text-lg text-white/80 mb-8 leading-relaxed">
-                      Join {"Satvik's Group"} at Imaginary Technology. No experience required—just bring your imagination.
-                      We're building concepts that have never been thought of before.
+                      Join {"Satvik's Group"} at Imaginary Technology. No
+                      experience required—just bring your imagination. We're
+                      building concepts that have never been thought of before.
                     </p>
-                    
+
                     <Link
                       href="/join"
                       className="inline-flex items-center gap-3 px-8 py-4 rounded-xl bg-white text-gray-900 font-bold hover:bg-gray-100 transition-all duration-300 hover:scale-105 hover:shadow-2xl"
@@ -530,9 +599,11 @@ export default function Home() {
                     <div className="inline-flex items-center justify-center w-32 h-32 rounded-full bg-linear-to-r from-purple-500/20 to-blue-500/20 border border-white/20 mb-6">
                       <div className="text-4xl">⚡✨🌌</div>
                     </div>
-                    
+
                     <div className="space-y-4">
-                      <h3 className="text-2xl font-semibold text-white/90">The Only Rule:</h3>
+                      <h3 className="text-2xl font-semibold text-white/90">
+                        The Only Rule:
+                      </h3>
                       <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold bg-linear-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
                         No Rules
                       </h1>
@@ -545,7 +616,11 @@ export default function Home() {
         </div>
 
         {/* Footer */}
-        <footer className={`py-12 ${isDarkMode ? "bg-gray-900 text-white" : "bg-gray-50 text-gray-900"}`}>
+        <footer
+          className={`py-12 ${
+            isDarkMode ? "bg-gray-900 text-white" : "bg-gray-50 text-gray-900"
+          }`}
+        >
           <div className="container mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid lg:grid-cols-3 gap-8 md:gap-12 mb-12">
               {/* Column 1 */}
@@ -556,16 +631,21 @@ export default function Home() {
                   </div>
                   <h3 className="text-xl font-bold">Satvik's Group</h3>
                 </div>
-                <p className={`mb-6 ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
-                  A conceptual collective exploring the boundaries of imagination.
-                  We create, imagine, and build things that don't exist—yet.
+                <p
+                  className={`mb-6 ${
+                    isDarkMode ? "text-gray-400" : "text-gray-600"
+                  }`}
+                >
+                  A conceptual collective exploring the boundaries of
+                  imagination. We create, imagine, and build things that don't
+                  exist—yet.
                 </p>
                 <div className="flex gap-3">
                   <Link
                     href="/about"
                     className={`px-4 py-2 rounded-lg border ${
-                      isDarkMode 
-                        ? "border-gray-700 hover:border-purple-500 text-gray-300 hover:text-purple-400" 
+                      isDarkMode
+                        ? "border-gray-700 hover:border-purple-500 text-gray-300 hover:text-purple-400"
                         : "border-gray-300 hover:border-purple-500 text-gray-700 hover:text-purple-600"
                     } transition-colors`}
                   >
@@ -574,8 +654,8 @@ export default function Home() {
                   <Link
                     href="/philosophy"
                     className={`px-4 py-2 rounded-lg border ${
-                      isDarkMode 
-                        ? "border-gray-700 hover:border-gray-500 text-gray-300 hover:text-gray-400" 
+                      isDarkMode
+                        ? "border-gray-700 hover:border-gray-500 text-gray-300 hover:text-gray-400"
                         : "border-gray-300 hover:border-gray-400 text-gray-700 hover:text-gray-900"
                     } transition-colors`}
                   >
@@ -589,24 +669,54 @@ export default function Home() {
                 <h5 className="text-lg font-bold mb-6">Imaginary Realms</h5>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Link href="/realms/cosmic" className={`block hover:text-purple-500 transition-colors ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
+                    <Link
+                      href="/realms/cosmic"
+                      className={`block hover:text-purple-500 transition-colors ${
+                        isDarkMode ? "text-gray-400" : "text-gray-600"
+                      }`}
+                    >
                       Cosmic Archives
                     </Link>
-                    <Link href="/realms/neural" className={`block hover:text-emerald-500 transition-colors ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
+                    <Link
+                      href="/realms/neural"
+                      className={`block hover:text-emerald-500 transition-colors ${
+                        isDarkMode ? "text-gray-400" : "text-gray-600"
+                      }`}
+                    >
                       Neural Nexus
                     </Link>
-                    <Link href="/realms/quantum" className={`block hover:text-amber-500 transition-colors ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
+                    <Link
+                      href="/realms/quantum"
+                      className={`block hover:text-amber-500 transition-colors ${
+                        isDarkMode ? "text-gray-400" : "text-gray-600"
+                      }`}
+                    >
                       Quantum Constructs
                     </Link>
                   </div>
                   <div className="space-y-2">
-                    <Link href="/realms/chrono" className={`block hover:text-rose-500 transition-colors ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
+                    <Link
+                      href="/realms/chrono"
+                      className={`block hover:text-rose-500 transition-colors ${
+                        isDarkMode ? "text-gray-400" : "text-gray-600"
+                      }`}
+                    >
                       Chrono Visions
                     </Link>
-                    <Link href="/realms/aether" className={`block hover:text-sky-500 transition-colors ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
+                    <Link
+                      href="/realms/aether"
+                      className={`block hover:text-sky-500 transition-colors ${
+                        isDarkMode ? "text-gray-400" : "text-gray-600"
+                      }`}
+                    >
                       Aether Gardens
                     </Link>
-                    <Link href="/realms/stellar" className={`block hover:text-gray-500 transition-colors ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
+                    <Link
+                      href="/realms/stellar"
+                      className={`block hover:text-gray-500 transition-colors ${
+                        isDarkMode ? "text-gray-400" : "text-gray-600"
+                      }`}
+                    >
                       Stellar Forge
                     </Link>
                   </div>
@@ -626,14 +736,18 @@ export default function Home() {
                   <Link
                     href="/collaborate"
                     className={`block w-full py-3 rounded-lg border text-center font-semibold ${
-                      isDarkMode 
-                        ? "border-gray-700 hover:border-gray-500 text-gray-300 hover:text-white" 
+                      isDarkMode
+                        ? "border-gray-700 hover:border-gray-500 text-gray-300 hover:text-white"
                         : "border-gray-300 hover:border-gray-400 text-gray-700 hover:text-gray-900"
                     } transition-colors`}
                   >
                     Request Collaboration
                   </Link>
-                  <div className={`mt-4 ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
+                  <div
+                    className={`mt-4 ${
+                      isDarkMode ? "text-gray-400" : "text-gray-600"
+                    }`}
+                  >
                     <p>Email: imagination@satviksgroup.tech</p>
                   </div>
                 </div>
@@ -641,24 +755,56 @@ export default function Home() {
             </div>
 
             {/* Divider */}
-            <hr className={`mb-8 ${isDarkMode ? "border-gray-800" : "border-gray-200"}`} />
+            <hr
+              className={`mb-8 ${
+                isDarkMode ? "border-gray-800" : "border-gray-200"
+              }`}
+            />
 
             {/* Footer Bottom */}
             <div className="text-center">
-              <p className={`mb-4 ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
-                © {new Date().getFullYear()} {"Satvik's Group"} • Imaginary Technology
+              <p
+                className={`mb-4 ${
+                  isDarkMode ? "text-gray-400" : "text-gray-600"
+                }`}
+              >
+                © {new Date().getFullYear()} {"Satvik's Group"} • Imaginary
+                Technology
               </p>
-              <p className={`text-sm mb-6 ${isDarkMode ? "text-gray-500" : "text-gray-500"}`}>
-                This institution exists purely in imagination. All concepts, projects, and realms are fictional.
+              <p
+                className={`text-sm mb-6 ${
+                  isDarkMode ? "text-gray-500" : "text-gray-500"
+                }`}
+              >
+                This institution exists purely in imagination. All concepts,
+                projects, and realms are fictional.
               </p>
               <div className="flex gap-2 justify-center">
-                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${isDarkMode ? "bg-gray-800 text-gray-300" : "bg-gray-200 text-gray-700"}`}>
+                <span
+                  className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                    isDarkMode
+                      ? "bg-gray-800 text-gray-300"
+                      : "bg-gray-200 text-gray-700"
+                  }`}
+                >
                   Conceptual
                 </span>
-                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${isDarkMode ? "bg-gray-800 text-gray-300" : "bg-gray-200 text-gray-700"}`}>
+                <span
+                  className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                    isDarkMode
+                      ? "bg-gray-800 text-gray-300"
+                      : "bg-gray-200 text-gray-700"
+                  }`}
+                >
                   Imaginary
                 </span>
-                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${isDarkMode ? "bg-gray-800 text-gray-300" : "bg-gray-200 text-gray-700"}`}>
+                <span
+                  className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                    isDarkMode
+                      ? "bg-gray-800 text-gray-300"
+                      : "bg-gray-200 text-gray-700"
+                  }`}
+                >
                   Unreal
                 </span>
               </div>
@@ -669,19 +815,29 @@ export default function Home() {
         {/* Custom animations */}
         <style jsx global>{`
           @keyframes float {
-            0%, 100% { transform: translateY(0px); }
-            50% { transform: translateY(-10px); }
+            0%,
+            100% {
+              transform: translateY(0px);
+            }
+            50% {
+              transform: translateY(-10px);
+            }
           }
-          
+
           @keyframes glow {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
+            0%,
+            100% {
+              opacity: 1;
+            }
+            50% {
+              opacity: 0.7;
+            }
           }
-          
+
           .animate-float {
             animation: float 3s ease-in-out infinite;
           }
-          
+
           .animate-glow {
             animation: glow 2s ease-in-out infinite;
           }
