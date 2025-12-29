@@ -23,8 +23,7 @@
     "react-dom": "19.2.1",
     "recharts": "^3.6.0",
     "socket.io": "^4.8.3",
-    "socket.io-client": "^4.8.3",
-     "start": "node server.js"
+    "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
