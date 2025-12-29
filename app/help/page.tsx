@@ -537,7 +537,7 @@ export default function HelpSupportPage() {
                 </div>
                 <h4 className="text-xl font-bold mb-2">Phone Support</h4>
                 <p className="text-white/60 mb-4">24/7 emergency support line</p>
-                <div className="text-purple-400 font-medium">+1 (555) 123-4567</div>
+                <div className="text-purple-400 font-medium">+91 7580915543</div>
               </div>
             </div>
             
@@ -1310,8 +1310,8 @@ export default function HelpSupportPage() {
                       <div className="font-medium text-rose-300">Emergency Support</div>
                     </div>
                     <div className="text-sm text-white/60">24/7 critical issue response</div>
-                    <a href="tel:+15551234567" className="text-sm font-medium text-rose-400 hover:text-rose-300 block mt-2">
-                      +1 (555) 123-4567
+                    <a href="tel:+917580915543" className="text-sm font-medium text-rose-400 hover:text-rose-300 block mt-2">
+                      +91 7580915543
                     </a>
                   </div>
                   
