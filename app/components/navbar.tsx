@@ -256,9 +256,9 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
             </button>
 
             <Link href="/" className="flex items-center gap-3 group">
-              <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 group-hover:from-purple-600 group-hover:to-pink-600 transition-all overflow-hidden shadow-md">
+              <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-white to-pink-100 group-hover:from-purple-300 group-hover:to-pink-300 transition-all overflow-hidden shadow-md">
                 <Image
-                  src="/img/logo.png"
+                  src="/img/logo123.png"
                   alt="logo"
                   width={40}
                   height={40}
