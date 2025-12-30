@@ -248,7 +248,7 @@ export default function Home() {
       >
         {/* Carousel Section */}
         <div
-          className="relative h-[85vh] md:h-[90vh] overflow-hidden"
+          className="relative:h-[85vh] md:h-[90vh] overflow-hidden"
           ref={carouselRef}
         >
           {/* Slides */}
