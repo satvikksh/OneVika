@@ -370,7 +370,7 @@ export default function Home() {
             </div>
 
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 bg-linear-to-r from-purple-600 via-pink-600 to-blue-600 bg-clip-text text-transparent">
-              Satvik's Imaginary Collective
+              Satvik&#39;s Imaginary Collective
             </h1>
 
             <p className="text-xl lg:text-2xl text-gray-700 dark:text-gray-300 mb-8 leading-relaxed">
@@ -378,7 +378,7 @@ export default function Home() {
               <span className="font-bold text-purple-600 dark:text-purple-400">
                 impossible things
               </span>{" "}
-              in a world that doesn't exist
+              in a world that doesn&#39;t exist
             </p>
 
             {/* Action Buttons */}
@@ -407,7 +407,7 @@ export default function Home() {
             </div>
 
             <p className="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-              Imaginary Technology is a conceptual space where boundaries don't
+              Imaginary Technology is a conceptual space where boundaries don&#39;t
               exist. Founded by {"Satvik's Group"} as a thought experiment
               turned creative engine.
             </p>
@@ -520,7 +520,7 @@ export default function Home() {
                             Imaginary Technology
                           </span>
                           <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                            Satvik's Group
+                            Satvik&#39;s Group
                           </span>
                         </div>
                         {isLoggedIn ? (
@@ -581,7 +581,7 @@ export default function Home() {
 
                     <p className="text-lg text-white/80 mb-8 leading-relaxed">
                       Join {"Satvik's Group"} at Imaginary Technology. No
-                      experience required—just bring your imagination. We're
+                      experience required—just bring your imagination. We&#39;re
                       building concepts that have never been thought of before.
                     </p>
 
@@ -629,7 +629,7 @@ export default function Home() {
                   <div className="w-10 h-10 rounded-full bg-linear-to-br from-purple-500 to-blue-500 flex items-center justify-center">
                     <span className="text-white font-bold">⚡</span>
                   </div>
-                  <h3 className="text-xl font-bold">Satvik's Group</h3>
+                  <h3 className="text-xl font-bold">Satvik&#39;s Group</h3>
                 </div>
                 <p
                   className={`mb-6 ${
@@ -637,7 +637,7 @@ export default function Home() {
                   }`}
                 >
                   A conceptual collective exploring the boundaries of
-                  imagination. We create, imagine, and build things that don't
+                  imagination. We create, imagine, and build things that don&#39;t
                   exist—yet.
                 </p>
                 <div className="flex gap-3">
