@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Sparkles, Lock, Mail, Eye, EyeOff, LogIn } from "lucide-react";
 import { useTheme } from "../theme-provider";
 import { signIn, useSession } from "next-auth/react";
+import { FcGoogle } from "react-icons/fc";
 
 export default function LoginPage() {
   const { theme } = useTheme();
@@ -27,34 +28,42 @@ export default function LoginPage() {
   }, [status, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setError("");
+    e.preventDefault();
+    setError("");
 
-  const res = await signIn("credentials", {
-    email,
-    password,
-    redirect: false,
-  });
+    const res = await signIn("credentials", {
+      email,
+      password,
+      redirect: false,
+    });
 
-  if (!res) {
-    setError("Something went wrong");
-    return;
-  }
-
-  if (res.error) {
-    if (res.error.includes("User not found")) {
-      setError("No account found with this email");
-    } else if (res.error.includes("Invalid password")) {
-      setError("Incorrect password");
-    } else {
-      setError(res.error);
+    if (!res) {
+      setError("Something went wrong");
+      return;
     }
-    return;
-  }
 
-  router.push("/feed");
-};
+    if (res.error) {
+      if (res.error.includes("User not found")) {
+        setError("No account found with this email");
+      } else if (res.error.includes("Invalid password")) {
+        setError("Incorrect password");
+      } else {
+        setError(res.error);
+      }
+      return;
+    }
 
+    router.push("/feed");
+  };
+
+  const handleGoogleLogin = async () => {
+    setError("");
+    setLoading(true);
+
+    await signIn("google", {
+      callbackUrl: "/feed",
+    });
+  };
 
   return (
     <div
@@ -162,6 +171,26 @@ export default function LoginPage() {
             {loading ? "Signing in..." : "Login"}
           </button>
         </form>
+
+        {/* Divider */}
+        <div className="my-6 flex items-center gap-3">
+          <div className="flex-1 h-px bg-gray-300 dark:bg-gray-700" />
+          <span className="text-sm text-gray-500">OR</span>
+          <div className="flex-1 h-px bg-gray-300 dark:bg-gray-700" />
+        </div>
+
+        {/* Google Login */}
+        <button
+          onClick={handleGoogleLogin}
+          type="button"
+          className="w-full flex items-center justify-center gap-3 py-3 
+  bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700
+  rounded-xl font-semibold hover:bg-gray-100 dark:hover:bg-gray-700
+  transition"
+        >
+          <FcGoogle className="w-5 h-5" />
+          Continue with Google
+        </button>
 
         {/* Signup */}
         <p className="mt-6 text-center text-gray-600 dark:text-gray-400">

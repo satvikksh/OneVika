@@ -1,5 +1,6 @@
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import GoogleProvider from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
 
 import User from "@/app/models/User";
@@ -11,6 +12,7 @@ export const authOptions: NextAuthOptions = {
   },
 
   providers: [
+    // 🔐 EMAIL / PASSWORD LOGIN (UNCHANGED)
     CredentialsProvider({
       name: "credentials",
       credentials: {
@@ -21,21 +23,24 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials?.email || !credentials.password) return null;
 
-        await dbConnect(); // ✅ runtime only
+        await dbConnect();
 
         const user = await User.findOne({ email: credentials.email }).lean();
         if (!user || !user.password) return null;
 
         let isValid = false;
 
+        // bcrypt password
         if (user.password.startsWith("$2")) {
           isValid = await bcrypt.compare(
             credentials.password,
             user.password
           );
         } else {
+          // legacy plain-text password
           isValid = credentials.password === user.password;
 
+          // 🔁 auto-migrate to bcrypt
           if (isValid) {
             const hashed = await bcrypt.hash(credentials.password, 10);
             await User.updateOne(
@@ -54,17 +59,52 @@ export const authOptions: NextAuthOptions = {
         };
       },
     }),
+
+    // 🔑 GOOGLE LOGIN (ADDED)
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    }),
   ],
 
   callbacks: {
+    // 🔹 GOOGLE USER SAVE (NO DATA LOSS)
+    async signIn({ user, account }) {
+      if (account?.provider === "google") {
+        await dbConnect();
+
+        const existingUser = await User.findOne({
+          email: user.email,
+        });
+
+        if (!existingUser) {
+          await User.create({
+            name: user.name,
+            email: user.email,
+            image: user.image,
+            provider: "google",
+          });
+        }
+      }
+      return true;
+    },
+
+    // 🔹 JWT (UNCHANGED + SAFE)
     async jwt({ token, user }) {
-      if (user) token.id = user.id;
+      if (user) {
+        token.id = user.id;
+        token.email = user.email;
+        token.name = user.name;
+      }
       return token;
     },
 
+    // 🔹 SESSION (UNCHANGED + SAFE)
     async session({ session, token }) {
       if (session.user && token.id) {
         session.user.id = token.id as string;
+        session.user.email = token.email as string;
+        session.user.name = token.name as string;
       }
       return session;
     },
