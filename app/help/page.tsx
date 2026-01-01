@@ -1150,7 +1150,7 @@ export default function HelpSupportPage() {
         {/* Initial message */}
         <div className="flex justify-start">
           <div className="max-w-[80%] p-3 rounded-2xl bg-white/10">
-            <div className="text-sm">Hello! I'm your Neural Support assistant. How can I help you today?</div>
+            <div className="text-sm">Hello! I&#39;m your Neural Support assistant. How can I help you today?</div>
             <div className="text-xs opacity-60 mt-1">10:00 AM</div>
           </div>
         </div>
