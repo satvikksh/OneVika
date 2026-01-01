@@ -7,7 +7,6 @@ import {
   Heart,
   MessageCircle,
   Sparkles,
-  LogIn,
   Trash2,
 } from "lucide-react";
 import CreatePost from "./CreatePost";
@@ -22,17 +21,32 @@ export default function FeedPage() {
   const { data: session, status } = useSession();
 
   const [posts, setPosts] = useState<any[]>([]);
-  const [page, setPage] = useState(1);
   const [loadingPosts, setLoadingPosts] = useState(false);
   const loaderRef = useRef<HTMLDivElement | null>(null);
 
   /* ============================
-     FETCH POSTS (NO PAGE PARAM)
+     SESSION GUARD (IMPORTANT)
   ============================ */
-  useEffect(() => {
-    if (!session) return;
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        Loading feed...
+      </div>
+    );
+  }
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+  if (status === "unauthenticated") {
+    router.replace("/login");
+    return null;
+  }
+
+  /* ============================
+     FETCH POSTS
+  ============================ */
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useEffect(() => {
+    if (!session?.user?.id) return;
+
     setLoadingPosts(true);
 
     fetch("/api/posts")
@@ -42,26 +56,10 @@ export default function FeedPage() {
   }, [session]);
 
   /* ============================
-     INFINITE SCROLL (UI ONLY)
-  ============================ */
-  useEffect(() => {
-    if (!loaderRef.current) return;
-
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) {
-        setPage((p) => p + 1); // future pagination
-      }
-    });
-
-    observer.observe(loaderRef.current);
-    return () => observer.disconnect();
-  }, []);
-
-  /* ============================
      OPTIMISTIC LIKE
   ============================ */
   const toggleLike = async (id: string) => {
-    if (!session) return;
+    if (!session?.user?.id) return;
 
     setPosts((prev) =>
       prev.map((p) =>
@@ -78,13 +76,17 @@ export default function FeedPage() {
       )
     );
 
-    await fetch(`/api/posts/${id}/like`, { method: "POST" });
+    await fetch(`/api/posts/${id}/like`, {
+      method: "POST",
+    });
   };
 
   /* ============================
-     DELETE POST
+     DELETE POST (OWNER ONLY)
   ============================ */
   const deletePost = async (id: string) => {
+    if (!session?.user?.id) return;
+
     const res = await fetch(`/api/posts/${id}`, {
       method: "DELETE",
     });
@@ -96,44 +98,6 @@ export default function FeedPage() {
 
     setPosts((prev) => prev.filter((p) => p._id !== id));
   };
-
-  /* ============================
-     SESSION LOADING
-  ============================ */
-  if (status === "loading") {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        Loading feed...
-      </div>
-    );
-  }
-
-  /* ============================
-     BLOCK IF NOT LOGGED IN
-  ============================ */
-  if (!session) {
-    return (
-      <div
-        className={`${
-          isDark ? "bg-black text-white" : "bg-gray-50"
-        } min-h-screen flex flex-col items-center justify-center px-4`}
-      >
-        <Sparkles className="w-12 h-12 mb-4 text-purple-500" />
-        <h2 className="text-2xl font-bold mb-2">
-          Login Required
-        </h2>
-        <p className="text-gray-500 mb-6 text-center">
-          You must be logged in to view the feed.
-        </p>
-        <button
-          onClick={() => router.push("/login")}
-          className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-blue-500 text-white"
-        >
-          <LogIn size={18} /> Login
-        </button>
-      </div>
-    );
-  }
 
   return (
     <div className={`${isDark ? "dark bg-black" : "bg-gray-50"} min-h-screen`}>
@@ -174,11 +138,12 @@ export default function FeedPage() {
               animate={{ opacity: 1, y: 0 }}
               className="rounded-2xl p-6 bg-white dark:bg-gray-900 border shadow"
             >
-              {/* USER */}
+              {/* USER INFO */}
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-10 h-10 rounded-full bg-purple-500 flex items-center justify-center text-white font-bold">
                   {post.userId?.name?.[0] ?? "U"}
                 </div>
+
                 <div className="flex-1">
                   <h3 className="font-bold">
                     {post.userId?.name}
@@ -188,8 +153,7 @@ export default function FeedPage() {
                   </p>
                 </div>
 
-                {/* DELETE (OWNER ONLY) */}
-                {post.userId?._id === session.user.id && (
+                {post.userId?._id === session?.user?.id && (
                   <button
                     onClick={() => deletePost(post._id)}
                     className="text-red-500"
@@ -204,9 +168,9 @@ export default function FeedPage() {
                 <p className="mb-3">{post.content}</p>
               )}
 
-              {/* MEDIA (IMAGES + VIDEOS) */}
+              {/* MEDIA */}
               {post.images?.map((url: string, i: number) =>
-                url.includes("video") || url.endsWith(".mp4") ? (
+                url.endsWith(".mp4") ? (
                   <video
                     key={i}
                     src={url}
@@ -243,13 +207,13 @@ export default function FeedPage() {
             </motion.div>
           ))}
 
-          {/* LOADER */}
-          <div ref={loaderRef} className="h-10" />
           {loadingPosts && (
             <p className="text-center text-gray-400">
-              Loading…
+              Loading posts…
             </p>
           )}
+
+          <div ref={loaderRef} className="h-10" />
         </div>
       </div>
     </div>

@@ -12,7 +12,13 @@ export const authOptions: NextAuthOptions = {
   },
 
   providers: [
-    // 🔐 EMAIL / PASSWORD LOGIN (UNCHANGED)
+    // ✅ GOOGLE PROVIDER
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    }),
+
+    // ✅ CREDENTIALS PROVIDER (unchanged)
     CredentialsProvider({
       name: "credentials",
       credentials: {
@@ -25,30 +31,12 @@ export const authOptions: NextAuthOptions = {
 
         await dbConnect();
 
-        const user = await User.findOne({ email: credentials.email }).lean();
+        const user = await User.findOne({ email: credentials.email });
         if (!user || !user.password) return null;
 
-        let isValid = false;
-
-        // bcrypt password
-        if (user.password.startsWith("$2")) {
-          isValid = await bcrypt.compare(
-            credentials.password,
-            user.password
-          );
-        } else {
-          // legacy plain-text password
-          isValid = credentials.password === user.password;
-
-          // 🔁 auto-migrate to bcrypt
-          if (isValid) {
-            const hashed = await bcrypt.hash(credentials.password, 10);
-            await User.updateOne(
-              { _id: user._id },
-              { password: hashed }
-            );
-          }
-        }
+        const isValid = user.password.startsWith("$2")
+          ? await bcrypt.compare(credentials.password, user.password)
+          : credentials.password === user.password;
 
         if (!isValid) return null;
 
@@ -59,23 +47,15 @@ export const authOptions: NextAuthOptions = {
         };
       },
     }),
-
-    // 🔑 GOOGLE LOGIN (ADDED)
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    }),
   ],
 
   callbacks: {
-    // 🔹 GOOGLE USER SAVE (NO DATA LOSS)
+    // 🔥 THIS IS THE FIX
     async signIn({ user, account }) {
       if (account?.provider === "google") {
         await dbConnect();
 
-        const existingUser = await User.findOne({
-          email: user.email,
-        });
+        const existingUser = await User.findOne({ email: user.email });
 
         if (!existingUser) {
           await User.create({
@@ -89,22 +69,18 @@ export const authOptions: NextAuthOptions = {
       return true;
     },
 
-    // 🔹 JWT (UNCHANGED + SAFE)
     async jwt({ token, user }) {
       if (user) {
-        token.id = user.id;
-        token.email = user.email;
-        token.name = user.name;
+        await dbConnect();
+        const dbUser = await User.findOne({ email: user.email });
+        token.id = dbUser?._id.toString();
       }
       return token;
     },
 
-    // 🔹 SESSION (UNCHANGED + SAFE)
     async session({ session, token }) {
       if (session.user && token.id) {
         session.user.id = token.id as string;
-        session.user.email = token.email as string;
-        session.user.name = token.name as string;
       }
       return session;
     },
