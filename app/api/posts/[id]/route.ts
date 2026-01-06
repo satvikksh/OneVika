@@ -1,56 +1,85 @@
-export const runtime = "nodejs";
-
+// app/api/posts/[id]/route.ts
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from "../../../lib/authOptions";
-import { dbConnect } from "../../../lib/mongodb";
-import Post from "../../../models/Post";
-// import User from "../../../models/User";
-
-type RouteContext = {
-  params: Promise<{ id: string }>;
-};
+import { authOptions } from "@/app/lib/authOptions";
+import { dbConnect } from "@/app/lib/mongodb";
+import Post from "@/app/models/Post";
+import mongoose from "mongoose";
 
 export async function DELETE(
-  _req: Request,
-  context: RouteContext
+  req: Request,
+  props: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await context.params; // ✅ MUST await
-
+    const params = await props.params;
     const session = await getServerSession(authOptions);
+
     if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     await dbConnect();
 
-    const post = await Post.findById(id);
+    // Add .lean() to get a plain JavaScript object and avoid Mongoose document overhead
+    // Use select to only get userId field for efficiency
+    const post = await Post.findById(params.id).select('userId').lean();
+    
     if (!post) {
-      return NextResponse.json(
-        { error: "Post not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Post not found" }, { status: 404 });
     }
 
-    // ownership check
-    if (post.userId.toString() !== session.user.id) {
+    // Debug: Check user IDs
+    console.log("Post userId:", post.userId);
+    console.log("Session userId:", session.user.id);
+    console.log("Post userId type:", typeof post.userId);
+    console.log("Session userId type:", typeof session.user.id);
+    
+    // Handle both cases: userId could be ObjectId or populated object
+    let postUserId: string;
+    
+    // Check if userId is an object with _id property (populated)
+    if (post.userId && typeof post.userId === 'object' && '_id' in post.userId) {
+      postUserId = (post.userId as any)._id.toString();
+    } else if (post.userId) {
+      // If it's already an ObjectId or string
+      postUserId = String(post.userId);
+    } else {
+      return NextResponse.json({ error: "Post has no owner" }, { status: 400 });
+    }
+    
+    const sessionUserId = session.user.id.toString();
+    
+    console.log("Post userId string:", postUserId);
+    console.log("Session userId string:", sessionUserId);
+    console.log("Comparing:", postUserId, "===", sessionUserId);
+    
+    // Check if current user is the post owner
+    if (postUserId !== sessionUserId) {
       return NextResponse.json(
-        { error: "Forbidden" },
+        { 
+          error: "You are not authorized to delete this post",
+          details: {
+            postUserId,
+            sessionUserId,
+            postId: params.id
+          }
+        }, 
         { status: 403 }
       );
     }
 
-    await Post.deleteOne({ _id: id });
+    // Delete the post
+    await Post.deleteOne({ _id: params.id });
 
-    return NextResponse.json({ success: true });
-  } catch (err) {
-    console.error("DELETE POST ERROR:", err);
+    return NextResponse.json({ 
+      success: true,
+      message: "Post deleted successfully"
+    });
+    
+  } catch (error: any) {
+    console.error("Error deleting post:", error);
     return NextResponse.json(
-      { error: "Server error" },
+      { error: error.message || "Internal server error" },
       { status: 500 }
     );
   }
