@@ -49,6 +49,12 @@ const UserSchema = new Schema(
       default: "",
     },
 
+   sessionVersion: {
+  type: Number,
+  default: 0,
+},
+
+
     likedPosts: [
       {
         type: Schema.Types.ObjectId,
@@ -60,5 +66,4 @@ const UserSchema = new Schema(
 );
 
 // 🔁 Prevent model overwrite in Next.js
-export default mongoose.models.User ||
-  mongoose.model("User", UserSchema);
+export default mongoose.models.User || mongoose.model("User", UserSchema);

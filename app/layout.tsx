@@ -1,19 +1,22 @@
-import { Providers } from "./providers";
-import Navbar from "./components/navbar";
+// app/layout.tsx (SERVER COMPONENT)
 import "./globals.css";
+import ClientLayout from "./ClientLayout";
 
 export const metadata = {
   title: "OneVika",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en">
       <body>
-        <Providers>
-          <Navbar />
+        <ClientLayout>
           {children}
-        </Providers>
+        </ClientLayout>
       </body>
     </html>
   );

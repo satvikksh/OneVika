@@ -12,7 +12,7 @@ export default function LoginPage() {
   const isDark = theme === "dark";
   const router = useRouter();
 
-  const { status } = useSession(); // 🔐 session check
+  const { status } = useSession();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -20,42 +20,33 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // 🚀 Redirect if already logged in
+  /* ✅ Redirect if already logged in */
   useEffect(() => {
     if (status === "authenticated") {
       router.replace("/feed");
     }
   }, [status, router]);
 
+  /* ✅ FIXED credentials login */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setLoading(true);
 
     const res = await signIn("credentials", {
       email,
       password,
-      redirect: false,
+      redirect: true,        // 🔥 FIX
+      callbackUrl: "/feed",  // 🔥 FIX
     });
 
-    if (!res) {
-      setError("Something went wrong");
-      return;
+    if (res?.error) {
+      setLoading(false);
+      setError("Invalid email or password");
     }
-
-    if (res.error) {
-      if (res.error.includes("User not found")) {
-        setError("No account found with this email");
-      } else if (res.error.includes("Invalid password")) {
-        setError("Incorrect password");
-      } else {
-        setError(res.error);
-      }
-      return;
-    }
-
-    router.push("/feed");
   };
 
+  /* ✅ Google login already correct */
   const handleGoogleLogin = async () => {
     setError("");
     setLoading(true);
@@ -103,7 +94,6 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* Error */}
         {error && (
           <p className="text-red-500 text-sm mb-4 text-center">{error}</p>
         )}
@@ -114,10 +104,7 @@ export default function LoginPage() {
             <label className="block mb-2 text-gray-700 dark:text-gray-300 font-medium">
               Email Address
             </label>
-            <div
-              className="flex items-center gap-2 bg-white dark:bg-gray-800 border 
-              dark:border-gray-700 rounded-xl px-4 py-3"
-            >
+            <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl px-4 py-3">
               <Mail className="w-5 h-5 text-gray-500" />
               <input
                 type="email"
@@ -135,10 +122,7 @@ export default function LoginPage() {
             <label className="block mb-2 text-gray-700 dark:text-gray-300 font-medium">
               Password
             </label>
-            <div
-              className="flex items-center gap-2 bg-white dark:bg-gray-800 border 
-              dark:border-gray-700 rounded-xl px-4 py-3"
-            >
+            <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl px-4 py-3">
               <Lock className="w-5 h-5 text-gray-500" />
               <input
                 type={showPass ? "text" : "password"}
@@ -158,7 +142,6 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* Submit */}
           <button
             type="submit"
             disabled={loading}
@@ -184,21 +167,16 @@ export default function LoginPage() {
           onClick={handleGoogleLogin}
           type="button"
           className="w-full flex items-center justify-center gap-3 py-3 
-  bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700
-  rounded-xl font-semibold hover:bg-gray-100 dark:hover:bg-gray-700
-  transition"
+          bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700
+          rounded-xl font-semibold hover:bg-gray-100 dark:hover:bg-gray-700 transition"
         >
           <FcGoogle className="w-5 h-5" />
           Continue with Google
         </button>
 
-        {/* Signup */}
         <p className="mt-6 text-center text-gray-600 dark:text-gray-400">
           Don&apos;t have an account?{" "}
-          <a
-            href="/register"
-            className="text-purple-600 dark:text-purple-400 font-semibold hover:underline"
-          >
+          <a href="/register" className="text-purple-600 dark:text-purple-400 font-semibold hover:underline">
             Create one
           </a>
         </p>

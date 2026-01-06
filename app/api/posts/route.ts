@@ -20,8 +20,8 @@ export async function GET() {
         select: "name email avatar",
       })
       .sort({ createdAt: -1 })
-      .lean();
-
+      .lean()
+      .populate("comments.user", "name avatar");
     return NextResponse.json(posts);
   } catch (err) {
     console.error("❌ GET POSTS ERROR:", err);
@@ -37,10 +37,7 @@ export async function POST(req: Request) {
     const session = await getServerSession(authOptions);
 
     if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const body = await req.json();
@@ -70,9 +67,6 @@ export async function POST(req: Request) {
     return NextResponse.json(populatedPost, { status: 201 });
   } catch (err) {
     console.error("❌ POST ERROR:", err);
-    return NextResponse.json(
-      { error: "Server error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
