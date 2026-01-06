@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/lib/authOptions";
 import { dbConnect } from "@/app/lib/mongodb";
 import Post from "@/app/models/Post";
+import mongoose from "mongoose";
 
 export async function POST(
   req: Request,
@@ -135,6 +136,163 @@ export async function GET(
     console.error("Error fetching comments:", error);
     return NextResponse.json(
       { error: error.message || "Failed to fetch comments" },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE a comment from a post
+export async function DELETE(
+  req: Request,
+  props: { params: Promise<{ id: string }> }
+) {
+  try {
+    const params = await props.params;
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Get commentId from query parameters or request body
+    const url = new URL(req.url);
+    const commentId = url.searchParams.get('commentId');
+    
+    if (!commentId) {
+      return NextResponse.json({ error: "Comment ID is required" }, { status: 400 });
+    }
+
+    await dbConnect();
+
+    // Find the post
+    const post = await Post.findById(params.id);
+    if (!post) {
+      return NextResponse.json({ error: "Post not found" }, { status: 404 });
+    }
+
+    // Find the comment
+    const comment = post.comments.find((c: any) => c._id.toString() === commentId);
+    if (!comment) {
+      return NextResponse.json({ error: "Comment not found" }, { status: 404 });
+    }
+
+    // Debug: Check user IDs
+    console.log("Comment user ID:", comment.user);
+    console.log("Session user ID:", session.user.id);
+    console.log("Comment user ID type:", typeof comment.user);
+    console.log("Session user ID type:", typeof session.user.id);
+
+    // Check if current user is the comment owner
+    let commentUserId: string;
+    
+    // Handle both cases: user could be ObjectId or populated object
+    if (comment.user && typeof comment.user === 'object' && '_id' in comment.user) {
+      commentUserId = (comment.user as any)._id.toString();
+    } else if (comment.user) {
+      commentUserId = (comment.user as any).toString();
+    } else {
+      commentUserId = '';
+    }
+    
+    const sessionUserId = session.user.id.toString();
+    
+    console.log("Comment userId string:", commentUserId);
+    console.log("Session userId string:", sessionUserId);
+    
+    if (commentUserId !== sessionUserId) {
+      return NextResponse.json(
+        { 
+          error: "You are not authorized to delete this comment",
+          details: {
+            commentUserId,
+            sessionUserId,
+            commentId
+          }
+        }, 
+        { status: 403 }
+      );
+    }
+
+    // Remove the comment using $pull
+    const result = await Post.updateOne(
+      { _id: params.id },
+      { $pull: { comments: { _id: commentId } } }
+    );
+
+    if (result.modifiedCount === 0) {
+      return NextResponse.json({ error: "Failed to delete comment" }, { status: 500 });
+    }
+
+    return NextResponse.json({ 
+      success: true,
+      message: "Comment deleted successfully"
+    });
+    
+  } catch (error: any) {
+    console.error("Error deleting comment:", error);
+    return NextResponse.json(
+      { error: error.message || "Failed to delete comment" },
+      { status: 500 }
+    );
+  }
+}
+
+// Alternative DELETE method using request body (if you prefer)
+export async function DELETE_VIA_BODY(
+  req: Request,
+  props: { params: Promise<{ id: string }> }
+) {
+  try {
+    const params = await props.params;
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Get commentId from request body
+    const { commentId } = await req.json();
+    
+    if (!commentId) {
+      return NextResponse.json({ error: "Comment ID is required" }, { status: 400 });
+    }
+
+    await dbConnect();
+
+    // Use findOneAndUpdate to both check and update in one operation
+    const post = await Post.findOneAndUpdate(
+      { 
+        _id: params.id,
+        "comments._id": commentId,
+        "comments.user": session.user.id  // This ensures only comment owner can delete
+      },
+      { $pull: { comments: { _id: commentId } } },
+      { new: true }
+    );
+
+    if (!post) {
+      return NextResponse.json(
+        { 
+          error: "Comment not found or you are not authorized to delete it",
+          details: {
+            postId: params.id,
+            commentId,
+            userId: session.user.id
+          }
+        }, 
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({ 
+      success: true,
+      message: "Comment deleted successfully"
+    });
+    
+  } catch (error: any) {
+    console.error("Error deleting comment:", error);
+    return NextResponse.json(
+      { error: error.message || "Failed to delete comment" },
       { status: 500 }
     );
   }

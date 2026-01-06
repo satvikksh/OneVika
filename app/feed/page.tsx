@@ -221,7 +221,7 @@ function CommentsModal({
 
   const handleDeleteComment = async (commentId: string) => {
     try {
-      const response = await fetch(`/api/comments/${commentId}`, {
+      const response = await fetch(`/api/posts/${postId}/comments?commentId=${commentId}`, {
         method: "DELETE",
       });
 
