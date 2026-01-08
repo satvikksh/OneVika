@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useNotifications } from "@/app/context/NotificationContext"; 
 import { useUserAvatar } from "../hooks/useUserAvatar";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -77,7 +78,8 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
-  const [unreadNotifications, setUnreadNotifications] = useState(3);
+  // const [unreadNotifications, setUnreadNotifications] = useState(3);
+  const { unreadNotifications } = useNotifications();
 
   const searchRef = useRef<HTMLDivElement>(null);
   const userDropdownRef = useRef<HTMLDivElement>(null);
@@ -233,7 +235,10 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
     setUnreadNotifications(0);
   };
 
-  // const { data: session } = useSession();
+  const handleChatClick = () => {
+    // Navigate to chat page or open chat modal
+    router.push("/chat");
+  };
 
   return (
     <>
@@ -256,15 +261,18 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
             </button>
 
             <Link href="/" className="flex items-center gap-3 group">
-              <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-white to-pink-100 group-hover:from-purple-300 group-hover:to-pink-300 transition-all overflow-hidden shadow-md">
+              {/* Logo without background - only showing the logo image */}
+              <div className="relative w-10 h-10">
                 <Image
-                  src="/img/logo123.png"
-                  alt="logo"
+                  src="/img/logo2.png"
+                  alt="OneVika logo"
                   width={40}
                   height={40}
-                  className="object-cover"
+                  className="object-contain"
+                  priority
                 />
               </div>
+
               <span className="font-bold text-xl bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
                 {title}
               </span>
@@ -378,6 +386,24 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
 
           {/* Right Actions */}
           <div className="flex items-center gap-2">
+            {/* Chat Button/Icon */}
+            {session?.user && (
+              <button
+                onClick={handleChatClick}
+                className="p-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors relative"
+                aria-label="Chat"
+              >
+                <MessageSquare size={20} />
+
+                {/* 🔔 REAL-TIME UNREAD MESSAGE BADGE */}
+                {unreadNotifications > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 bg-green-500 text-white text-xs rounded-full flex items-center justify-center">
+                    {unreadNotifications}
+                  </span>
+                )}
+              </button>
+            )}
+
             <button
               onClick={handleThemeToggle}
               className="p-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
@@ -537,6 +563,12 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                         <Settings size={18} /> Settings
                       </Link>
                       <Link
+                        href="/chat"
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                      >
+                        <MessageSquare size={18} /> Chat
+                      </Link>
+                      <Link
                         href="/help"
                         className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                       >
@@ -617,6 +649,23 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                     )}
                   </Link>
                 ))}
+
+                {/* Add Chat to mobile menu for logged-in users */}
+                {session?.user && (
+                  <button
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      handleChatClick();
+                    }}
+                    className="flex items-center gap-3 w-full px-4 py-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-left"
+                  >
+                    <MessageSquare size={18} />
+                    <span className="font-medium">Chat</span>
+                    <span className="ml-auto px-2 py-0.5 text-xs bg-green-500 text-white rounded-full">
+                      3
+                    </span>
+                  </button>
+                )}
               </div>
 
               {/* Mobile User Actions */}
@@ -654,3 +703,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
 };
 
 export default SimpleNavbar;
+function setUnreadNotifications(arg0: number) {
+  throw new Error("Function not implemented.");
+}
+

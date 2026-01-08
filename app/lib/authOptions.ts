@@ -2,47 +2,21 @@ import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
-import { MongoDBAdapter } from "@next-auth/mongodb-adapter";
-
-import clientPromise from "@/app/lib/mongodb-adapter";
 
 import User from "@/app/models/User";
 import { dbConnect } from "@/app/lib/mongodb";
 
 export const authOptions: NextAuthOptions = {
-    adapter: MongoDBAdapter(clientPromise),
   session: {
     strategy: "jwt",
-    maxAge: 60 * 60 * 24, // 1 day
-  },
-
-  jwt: {
-    maxAge: 60 * 60 * 24,
-  },
-
-  cookies: {
-    sessionToken: {
-      name:
-        process.env.NODE_ENV === "production"
-          ? "__Secure-next-auth.session-token"
-          : "next-auth.session-token",
-      options: {
-        httpOnly: true,
-        sameSite: "lax",
-        path: "/",
-        secure: process.env.NODE_ENV === "production",
-      },
-    },
   },
 
   providers: [
-    // ✅ GOOGLE
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     }),
 
-    // ✅ CREDENTIALS
     CredentialsProvider({
       name: "credentials",
       credentials: {
@@ -51,37 +25,46 @@ export const authOptions: NextAuthOptions = {
       },
 
       async authorize(credentials) {
-        if (!credentials?.email || !credentials.password) return null;
+        try {
+          if (!credentials?.email || !credentials.password) {
+            throw new Error("Missing credentials");
+          }
 
-        await dbConnect();
+          await dbConnect();
 
-        const user = await User.findOne({ email: credentials.email });
-        if (!user || !user.password) return null;
+          const user = await User.findOne({ email: credentials.email }).lean();
 
-        const isValid = user.password.startsWith("$2")
-          ? await bcrypt.compare(credentials.password, user.password)
-          : credentials.password === user.password;
+          if (!user) {
+            throw new Error("User not found");
+          }
 
-        if (!isValid) return null;
+          if (!user.password) {
+            throw new Error("Password not set (Google user?)");
+          }
 
-        // ✅ ensure defaults exist
-        if (user.sessionVersion === undefined) {
-          user.sessionVersion = 0;
-          user.provider = "credentials";
-          await user.save();
+          const isValid = await bcrypt.compare(
+            credentials.password,
+            user.password
+          );
+
+          if (!isValid) {
+            throw new Error("Invalid password");
+          }
+
+          return {
+            id: user._id.toString(),
+            name: user.name,
+            email: user.email,
+            sessionVersion: user.sessionVersion ?? 0,
+          };
+        } catch (err) {
+          console.error("❌ AUTH ERROR:", err);
+          return null;
         }
-
-        return {
-          id: user._id.toString(),
-          name: user.name,
-          email: user.email,
-          sessionVersion: user.sessionVersion,
-        };
       },
     }),
   ],
 
-  // 🔐 GOOGLE USER CREATION
   callbacks: {
     async signIn({ user, account }) {
       if (account?.provider === "google") {
@@ -91,55 +74,35 @@ export const authOptions: NextAuthOptions = {
 
         if (!dbUser) {
           dbUser = await User.create({
-            name: user.name || "Google User",
+            name: user.name,
             email: user.email,
             image: user.image,
             provider: "google",
-            sessionVersion: 0, // 🔐 IMPORTANT
+            sessionVersion: 0,
           });
         }
 
         user.id = dbUser._id.toString();
-        user.sessionVersion = dbUser.sessionVersion;
+        (user as any).sessionVersion = dbUser.sessionVersion;
       }
 
       return true;
     },
 
-    // 🔑 JWT — ALWAYS TRUST DATABASE VERSION
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
-        token.sessionVersion = user.sessionVersion ?? 0;
-      } else if (token.id) {
-        // 🔥 re-check DB every request (prevents hijacking)
-        await dbConnect();
-        const dbUser = await User.findById(token.id).select("sessionVersion");
-        token.sessionVersion = dbUser?.sessionVersion ?? 0;
+        token.sessionVersion = (user as any).sessionVersion ?? 0;
       }
-
       return token;
     },
 
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
-        session.user.sessionVersion = token.sessionVersion as number;
+        (session.user as any).sessionVersion = token.sessionVersion as number;
       }
       return session;
-    },
-  },
-
-  // 🔥 SESSION INVALIDATION ON LOGOUT
-  events: {
-    async signOut({ token }) {
-      if (!token?.id) return;
-
-      await dbConnect();
-      await User.updateOne(
-        { _id: token.id },
-        { $inc: { sessionVersion: 1 } }
-      );
     },
   },
 

@@ -6,32 +6,42 @@ interface MongooseCache {
 }
 
 declare global {
-  /// eslint-disable-next-line no-var
   var mongoose: MongooseCache | undefined;
 }
 
-let cached = global.mongoose;
+const cached: MongooseCache = global.mongoose ?? {
+  conn: null,
+  promise: null,
+};
 
-if (!cached) {
-  cached = global.mongoose = { conn: null, promise: null };
-}
+global.mongoose = cached;
 
-export async function dbConnect() {
-  if (cached!.conn) return cached!.conn;
+export async function dbConnect(): Promise<typeof mongoose> {
+  if (cached.conn) return cached.conn;
 
   const MONGODB_URI = process.env.MONGODB_URI;
-
-  // ✅ ONLY checked at runtime
   if (!MONGODB_URI) {
-    throw new Error("❌ MONGODB_URI is not defined at runtime");
+    throw new Error("❌ MONGODB_URI is not defined");
   }
 
-  if (!cached!.promise) {
-    cached!.promise = mongoose.connect(MONGODB_URI, {
+  if (!cached.promise) {
+    cached.promise = mongoose.connect(MONGODB_URI, {
       bufferCommands: false,
     });
   }
 
-  cached!.conn = await cached!.promise;
-  return cached!.conn;
+  cached.conn = await cached.promise;
+
+  console.log("✅ MongoDB connected (mongoose)");
+
+  return cached.conn;
+}
+export async function getNativeDb() {
+  const conn = await dbConnect();
+
+  if (!conn.connection.db) {
+    throw new Error("❌ Native MongoDB db not available");
+  }
+
+  return conn.connection.db;
 }

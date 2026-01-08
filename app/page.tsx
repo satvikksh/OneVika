@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useMemo, useRef } from "react";
+import { useTheme } from "next-themes";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -13,7 +14,7 @@ import {
   BookOpen,
 } from "lucide-react";
 // import Image from "next/image";
-import { useTheme } from "./theme-provider";
+// import { useTheme } from "./theme-provider";
 import SimpleNavbar from "./components/navbar";
 import { useSession } from "next-auth/react";
 import { Lock } from "lucide-react";
@@ -47,7 +48,7 @@ interface SlideData {
 
 export default function Home() {
   // Get theme from useTheme hook
-  const { theme, toggleTheme } = useTheme();
+  const { theme } = useTheme();
   const isDarkMode = theme === "dark";
 
   const { data: session, status } = useSession();

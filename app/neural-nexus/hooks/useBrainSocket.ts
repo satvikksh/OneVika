@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { io, Socket } from "socket.io-client";
+import  io, {Socket } from "socket.io-client";
 import { NeuralNode, NeuralLink } from "../../types/neural";
 
 const SOCKET_URL = "http://localhost:3001";
@@ -11,7 +11,7 @@ export function useBrainSocket(roomId: string) {
   const [links, setLinks] = useState<NeuralLink[]>([]);
 
   useEffect(() => {
-    const socket: Socket = io(SOCKET_URL);
+    const socket: typeof Socket = io(SOCKET_URL);
 
     socket.emit("join-room", {
       roomId,
@@ -21,7 +21,7 @@ export function useBrainSocket(roomId: string) {
       },
     });
 
-    socket.on("room-users", (users) => {
+    socket.on("room-users", (users: any[]) => {
       const brainNodes: NeuralNode[] = users.map((u: any) => ({
         id: u.id,
         label: u.name,
