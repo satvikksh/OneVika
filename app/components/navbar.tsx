@@ -71,7 +71,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
   const { data: session } = useSession();
   const { avatar, loading } = useUserAvatar();
 
-  const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
@@ -184,16 +184,25 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
   }, []);
 
   // Theme init
-  useEffect(() => {
-    const saved = localStorage.getItem("theme");
-    if (saved === "light" || saved === "dark") {
-      setTheme(saved);
-      document.documentElement.classList.toggle("dark", saved === "dark");
-    } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
-      setTheme("dark");
-      document.documentElement.classList.add("dark");
-    }
-  }, []);
+ useEffect(() => {
+  if (typeof window === "undefined") return;
+
+  const saved = localStorage.getItem("theme") as "dark" | "light" | null;
+
+  const prefersDark = window.matchMedia(
+    "(prefers-color-scheme: dark)"
+  ).matches;
+
+  const resolvedTheme = saved ?? (prefersDark ? "dark" : "light");
+
+  setTheme(resolvedTheme);
+  document.documentElement.classList.toggle(
+    "dark",
+    resolvedTheme === "dark"
+  );
+}, []);
+
+
 
   // Close dropdowns on outside click
   useEffect(() => {

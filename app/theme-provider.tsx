@@ -1,45 +1,54 @@
 // app/theme-provider.tsx
-'use client';
+"use client";
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from "react";
 
-type Theme = 'light' | 'dark';
+type Theme = "light" | "dark";
 
-const ThemeContext = createContext<{
+interface ThemeContextValue {
   theme: Theme;
   toggleTheme: () => void;
-} | undefined>(undefined);
+}
+
+const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
+
+/* ------------------------------------------------------------------ */
+/* PROVIDER */
+/* ------------------------------------------------------------------ */
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>('dark'); // default to dark
+  const [theme, setTheme] = useState<Theme>("light"); // safe default
 
+  /* ---------------- INITIAL LOAD ---------------- */
   useEffect(() => {
-    // Check localStorage or system preference on mount
-    const saved = localStorage.getItem('theme') as Theme;
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    
-    const initialTheme = saved || (prefersDark ? 'dark' : 'light');
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setTheme(initialTheme);
-    
-    // Apply class to HTML element
-    if (initialTheme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    if (typeof window === "undefined") return;
+
+    const saved = localStorage.getItem("theme") as Theme | null;
+    const prefersDark = window.matchMedia(
+      "(prefers-color-scheme: dark)"
+    ).matches;
+
+    const resolvedTheme: Theme =
+      saved ?? (prefersDark ? "dark" : "light");
+
+    setTheme(resolvedTheme);
+    document.documentElement.classList.toggle(
+      "dark",
+      resolvedTheme === "dark"
+    );
   }, []);
 
+  /* ---------------- APPLY THEME (SINGLE SOURCE) ---------------- */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    document.documentElement.classList.toggle("dark", theme === "dark");
+    localStorage.setItem("theme", theme);
+  }, [theme]);
+
+  /* ---------------- TOGGLE ---------------- */
   const toggleTheme = () => {
-    const newTheme = theme === 'dark' ? 'light' : 'dark';
-    setTheme(newTheme);
-    localStorage.setItem('theme', newTheme);
-    
-    if (newTheme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    setTheme((prev) => (prev === "dark" ? "light" : "dark"));
   };
 
   return (
@@ -49,10 +58,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+/* ------------------------------------------------------------------ */
+/* HOOK */
+/* ------------------------------------------------------------------ */
+
 export function useTheme() {
   const context = useContext(ThemeContext);
   if (!context) {
-    throw new Error('useTheme must be used within a ThemeProvider');
+    throw new Error("useTheme must be used within a ThemeProvider");
   }
   return context;
 }

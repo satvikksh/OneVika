@@ -13,8 +13,6 @@ import {
   ChevronRight,
   BookOpen,
 } from "lucide-react";
-// import Image from "next/image";
-// import { useTheme } from "./theme-provider";
 import SimpleNavbar from "./components/navbar";
 import { useSession } from "next-auth/react";
 import { Lock } from "lucide-react";
@@ -43,14 +41,14 @@ interface SlideData {
   };
 }
 
-// Remove the HomePageProps interface and useState for isDarkMode
-// We'll use the theme directly from useTheme
-
 export default function Home() {
   // Get theme from useTheme hook
-  const { theme } = useTheme();
-  const isDarkMode = theme === "dark";
-
+  const { theme, resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  
+  // Use resolvedTheme for accurate theme detection
+  const isDarkMode = resolvedTheme === "dark";
+  
   const { data: session, status } = useSession();
   const isLoggedIn = !!session?.user;
 
@@ -163,6 +161,11 @@ export default function Home() {
     []
   );
 
+  // Handle mount to avoid hydration mismatch
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   // Handle window resize
   useEffect(() => {
     const handleResize = () => setWindowWidth(window.innerWidth);
@@ -238,15 +241,27 @@ export default function Home() {
     return linears[variant] || linears.purple;
   };
 
+  // Don't render theme-dependent content until mounted
+  if (!mounted) {
+    return (
+      <>
+        <SimpleNavbar />
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+          <div className="container mx-auto px-4 py-16">
+            <div className="animate-pulse">
+              <div className="h-8 bg-gray-200 dark:bg-gray-800 rounded w-1/4 mb-4"></div>
+              <div className="h-4 bg-gray-200 dark:bg-gray-800 rounded w-1/2 mb-8"></div>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
-      {/* Add SimpleNavbar here */}
       <SimpleNavbar />
-      <div
-        className={`min-h-screen ${
-          isDarkMode ? "dark bg-gray-900" : "bg-gray-50"
-        }`}
-      >
+      <div className={`min-h-screen ${isDarkMode ? "dark" : ""}`}>
         {/* Carousel Section */}
         <div
           className="relative:h-[85vh] md:h-[90vh] overflow-hidden"
@@ -441,7 +456,13 @@ export default function Home() {
                 className="group p-6 rounded-2xl border border-gray-200 dark:border-gray-800 hover:border-purple-300 dark:hover:border-purple-700 transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:shadow-purple-500/10"
               >
                 <div
-                  className={`w-14 h-14 rounded-xl bg-linear-to-br from-${feature.color}-500 to-${feature.color}-600 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}
+                  className={`w-14 h-14 rounded-xl ${
+                    feature.color === "purple" 
+                      ? "bg-linear-to-br from-purple-500 to-purple-600"
+                      : feature.color === "pink"
+                      ? "bg-linear-to-br from-pink-500 to-rose-600"
+                      : "bg-linear-to-br from-blue-500 to-cyan-600"
+                  } flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}
                 >
                   <div className="text-white">{feature.icon}</div>
                 </div>
