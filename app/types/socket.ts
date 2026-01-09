@@ -13,6 +13,7 @@ export type NextApiResponseServerIO = NextApiResponse & {
 };
 
 export interface Message {
+  status: string;
   id: string;
   text: string;
   senderId: string;
@@ -107,6 +108,11 @@ export function initSocket(res: NextApiResponseServerIO) {
         socket.to(conversationId).emit("receive_message", message);
       }
     );
+
+// export interface SocketDeletePayload {
+//   conversationId: string;
+//   messageId: string;
+// }
 
     /* TYPING INDICATOR */
     socket.on(

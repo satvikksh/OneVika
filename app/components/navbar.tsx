@@ -13,6 +13,7 @@ import {
   Menu,
   X,
   ChevronDown,
+  ChevronRight,
   LogOut,
   Settings,
   Home,
@@ -84,6 +85,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
   const searchRef = useRef<HTMLDivElement>(null);
   const userDropdownRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
 
   const searchSuggestions: SearchSuggestion[] = [
     {
@@ -184,25 +186,23 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
   }, []);
 
   // Theme init
- useEffect(() => {
-  if (typeof window === "undefined") return;
+  useEffect(() => {
+    if (typeof window === "undefined") return;
 
-  const saved = localStorage.getItem("theme") as "dark" | "light" | null;
+    const saved = localStorage.getItem("theme") as "dark" | "light" | null;
 
-  const prefersDark = window.matchMedia(
-    "(prefers-color-scheme: dark)"
-  ).matches;
+    const prefersDark = window.matchMedia(
+      "(prefers-color-scheme: dark)"
+    ).matches;
 
-  const resolvedTheme = saved ?? (prefersDark ? "dark" : "light");
+    const resolvedTheme = saved ?? (prefersDark ? "dark" : "light");
 
-  setTheme(resolvedTheme);
-  document.documentElement.classList.toggle(
-    "dark",
-    resolvedTheme === "dark"
-  );
-}, []);
-
-
+    setTheme(resolvedTheme);
+    document.documentElement.classList.toggle(
+      "dark",
+      resolvedTheme === "dark"
+    );
+  }, []);
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -213,11 +213,14 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
         notificationsRef.current &&
         !notificationsRef.current.contains(e.target as Node) &&
         searchRef.current &&
-        !searchRef.current.contains(e.target as Node)
+        !searchRef.current.contains(e.target as Node) &&
+        mobileMenuRef.current &&
+        !mobileMenuRef.current.contains(e.target as Node)
       ) {
         setIsUserDropdownOpen(false);
         setIsNotificationsOpen(false);
         setShowSearchSuggestions(false);
+        setIsMobileMenuOpen(false);
       }
     };
     document.addEventListener("mousedown", handler);
@@ -241,12 +244,17 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
   };
 
   const markAllAsRead = () => {
-    setUnreadNotifications(0);
+    // setUnreadNotifications(0);
   };
 
   const handleChatClick = () => {
-    // Navigate to chat page or open chat modal
     router.push("/chat");
+    setIsMobileMenuOpen(false);
+  };
+
+  const handleNotificationClick = () => {
+    router.push("/notifications");
+    setIsMobileMenuOpen(false);
   };
 
   return (
@@ -261,16 +269,8 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
         <div className="container mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           {/* Logo & Mobile Menu Button */}
           <div className="flex items-center gap-4">
-            <button
-              className="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              aria-label="Toggle menu"
-            >
-              {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
-            </button>
-
+            {/* Mobile Menu Button - Now on the right side */}
             <Link href="/" className="flex items-center gap-3 group">
-              {/* Logo without background - only showing the logo image */}
               <div className="relative w-10 h-10">
                 <Image
                   src="/img/logo2.png"
@@ -281,7 +281,6 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                   priority
                 />
               </div>
-
               <span className="font-bold text-xl bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
                 {title}
               </span>
@@ -393,8 +392,8 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
             </div>
           )}
 
-          {/* Right Actions */}
-          <div className="flex items-center gap-2">
+          {/* Desktop Right Actions - Hidden on Mobile */}
+          <div className="hidden lg:flex items-center gap-2">
             {/* Chat Button/Icon */}
             {session?.user && (
               <button
@@ -403,8 +402,6 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                 aria-label="Chat"
               >
                 <MessageSquare size={20} />
-
-                {/* 🔔 REAL-TIME UNREAD MESSAGE BADGE */}
                 {unreadNotifications > 0 && (
                   <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 bg-green-500 text-white text-xs rounded-full flex items-center justify-center">
                     {unreadNotifications}
@@ -611,15 +608,30 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
               </div>
             )}
           </div>
+
+          {/* Mobile Dropdown Button - Shows Everything Inside */}
+          <button
+            className="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2"
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            aria-label="Toggle menu"
+          >
+            <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
+              Menu
+            </span>
+            {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
         </div>
 
-        {/* Mobile Menu */}
+        {/* Mobile Menu Dropdown - Contains Everything */}
         {isMobileMenuOpen && (
-          <div className="lg:hidden absolute top-16 inset-x-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 shadow-xl">
+          <div 
+            ref={mobileMenuRef}
+            className="lg:hidden absolute top-16 inset-x-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 shadow-2xl max-h-[80vh] overflow-y-auto"
+          >
             <div className="p-4">
               {/* Mobile Search */}
               {showSearch && (
-                <div className="mb-4">
+                <div className="mb-6">
                   <form onSubmit={handleSearch} className="relative">
                     <Search
                       className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
@@ -627,8 +639,8 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                     />
                     <input
                       type="text"
-                      placeholder="Search..."
-                      className="w-full pl-10 pr-4 py-3 bg-gray-100 dark:bg-gray-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      placeholder="Search projects, docs, users..."
+                      className="w-full pl-10 pr-4 py-3 bg-gray-100 dark:bg-gray-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 text-gray-900 dark:text-white"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                     />
@@ -636,68 +648,188 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                 </div>
               )}
 
-              {/* Mobile Nav Items */}
-              <div className="space-y-1">
-                {navItems.map((item) => (
-                  <Link
-                    key={item.path}
-                    href={item.path}
-                    onClick={() => setIsMobileMenuOpen(false)}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                      pathname === item.path
-                        ? "bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400"
-                        : "hover:bg-gray-100 dark:hover:bg-gray-800"
-                    }`}
-                  >
-                    {item.icon}
-                    <span className="font-medium">{item.label}</span>
-                    {item.badge && (
-                      <span className="ml-auto px-2 py-0.5 text-xs bg-red-500 text-white rounded-full">
-                        {item.badge}
-                      </span>
-                    )}
-                  </Link>
-                ))}
-
-                {/* Add Chat to mobile menu for logged-in users */}
-                {session?.user && (
-                  <button
-                    onClick={() => {
-                      setIsMobileMenuOpen(false);
-                      handleChatClick();
-                    }}
-                    className="flex items-center gap-3 w-full px-4 py-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-left"
-                  >
-                    <MessageSquare size={18} />
-                    <span className="font-medium">Chat</span>
-                    <span className="ml-auto px-2 py-0.5 text-xs bg-green-500 text-white rounded-full">
-                      3
-                    </span>
-                  </button>
-                )}
+              {/* Navigation Tabs */}
+              <div className="mb-6">
+                <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 px-2">
+                  Navigation
+                </h3>
+                <div className="space-y-1">
+                  {navItems.map((item) => (
+                    <Link
+                      key={item.path}
+                      href={item.path}
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className={`flex items-center justify-between px-4 py-3 rounded-xl transition-colors ${
+                        pathname === item.path
+                          ? "bg-gradient-to-r from-purple-500/10 to-pink-500/10 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800"
+                          : "hover:bg-gray-100 dark:hover:bg-gray-800"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        {item.icon}
+                        <span className="font-medium">{item.label}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {item.badge && (
+                          <span className="px-2 py-0.5 text-xs bg-red-500 text-white rounded-full">
+                            {item.badge}
+                          </span>
+                        )}
+                        <ChevronRight size={16} className="text-gray-400" />
+                      </div>
+                    </Link>
+                  ))}
+                </div>
               </div>
 
-              {/* Mobile User Actions */}
-              {!session?.user && (
-                <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-800 grid grid-cols-2 gap-3">
+              {/* Quick Actions */}
+              <div className="mb-6">
+                <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 px-2">
+                  Quick Actions
+                </h3>
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Theme Toggle */}
                   <button
-                    onClick={() => {
-                      setIsMobileMenuOpen(false);
-                      router.push("/login");
-                    }}
-                    className="px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                    onClick={handleThemeToggle}
+                    className="flex flex-col items-center justify-center p-4 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
                   >
-                    Login
+                    {theme === "dark" ? (
+                      <Sun size={20} className="mb-2" />
+                    ) : (
+                      <Moon size={20} className="mb-2" />
+                    )}
+                    <span className="text-sm font-medium">
+                      {theme === "dark" ? "Light Mode" : "Dark Mode"}
+                    </span>
                   </button>
-                  <button
-                    onClick={() => {
-                      setIsMobileMenuOpen(false);
-                      router.push("/register");
-                    }}
-                    className="px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all"
-                  >
-                    Sign Up
-                  </button>
+
+                  {/* Chat */}
+                  {session?.user && (
+                    <button
+                      onClick={handleChatClick}
+                      className="flex flex-col items-center justify-center p-4 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors relative"
+                    >
+                      <MessageSquare size={20} className="mb-2" />
+                      <span className="text-sm font-medium">Chat</span>
+                      {unreadNotifications > 0 && (
+                        <span className="absolute top-2 right-2 w-5 h-5 bg-green-500 text-white text-xs rounded-full flex items-center justify-center">
+                          {unreadNotifications}
+                        </span>
+                      )}
+                    </button>
+                  )}
+
+                  {/* Notifications */}
+                  {session?.user && (
+                    <button
+                      onClick={handleNotificationClick}
+                      className="flex flex-col items-center justify-center p-4 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors relative"
+                    >
+                      <Bell size={20} className="mb-2" />
+                      <span className="text-sm font-medium">Notifications</span>
+                      {unreadNotifications > 0 && (
+                        <span className="absolute top-2 right-2 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+                          {unreadNotifications}
+                        </span>
+                      )}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* User Section */}
+              {session?.user ? (
+                <div className="mb-6">
+                  <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 px-2">
+                    Account
+                  </h3>
+                  <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="relative w-12 h-12 rounded-full overflow-hidden bg-linear-to-br from-purple-500 to-blue-500">
+                        {!loading && avatar ? (
+                          <Image
+                            src={avatar}
+                            alt="User Avatar"
+                            fill
+                            className="object-cover"
+                          />
+                        ) : (
+                          <span className="flex items-center justify-center w-full h-full text-white font-bold text-lg">
+                            {session?.user?.name?.[0]?.toUpperCase() ?? "U"}
+                          </span>
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-bold">{session.user.name || "User"}</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          {session.user.email || "No email"}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Link
+                        href="/profile"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-300"
+                      >
+                        <User size={18} />
+                        <span className="font-medium">Profile</span>
+                      </Link>
+                      <Link
+                        href="/settings"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-300"
+                      >
+                        <Settings size={18} />
+                        <span className="font-medium">Settings</span>
+                      </Link>
+                      <Link
+                        href="/help"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-300"
+                      >
+                        <HelpCircle size={18} />
+                        <span className="font-medium">Help & Support</span>
+                      </Link>
+                      <button
+                        onClick={() => {
+                          setIsMobileMenuOpen(false);
+                          signOut({ callbackUrl: "/login" });
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 text-red-600 hover:bg-red-100 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                      >
+                        <LogOut size={18} />
+                        <span className="font-medium">Logout</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="mb-6">
+                  <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 px-2">
+                    Account
+                  </h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => {
+                        setIsMobileMenuOpen(false);
+                        router.push("/login");
+                      }}
+                      className="px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors font-medium"
+                    >
+                      Login
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsMobileMenuOpen(false);
+                        router.push("/register");
+                      }}
+                      className="px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all font-medium"
+                    >
+                      Sign Up
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -712,7 +844,3 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
 };
 
 export default SimpleNavbar;
-function setUnreadNotifications(arg0: number) {
-  throw new Error("Function not implemented.");
-}
-
