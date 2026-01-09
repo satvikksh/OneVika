@@ -212,7 +212,7 @@ export default function ChatSidebar({
           </div>
 
           {/* Mobile Users List */}
-          <div className="flex-1 overflow-y-auto scrollbar-thin">
+          <div className="flex-1 overflow-y-auto scrollbar-thin pb-14">
             {loadingUsers ? (
               <div className="text-center py-12 px-4">
                 <Loader2 className="h-16 w-16 text-gray-400 mx-auto mb-3 animate-spin" />
