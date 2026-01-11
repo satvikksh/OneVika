@@ -207,9 +207,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 
         {/* Quick actions on hover (desktop only) */}
         {isHovered && !('ontouchstart' in window) && (
-          <div className={`absolute top-1/2 -translate-y-1/2 flex items-center gap-1 ${
-            isCurrentUser ? "-left-12" : "-right-12"
-          }`}>
+          <div className={`absolute top-1/2 -translate-y-1/2 flex items-center gap-1 $ ${isCurrentUser ? "right-full mr-2" : "left-full ml-2"}`}>
             {quickActions.map((action) => (
               <button
                 key={action.action}
