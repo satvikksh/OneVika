@@ -5,10 +5,10 @@ let socket: typeof Socket | null = null;
 export const getSocket = () => {
   if (!socket) {
     socket = io(
-      process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3000",
+      process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001",
       {
         path: "/api/socket",
-        transports: ["websocket"],
+        transports: ["polling", "websocket"],
         autoConnect: false, // IMPORTANT
         reconnection: true,
         reconnectionAttempts: 5,

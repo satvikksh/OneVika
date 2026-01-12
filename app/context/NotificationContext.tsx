@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { useSocket } from "./SocketContext";
 import { useSession } from "next-auth/react";
 import { Message } from "../types/socket";
+import { m } from "framer-motion";
 
 interface NotificationContextType {
   unreadNotifications: number;
@@ -20,25 +21,25 @@ export const NotificationProvider = ({
 }: {
   children: React.ReactNode;
 }) => {
-  const { socket } = useSocket();
+  const { messages } = useSocket();
   const { data: session } = useSession();
   const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   useEffect(() => {
-    if (!socket || !session?.user?.id) return;
+    if (!messages || !session?.user?.id) return;
 
     // 🔔 NEW MESSAGE ARRIVED
-    socket.on("new_notification", ({ message }: { message: Message }) => {
-      // do NOT count messages sent by yourself
-      if (message.senderId !== session.user.id) {
-        setUnreadNotifications((prev) => prev + 1);
-      }
-    });
+    // messages.on("new_notification", ({ message }: { message: Message }) => {
+    //   // do NOT count messages sent by yourself
+    //   if (message.senderId !== session.user.id) {
+    //     setUnreadNotifications((prev) => prev + 1);
+    //   }
+    // });
 
     return () => {
-      socket.off("new_notification");
+      // messages.off("new_notification");
     };
-  }, [socket, session?.user?.id]);
+  }, [messages, session?.user?.id]);
 
   const clearNotifications = () => setUnreadNotifications(0);
 

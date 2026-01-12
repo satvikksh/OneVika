@@ -5,6 +5,8 @@ import { User } from "../types/socket";
 import Image from "next/image";
 import { ArrowLeft, Phone, Video, Info, Users, MoreVertical, Menu } from "lucide-react";
 import { useSession } from "next-auth/react";
+import { useSocket } from "../context/SocketContext";
+
 
 interface ChatTopBarProps {
   selectedUser: User | null;
@@ -32,6 +34,11 @@ export default function ChatTopBar({
   const desktopLeft = "lg:left-80";
   const mobileClasses = isMobile ? "left-0 right-0" : "";
   const positionClasses = isMobile ? mobileClasses : `${desktopLeft} right-0`;
+  const { onlineUsers } = useSocket();
+const isUserOnline =
+  selectedUser?.id
+    ? onlineUsers.includes(selectedUser.id)
+    : false;
 
   if (!selectedUser) {
     return (
@@ -115,24 +122,26 @@ export default function ChatTopBar({
                   </div>
                 )}
               </div>
-              {selectedUser.isOnline && (
-                <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white dark:border-gray-900" />
-              )}
+             {isUserOnline && (
+  <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white dark:border-gray-900" />
+)}
+
             </div>
             <div>
               <h3 className="font-bold text-gray-900 dark:text-white text-sm sm:text-base">
                 {selectedUser.name}
               </h3>
               <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-                {typingUsers.has(selectedUser.id) ? (
-                  <span className="text-purple-600 dark:text-purple-400 italic">
-                    typing...
-                  </span>
-                ) : selectedUser.isOnline ? (
-                  "Online"
-                ) : (
-                  "Offline"
-                )}
+              {typingUsers.has(selectedUser.id) ? (
+  <span className="text-purple-600 dark:text-purple-400 italic">
+    typing...
+  </span>
+) : isUserOnline ? (
+  "Online"
+) : (
+  "Offline"
+)}
+
               </p>
             </div>
           </div>

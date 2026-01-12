@@ -170,7 +170,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
           {/* Message metadata */}
           <div className="flex items-center justify-end mt-1 space-x-1.5 text-xs">
             <span className={isCurrentUser ? "text-blue-200" : "text-gray-500"}>
-              {formatMessageTime(message.timestamp)}
+              {message.timestamp.toLocaleString([], { hour: '2-digit', minute: '2-digit' })}
+                
             </span>
 {/*             
             {isCurrentUser && showStatus && (

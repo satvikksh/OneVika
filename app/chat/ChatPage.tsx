@@ -8,7 +8,7 @@ import ChatSidebar from "./ChatSidebar";
 import ChatTopBar from "./ChatTopBar";
 import ChatArea from "./ChatArea";
 import ContextMenu from "./ContextMenu";
-import { Users, Loader2, Menu, MoreVertical, ChevronDown, Check, CheckCheck, Send, Paperclip, Smile } from "lucide-react";
+import { Users, Loader2, Menu } from "lucide-react";
 
 /* -------------------------------- HELPERS -------------------------------- */
 const isValidObjectId = (id?: string) =>
@@ -28,11 +28,21 @@ const normalizeUsers = (users: any[]): User[] =>
 
 export default function ChatPage() {
   const { data: session, status } = useSession();
-  const { socket, isConnected, onlineUsers } = useSocket();
+  const { 
+    isConnected, 
+    onlineUsers, 
+    messages: socketMessages,
+    // addMessages,
+    sendMessage: socketSendMessage,
+    joinChat,
+    leaveChat,
+    markMessageAsRead,
+    clearMessages,
+     markChatMessagesSeen
+  } = useSocket();
 
   // State
   const [users, setUsers] = useState<User[]>([]);
-  const [messages, setMessages] = useState<Message[]>([]);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [newMessage, setNewMessage] = useState("");
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
@@ -45,6 +55,7 @@ export default function ChatPage() {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isNavbarHidden, setIsNavbarHidden] = useState(false);
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+  const { addMessages } = useSocket();
   
   // Chat UI state
   const [replyTo, setReplyTo] = useState<Message | null>(null);
@@ -55,7 +66,7 @@ export default function ChatPage() {
   const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
   const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null);
 
-  // Message status tracking
+  // Message status tracking - now tracked locally for UI
   const [messageStatus, setMessageStatus] = useState<Record<string, 'sending' | 'sent' | 'delivered' | 'read'>>({});
 
   // Refs
@@ -68,7 +79,8 @@ export default function ChatPage() {
   const isInputFocusedRef = useRef(false);
   const chatAreaRef = useRef<HTMLDivElement | null>(null);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
-  
+  const chatIdRef = useRef<string | null>(null);
+  const fileInputRefCallback = useRef<HTMLInputElement | null>(null);
 
   /* ---------------------------- DETECT MOBILE ---------------------------- */
   useEffect(() => {
@@ -179,7 +191,14 @@ export default function ChatPage() {
         
         const data = await res.json();
         const normalized = normalizeUsers(data.users || []);
-        setUsers(normalized);
+        
+        // Update online status based on socket context
+        const updatedUsers = normalized.map(user => ({
+          ...user,
+          isOnline: onlineUsers.includes(user.id)
+        }));
+        
+        setUsers(updatedUsers);
       } catch (error) {
         console.error("Error fetching users:", error);
         setUsers([]);
@@ -187,193 +206,108 @@ export default function ChatPage() {
         setLoadingUsers(false);
       }
     })();
-  }, [status]);
+  }, [status, onlineUsers]);
 
-  /* ------------------------------ FETCH MESSAGES ----------------------------- */
-  useEffect(() => {
-    if (
-      !selectedUser ||
-      !isValidObjectId(selectedUser.id) ||
-      !session?.user?.id
-    ) {
-      return;
+  /* ------------------------------- JOIN/LEAVE CHAT ROOMS ------------------------------- */
+useEffect(() => {
+  if (!selectedUser || !session?.user?.id) return;
+
+  const users = [session.user.id, selectedUser.id].sort();
+  const chatId = `chat_${users[0]}_${users[1]}`;
+
+  chatIdRef.current = chatId;
+  joinChat(chatId);
+
+  fetchInitialMessages(selectedUser.id);
+
+  // 🔥 CLEANUP = user leaves chat
+ return () => {
+  // ✅ tell server messages were seen
+  markChatMessagesSeen(chatId);
+
+  leaveChat(chatId);
+  chatIdRef.current = null;
+};
+
+}, [selectedUser?.id, session?.user?.id]);
+
+
+
+
+
+  /* ---------------------------- FETCH INITIAL MESSAGES ---------------------------- */
+ const fetchInitialMessages = async (userId: string) => {
+  if (!session?.user?.id) return;
+
+  try {
+    setLoadingMessages(true);
+
+    const res = await fetch(`/api/messages/by-user/${userId}`);
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || "Failed to fetch messages");
     }
 
-    (async () => {
-      try {
-        setLoadingMessages(true);
-        const res = await fetch(`/api/messages/by-user/${selectedUser.id}`);
-        const data = await res.json();
+    // ✅ PUSH DB MESSAGES INTO SOCKET STATE
+   addMessages(data.messages);
 
-        if (!res.ok) {
-          throw new Error(data.error || "Failed to fetch messages");
-        }
+  } catch (err) {
+    console.error("Fetch initial messages failed:", err);
+  } finally {
+    setLoadingMessages(false);
+  }
+};
 
-        const fetchedMessages = data.messages || [];
-        setMessages(fetchedMessages);
-        
-        // Initialize message statuses
-        const statuses: Record<string, 'sending' | 'sent' | 'delivered' | 'read'> = {};
-        fetchedMessages.forEach((msg: Message) => {
-          if (msg.senderId === session.user.id) {
-            // For messages we sent
-            if (msg.read) {
-              statuses[msg.id] = 'read';
-            } else {
-              statuses[msg.id] = 'delivered';
-            }
-          }
-        });
-        setMessageStatus(statuses);
-      } catch (err) {
-        console.error("Fetch messages failed:", err);
-        setMessages([]);
-      } finally {
-        setLoadingMessages(false);
-        setTimeout(() => {
-          messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-        }, 100);
-      }
-    })();
-  }, [selectedUser, session?.user?.id]);
 
-  /* ------------------------------- SOCKET EVENTS ------------------------------ */
-  useEffect(() => {
-    if (!socket || !selectedUser || !session?.user?.id) return;
-
-    socket.emit("join_conversation", {
-      senderId: session.user.id,
-      receiverId: selectedUser.id,
-    });
-
-    const handleReceiveMessage = (msg: Message) => {
-      if (
-        msg.senderId === selectedUser.id ||
-        msg.receiverId === selectedUser.id
-      ) {
-        setMessages((prev) => {
-          if (prev.some((m) => m.id === msg.id)) return prev;
-          return [...prev, msg];
-        });
-      }
-    };
-
-    const handleMessagesSeen = (ids: string[]) => {
-      setMessages((prev) =>
-        prev.map((m) => (ids.includes(m.id) ? { ...m, read: true } : m))
-      );
-      
-      // Update message status to 'read'
-      setMessageStatus(prev => {
-        const updated = { ...prev };
-        ids.forEach(id => {
-          if (updated[id]) {
-            updated[id] = 'read';
-          }
-        });
-        return updated;
-      });
-    };
-
-    const handleMessageDelivered = (messageId: string) => {
-      // Update message status to 'delivered'
-      setMessageStatus(prev => ({
-        ...prev,
-        [messageId]: 'delivered'
-      }));
-    };
-
-    const handleMessageDeleted = (deletedMessageId: string) => {
-      setMessages((prev) => prev.filter((msg) => msg.id !== deletedMessageId));
-      setMessageStatus(prev => {
-        const updated = { ...prev };
-        delete updated[deletedMessageId];
-        return updated;
-      });
-    };
-
-    socket.on("receive_message", handleReceiveMessage);
-    socket.on("messages_seen", handleMessagesSeen);
-    socket.on("message_delivered", handleMessageDelivered);
-    socket.on("message_deleted", handleMessageDeleted);
-
-    return () => {
-      socket.off("receive_message", handleReceiveMessage);
-      socket.off("messages_seen", handleMessagesSeen);
-      socket.off("message_delivered", handleMessageDelivered);
-      socket.off("message_deleted", handleMessageDeleted);
-    };
-  }, [socket, selectedUser, session?.user?.id]);
-
-  /* ----------------------------- MARK AS READ ----------------------------- */
-  useEffect(() => {
-    if (!selectedUser || !socket || messages.length === 0) return;
-
-    const unseenIds = messages
-      .filter((m) => m.senderId === selectedUser.id && !m.read)
-      .map((m) => m.id);
-
-    if (unseenIds.length === 0) return;
-
-    setMessages((prev) =>
-      prev.map((m) =>
-        unseenIds.includes(m.id) ? { ...m, read: true } : m
-      )
+  /* ---------------------------- FILTER MESSAGES FOR SELECTED USER ---------------------------- */
+  const currentUserId = session?.user?.id;
+  
+  // Filter messages for the selected user from SocketContext
+  const filteredMessages = socketMessages.filter(msg => {
+    if (!selectedUser || !currentUserId) return false;
+    
+    return (
+      (msg.senderId === currentUserId && msg.receiverId === selectedUser.id) ||
+      (msg.receiverId === currentUserId && msg.senderId === selectedUser.id)
     );
+  });
 
-    socket.emit("mark_seen", {
-      conversationId: selectedUser.id,
-      messageIds: unseenIds,
-    });
+  // Sort messages by timestamp
+  const sortedMessages = [...filteredMessages].sort((a, b) => 
+    new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  );
 
-    fetch(`/api/messages/by-user/${selectedUser.id}/read`, {
-      method: "POST",
-    }).catch(console.error);
-  }, [messages, selectedUser, socket]);
+  /* ---------------------------- MARK MESSAGES AS READ ---------------------------- */
+useEffect(() => {
+  if (!selectedUser || !currentUserId) return;
 
-  /* ------------------------------ ONLINE STATUS ------------------------------ */
-  useEffect(() => {
-    setUsers((prev) =>
-      prev.map((u) => ({
-        ...u,
-        isOnline: onlineUsers.includes(u.id),
-      }))
-    );
-  }, [onlineUsers]);
+  sortedMessages
+    .filter(
+      m =>
+        m.senderId === selectedUser.id &&
+        m.receiverId === currentUserId &&
+        m.status !== "read"
+    )
+    .forEach(m => markMessageAsRead(m.id));
+}, [sortedMessages, selectedUser, currentUserId, markMessageAsRead]);
+
+
 
   /* -------------------------------- TYPING -------------------------------- */
   const handleTyping = useCallback(() => {
-    if (!socket || !selectedUser || !session?.user?.id) return;
+    if (!selectedUser || !currentUserId || !chatIdRef.current) return;
 
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
 
-    socket.emit("typing", {
-      conversationId: selectedUser.id,
-      userId: session.user.id,
-      isTyping: true,
-    });
-
     setIsTyping(true);
     
     typingTimeoutRef.current = setTimeout(() => {
-      socket.emit("typing", {
-        conversationId: selectedUser.id,
-        userId: session.user.id,
-        isTyping: false,
-      });
       setIsTyping(false);
     }, 1000);
-  }, [socket, selectedUser, session?.user?.id]);
-
-  /* ---------------------------- HANDLE ENTER KEY ---------------------------- */
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !isMobile && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
-    }
-  };
+  }, [selectedUser, currentUserId]);
 
   /* ---------------------------- AUTO RESIZE TEXTAREA ---------------------------- */
   useEffect(() => {
@@ -405,116 +339,58 @@ export default function ChatPage() {
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      console.log('Selected file:', file);
-      event.target.value = '';
-    }
-  };
-
   /* ------------------------------ SEND MESSAGE ------------------------------ */
   const handleSendMessage = async (e?: React.FormEvent) => {
-    e?.preventDefault();
-    if (
-      !newMessage.trim() ||
-      !selectedUser ||
-      !session?.user?.id ||
-      sendingMessage
-    )
-      return;
+  e?.preventDefault();
 
-    const messageText = newMessage.trim();
-    const tempId = `temp-${Date.now()}-${Math.random()}`;
+  if (
+    !newMessage.trim() ||
+    !selectedUser ||
+    !currentUserId ||
+    sendingMessage
+  ) {
+    return;
+  }
 
-    const optimisticMessage: Message = {
-        id: tempId,
-        text: messageText,
-        senderId: session.user.id,
-        receiverId: selectedUser.id,
-        conversationId: selectedUser.id,
-        timestamp: new Date().toISOString(),
-        read: false,
-        status: ""
-    };
+  const messageText = newMessage.trim();
+  const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
-    try {
-      setSendingMessage(true);
-      setNewMessage("");
-      setMessages((prev) => [...prev, optimisticMessage]);
-      setReplyTo(null);
-      setShowEmojiPicker(false);
+  try {
+    setSendingMessage(true);
 
-      // Reset textarea height
-      if (inputRef.current) {
-        inputRef.current.style.height = '44px';
-      }
+    socketSendMessage({
+      id: tempId,
+      content: messageText,
+    //   text: messageText,
+      receiverId: selectedUser.id,
+      chatId: chatIdRef.current!,
+    });
 
-      setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-      }, 100);
+    setNewMessage("");
+    setReplyTo(null);
+    setShowEmojiPicker(false);
 
-      const res = await fetch("/api/messages/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          text: messageText,
-          receiverId: selectedUser.id,
-          replyToId: replyTo?.id,
-        }),
-      });
+    inputRef.current?.focus();
+  } finally {
+    setSendingMessage(false);
+  }
+};
 
-      if (!res.ok) throw new Error("Failed to send message");
 
-      const data = await res.json();
-
-      if (data.message?.id) {
-        setMessages((prev) =>
-          prev.map((msg) => (msg.id === tempId ? data.message : msg))
-        );
-        
-        setMessageStatus(prev => ({
-          ...prev,
-          [data.message.id]: 'sent'
-        }));
-
-        // Remove temp status
-        setMessageStatus(prev => {
-          const updated = { ...prev };
-          delete updated[tempId];
-          return updated;
-        });
-
-        if (socket) {
-          socket.emit("send_message", {
-            conversationId: selectedUser.id,
-            message: data.message,
-            sender: {
-              id: session.user.id,
-              name: session.user.name || "User",
-              avatar: session.user.image || "",
-            },
-          });
-        }
-      }
-    } catch (error) {
-      console.error("Error sending message:", error);
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === tempId ? { ...msg, failed: true, error: "Failed to send" } : msg
-        )
-      );
-    } finally {
-      setSendingMessage(false);
+  /* ---------------------------- HANDLE ENTER KEY ---------------------------- */
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !isMobile && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    } else {
+      handleTyping();
     }
   };
 
   /* ---------------------------- DELETE MESSAGE ---------------------------- */
   const handleDeleteMessage = async (message: Message) => {
     try {
-      setMessages((prev) => prev.filter((msg) => msg.id !== message.id));
-      
-      if (!message.id.startsWith('temp-')) {
+      if (!message.id.startsWith('temp_')) {
         const response = await fetch(`/api/messages/by-message/${message.id}`, {
           method: "DELETE",
           headers: {
@@ -526,17 +402,16 @@ export default function ChatPage() {
             const errorData = await response.json() as { error?: string };
             throw new Error(errorData.error || "Failed to delete message");
           }
-
-        if (socket && selectedUser) {
-          socket.emit("delete_message", {
-            messageId: message.id,
-            conversationId: selectedUser.id,
-          });
-        }
       }
+      
+      // Remove from message status tracking
+      setMessageStatus(prev => {
+        const updated = { ...prev };
+        delete updated[message.id];
+        return updated;
+      });
     } catch (error) {
       console.error("Error deleting message:", error);
-      setMessages((prev) => [...prev, message]);
       alert("Failed to delete message. Please try again.");
     }
   };
@@ -572,13 +447,13 @@ export default function ChatPage() {
     
     // Calculate position to show context menu at the top
     const x = rect.left + rect.width / 2;
-    const y = rect.top - 10; // Position above the dropdown
+    const y = rect.top - 10;
     
     setContextMenu({
       message,
       position: { x, y },
     });
-    setActiveDropdownId(null); // Close dropdown after clicking
+    setActiveDropdownId(null);
   };
 
   const handleMenuAction = async (action: string, message: Message) => {
@@ -588,7 +463,7 @@ export default function ChatPage() {
         inputRef.current?.focus();
         break;
       case "copy":
-        await navigator.clipboard.writeText(message.text);
+        await navigator.clipboard.writeText(message.text || message.content || '');
         if (isMobile && 'vibrate' in navigator) {
           navigator.vibrate(30);
         }
@@ -617,15 +492,10 @@ export default function ChatPage() {
         }
         break;
       case "edit":
-        const newText = prompt("Edit your message:", message.text);
-        if (newText !== null && newText !== message.text) {
+        const currentText = message.text || message.content || '';
+        const newText = prompt("Edit your message:", currentText);
+        if (newText !== null && newText !== currentText) {
           try {
-            setMessages((prev) =>
-              prev.map((msg) =>
-                msg.id === message.id ? { ...msg, text: newText, edited: true } : msg
-              )
-            );
-            
             await fetch(`/api/messages/by-message/${message.id}`, {
               method: "PUT",
               headers: { "Content-Type": "application/json" },
@@ -655,7 +525,7 @@ export default function ChatPage() {
         }
         break;
       case "info":
-        alert(`Message Info:\n\nID: ${message.id}\nSent: ${new Date(message.timestamp).toLocaleString()}\nStatus: ${message.read ? 'Read' : 'Delivered'}`);
+        alert(`Message Info:\n\nID: ${message.id}\nSent: ${new Date(message.timestamp).toLocaleString()}\nStatus: ${message.status || 'unknown'}`);
         break;
     }
     setContextMenu(null);
@@ -723,55 +593,35 @@ export default function ChatPage() {
 
   /* ----------------------------- SCROLL TO BOTTOM ----------------------------- */
   useEffect(() => {
-    if (messages.length > 0 && !loadingMessages) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (sortedMessages.length > 0) {
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      }, 100);
     }
-  }, [messages.length, loadingMessages]);
+  }, [sortedMessages.length]);
 
-  const getUnreadCount = (userId: string) =>
-    messages.filter((m) => m.senderId === userId && !m.read).length;
+  /* ---------------------------- GET UNREAD COUNT ---------------------------- */
+  const getUnreadCount = useCallback((userId: string) => {
+    if (!currentUserId) return 0;
+    
+    const userMessages = socketMessages.filter(msg => 
+      msg.senderId === userId && 
+      msg.receiverId === currentUserId && 
+      msg.status !== 'read'
+    );
+    return userMessages.length;
+  }, [socketMessages, currentUserId]);
 
   // Group consecutive messages from same sender
-  const groupedMessages = messages.reduce((acc, msg, idx) => {
-    const prevMsg = messages[idx - 1];
-    const isGrouped = prevMsg && prevMsg.senderId === msg.senderId && 
+  const groupedMessages = sortedMessages.reduce((acc, msg, idx) => {
+    const prevMsg = sortedMessages[idx - 1];
+    const isGrouped = prevMsg && 
+      prevMsg.senderId === msg.senderId && 
       new Date(msg.timestamp).getTime() - new Date(prevMsg.timestamp).getTime() < 60000;
     
     acc.push({ ...msg, isGrouped });
     return acc;
   }, [] as (Message & { isGrouped?: boolean })[]);
-
-  /* ---------------------------- MESSAGE STATUS INDICATOR --------------------------- */
-  const MessageStatusIndicator = ({ messageId, isCurrentUser }: { messageId: string, isCurrentUser: boolean }) => {
-    const status = messageStatus[messageId];
-    
-    if (!isCurrentUser || !status) return null;
-
-    return (
-      <div className="flex items-center justify-end ml-2">
-        {status === 'sending' && (
-          <div className="flex items-center text-gray-400">
-            <Check size={12} />
-          </div>
-        )}
-        {status === 'sent' && (
-          <div className="flex items-center text-gray-400">
-            <Check size={12} />
-          </div>
-        )}
-        {status === 'delivered' && (
-          <div className="flex items-center text-gray-400">
-            <CheckCheck size={12} />
-          </div>
-        )}
-        {status === 'read' && (
-          <div className="flex items-center text-blue-500">
-            <CheckCheck size={12} />
-          </div>
-        )}
-      </div>
-    );
-  };
 
   /* -------------------------------- LOADING -------------------------------- */
   if (status === "loading" || loadingUsers) {
@@ -809,11 +659,16 @@ export default function ChatPage() {
 
   return (
     <div className="h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950">
+      {/* Connection Status Indicator */}
+      {/* <div className={`fixed top-0 left-0 right-0 z-50 px-4 py-2 text-xs text-center ${isConnected ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+        {isConnected ? '✓ Connected to chat server' : '⚠️ Connecting to chat server...'}
+      </div> */}
+
       {/* Mobile Sidebar Toggle Button */}
       {isMobile && !selectedUser && (
         <button
           onClick={toggleMobileSidebar}
-          className="fixed top-20 left-4 z-30 p-2 bg-white dark:bg-gray-800 rounded-full shadow-lg lg:hidden"
+          className="fixed top-12 left-4 z-30 p-2 bg-white dark:bg-gray-800 rounded-full shadow-lg lg:hidden"
           aria-label="Open chats"
         >
           <Menu size={20} />
@@ -858,17 +713,17 @@ export default function ChatPage() {
           {/* Use ChatArea Component */}
           <ChatArea
             selectedUser={selectedUser}
-            messages={groupedMessages}
             loadingMessages={loadingMessages}
+             messages={sortedMessages}
             newMessage={newMessage}
             setNewMessage={setNewMessage}
-            handleSendMessage={handleSendMessage}
             sendingMessage={sendingMessage}
+            onSendMessage={handleSendMessage}
             handleTyping={handleTyping}
             handleInputFocus={handleInputFocus}
             handleInputBlur={handleInputBlur}
             inputRef={inputRef}
-            fileInputRef={fileInputRef}  
+            fileInputRef={fileInputRef}
             handleFileSelect={handleFileSelect}
             showEmojiPicker={showEmojiPicker}
             setShowEmojiPicker={setShowEmojiPicker}

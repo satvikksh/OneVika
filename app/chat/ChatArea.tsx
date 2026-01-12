@@ -1,18 +1,25 @@
 // ChatArea.tsx
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import { Message, User } from "../types/socket";
 import { Session } from "next-auth";
-import { Check, CheckCheck, ChevronDown, Loader2, Paperclip, Send, Smile } from "lucide-react";
+import {
+  Check,
+  CheckCheck,
+  ChevronDown,
+  Loader2,
+  Paperclip,
+  Send,
+  Smile,
+} from "lucide-react";
 
 interface ChatAreaProps {
   selectedUser: User | null;
-  messages: (Message & { isGrouped?: boolean })[];
   loadingMessages: boolean;
   newMessage: string;
+    messages: Message[];
   setNewMessage: (message: string) => void;
-  handleSendMessage: (e?: React.FormEvent) => void;
   sendingMessage: boolean;
   handleTyping: () => void;
   handleInputFocus: () => void;
@@ -25,7 +32,10 @@ interface ChatAreaProps {
   emojiPickerRef: React.RefObject<HTMLDivElement | null>;
   handleEmojiClick: (emoji: string) => void;
   commonEmojis: string[];
-  handleMessageContextMenu: (e: React.MouseEvent | React.TouchEvent, message: Message) => void;
+  handleMessageContextMenu: (
+    e: React.MouseEvent | React.TouchEvent,
+    message: Message
+  ) => void;
   handleDropdownClick: (e: React.MouseEvent, message: Message) => void;
   replyTo: Message | null;
   setReplyTo: (message: Message | null) => void;
@@ -34,14 +44,20 @@ interface ChatAreaProps {
   setHoveredMessageId: (id: string | null) => void;
   activeDropdownId: string | null;
   setActiveDropdownId: (id: string | null) => void;
-  dropdownRef: React.RefObject<HTMLDivElement | null>; // Fixed here
+  dropdownRef: React.RefObject<HTMLDivElement | null>;
   session: Session | null;
-  messageStatus: Record<string, 'sending' | 'sent' | 'delivered' | 'read'>;
+  messageStatus: Record<string, "sending" | "sent" | "delivered" | "read">;
   isMobile: boolean;
   handleKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+  onSendMessage: () => void;
+  isConnected?: boolean; // Optional for connection status
 }
 
-const MessageStatusIndicator = ({ messageId, isCurrentUser, messageStatus }: { 
+const MessageStatusIndicator = ({ 
+  messageId, 
+  isCurrentUser, 
+  messageStatus 
+}: { 
   messageId: string, 
   isCurrentUser: boolean,
   messageStatus: Record<string, 'sending' | 'sent' | 'delivered' | 'read'>
@@ -78,11 +94,10 @@ const MessageStatusIndicator = ({ messageId, isCurrentUser, messageStatus }: {
 
 export default function ChatArea({
   selectedUser,
-  messages,
   loadingMessages,
+  messages = [],
   newMessage,
   setNewMessage,
-  handleSendMessage,
   sendingMessage,
   handleTyping,
   handleInputFocus,
@@ -108,11 +123,45 @@ export default function ChatArea({
   session,
   messageStatus,
   isMobile,
-  handleKeyDown
+  handleKeyDown,
+  onSendMessage,
+  isConnected = true, // Default to true for backward compatibility
 }: ChatAreaProps) {
-  
+  const currentUserId = session?.user?.id;
+
+  // Handle enter key for sending
+  const handleKeyDownOverride = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !isMobile && !e.shiftKey) {
+      e.preventDefault();
+      onSendMessage();
+    } else {
+      handleTyping();
+    }
+  };
+
+  // Handle send button click
+  const handleSendClick = () => {
+    onSendMessage();
+  };
+
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    if (messages.length > 0) {
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      }, 100);
+    }
+  }, [messages.length, messagesEndRef]);
+
   return (
     <div className="flex flex-col h-full w-full">
+      {/* Connection Status Indicator (optional) */}
+      {/* {isConnected !== undefined && (
+        <div className={`px-4 py-2 text-xs text-center ${isConnected ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+          {isConnected ? 'Connected' : 'Disconnected'} • Messages update in real-time
+        </div>
+      )}
+       */}
       {/* Main Messages Area - Takes remaining space */}
       <div className={`flex-1 overflow-y-auto ${selectedUser ? 'pb-24' : ''} lg:ml-80`}>
         {selectedUser ? (
@@ -122,68 +171,84 @@ export default function ChatArea({
             </div>
           ) : (
             <div className="space-y-3 p-4">
-              {messages.map((msg) => {
-                const isCurrentUser = msg.senderId === session?.user?.id;
-                
-                return (
-                  <div
-                    key={msg.id}
-                    className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
-                    onMouseEnter={() => setHoveredMessageId(msg.id)}
-                    onMouseLeave={() => setHoveredMessageId(null)}
-                  >
-                    <div className="relative group max-w-[70%] w-fit">
-                      {/* Message Bubble */}
-                      <div
-                        className={`rounded-2xl px-4 py-3 ${
-                          isCurrentUser
-                            ? 'bg-purple-600 text-white rounded-br-none'
-                            : 'bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-white rounded-bl-none'
-                        }`}
-                        onContextMenu={(e) => handleMessageContextMenu(e, msg)}
-                      >
-                        <div>{msg.text}</div>
-                        
-                        {/* Message timestamp and status */}
-                        <div className="flex items-center justify-end mt-1">
-                          <span className="text-xs opacity-75 mr-2">
-                            {new Date(msg.timestamp).toLocaleTimeString([], { 
-                              hour: '2-digit', 
-                              minute: '2-digit', 
-                              hour12: true 
-                            })}
-                          </span>
-                          
-                          {/* Read/unread indicators */}
-                          {isCurrentUser && (
-                            <MessageStatusIndicator 
-                              messageId={msg.id} 
-                              isCurrentUser={isCurrentUser} 
-                              messageStatus={messageStatus}
-                            />
-                          )}
-                        </div>
-                      </div>
-                      
-                      {/* Dropdown Arrow (only shows on hover) */}
-                      {(hoveredMessageId === msg.id || activeDropdownId === msg.id) && (
-                        <div 
-                          ref={dropdownRef}
-                          className={`absolute ${isCurrentUser ? 'left-0 -translate-x-8' : 'right-0 translate-x-8'} top-1/2 -translate-y-1/2`}
+              {messages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full py-8">
+                  <div className="text-gray-400 mb-4">💬</div>
+                  <p className="text-gray-500 dark:text-gray-400">
+                    No messages yet. Start a conversation!
+                  </p>
+                </div>
+              ) : (
+                messages.map((msg) => {
+                  const isCurrentUser = msg.senderId === currentUserId;
+                  
+                  return (
+                    <div
+                      key={msg.id}
+                      className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
+                      onMouseEnter={() => setHoveredMessageId(msg.id)}
+                      onMouseLeave={() => setHoveredMessageId(null)}
+                    >
+                      <div className="relative group max-w-[70%] w-fit">
+                        {/* Message Bubble */}
+                        <div
+                          className={`rounded-2xl px-4 py-3 ${
+                            isCurrentUser
+                              ? 'bg-purple-600 text-white rounded-br-none'
+                              : 'bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-white rounded-bl-none'
+                          } ${msg.status === 'sending' ? 'opacity-80' : ''}`}
+                          onContextMenu={(e) => handleMessageContextMenu(e, msg)}
                         >
-                          <button
-                            onClick={(e) => handleDropdownClick(e, msg)}
-                            className="p-1 bg-white dark:bg-gray-800 rounded-full shadow-md hover:shadow-lg transition-shadow"
-                            aria-label="Message options"
-                          >
-                            <ChevronDown size={16} />
-                          </button>
+                          {/* Reply indicator */}
+                          {msg.replyToId && (
+                            <div className="mb-2 p-2 bg-black/10 dark:bg-white/10 rounded-lg border-l-4 border-purple-400">
+                              <p className="text-xs italic opacity-75">Replying to a message</p>
+                            </div>
+                          )}
+                          
+                          <div>{msg.text || msg.content}</div>
+                          
+                          {/* Message timestamp and status */}
+                          <div className="flex items-center justify-end mt-1">
+                            <span className="text-xs opacity-75 mr-2">
+                              {new Date(msg.timestamp).toLocaleTimeString([], { 
+                                hour: '2-digit', 
+                                minute: '2-digit', 
+                                hour12: true 
+                              })}
+                            </span>
+                            
+                            {/* Read/unread indicators */}
+                            {isCurrentUser && (
+                              <MessageStatusIndicator 
+                                messageId={msg.id}
+                                isCurrentUser={isCurrentUser}
+                                messageStatus={messageStatus}
+                              />
+                            )}
+                          </div>
                         </div>
-                      )}
+                        
+                        {/* Dropdown Arrow (only shows on hover) */}
+                        {(hoveredMessageId === msg.id || activeDropdownId === msg.id) && (
+                          <div 
+                            ref={dropdownRef}
+                            className={`absolute ${isCurrentUser ? 'left-0 -translate-x-8' : 'right-0 translate-x-8'} top-1/2 -translate-y-1/2`}
+                          >
+                            <button
+                              onClick={(e) => handleDropdownClick(e, msg)}
+                              className="p-1 bg-white dark:bg-gray-800 rounded-full shadow-md hover:shadow-lg transition-shadow"
+                              aria-label="Message options"
+                            >
+                              <ChevronDown size={16} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
               <div ref={messagesEndRef} />
             </div>
           )
@@ -194,6 +259,11 @@ export default function ChatArea({
               <p className="text-gray-500 dark:text-gray-400">
                 Select a chat to start messaging
               </p>
+              {isConnected !== undefined && !isConnected && (
+                <p className="text-sm text-red-500 dark:text-red-400 mt-2">
+                  Reconnecting to server...
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -208,7 +278,7 @@ export default function ChatArea({
               <div className="flex justify-between items-center">
                 <div className="flex-1">
                   <p className="text-xs font-medium text-purple-600 dark:text-purple-400 mb-1">Replying to</p>
-                  <p className="text-sm text-gray-800 dark:text-gray-200 truncate">{replyTo.text}</p>
+                  <p className="text-sm text-gray-800 dark:text-gray-200 truncate">{replyTo.text || replyTo.content}</p>
                 </div>
                 <button
                   onClick={() => setReplyTo(null)}
@@ -291,7 +361,7 @@ export default function ChatArea({
                       setNewMessage(e.target.value);
                       handleTyping();
                     }}
-                    onKeyDown={handleKeyDown}
+                    onKeyDown={handleKeyDownOverride}
                     onFocus={handleInputFocus}
                     onBlur={handleInputBlur}
                     placeholder="Type a message..."
@@ -303,8 +373,8 @@ export default function ChatArea({
                 {/* Send Button on Side */}
                 <button
                   type="button"
-                  onClick={handleSendMessage}
-                  disabled={sendingMessage || !newMessage.trim()}
+                  onClick={handleSendClick}
+                  disabled={sendingMessage || !newMessage.trim() || (isConnected !== undefined && !isConnected)}
                   className="p-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg flex items-center justify-center"
                   style={{ minHeight: '44px', minWidth: '44px' }}
                 >
@@ -316,6 +386,11 @@ export default function ChatArea({
                 </button>
               </div>
             </div>
+            {isConnected !== undefined && !isConnected && (
+              <p className="text-xs text-red-500 mt-2 text-center">
+                Unable to send messages. Reconnecting...
+              </p>
+            )}
           </div>
         </div>
       )}
