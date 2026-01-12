@@ -1,28 +1,54 @@
-import mongoose, { Schema } from "mongoose";
+import mongoose, { Schema, Model, Document } from "mongoose";
 
-const UserSchema = new Schema(
+/* =======================
+   1️⃣ User Interface
+======================= */
+export interface IUser extends Document {
+  name: string;
+  email: string;
+  password?: string;
+  provider: "credentials" | "google";
+  image?: string;
+  isPrivate: boolean;
+  cover?: string;
+  avatar?: string;
+  bio?: string;
+  sessionVersion: number;
+  likedPosts: mongoose.Types.ObjectId[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/* =======================
+   2️⃣ User Schema
+======================= */
+const UserSchema = new Schema<IUser>(
   {
     name: {
       type: String,
       required: true,
+      trim: true,
     },
 
     email: {
       type: String,
       unique: true,
       required: true,
+      lowercase: true,
+      index: true,
     },
 
-    // 🔑 OPTIONAL password (IMPORTANT for Google users)
+    // 🔑 OPTIONAL password (Google users)
     password: {
       type: String,
       required: false,
     },
 
-    // 🔐 auth provider
+    // 🔐 Auth provider
     provider: {
       type: String,
-      default: "credentials", // "google" for Google users
+      enum: ["credentials", "google"],
+      default: "credentials",
     },
 
     // 🖼️ Google profile image
@@ -49,11 +75,10 @@ const UserSchema = new Schema(
       default: "",
     },
 
-   sessionVersion: {
-  type: Number,
-  default: 0,
-},
-
+    sessionVersion: {
+      type: Number,
+      default: 0,
+    },
 
     likedPosts: [
       {
@@ -65,5 +90,10 @@ const UserSchema = new Schema(
   { timestamps: true }
 );
 
-// 🔁 Prevent model overwrite in Next.js
-export default mongoose.models.User || mongoose.model("User", UserSchema);
+/* =======================
+   3️⃣ Export Model (Next.js Safe)
+======================= */
+const User: Model<IUser> =
+  mongoose.models.User || mongoose.model<IUser>("User", UserSchema);
+
+export default User;
