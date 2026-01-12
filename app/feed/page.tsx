@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import Image from "next/image";
-import { Heart, MessageCircle, Sparkles, Trash2, X, User, Send } from "lucide-react";
+import { Heart, MessageCircle, Sparkles, Trash2, X, User, Send, Loader2 } from "lucide-react";
 import CreatePost from "./CreatePost";
 import { useTheme } from "../theme-provider";
 import { useSession } from "next-auth/react";
@@ -67,27 +67,25 @@ function LikeUserModal({ isOpen, onClose, postId, likeCount }: LikeUserModalProp
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, postId]);
 
-  // In your LikeUserModal component
-const fetchLikeUsers = async () => {
-  setLoading(true);
-  setError(null);
-  try {
-    // Change this line from /likes to /like
-    const response = await fetch(`/api/posts/${postId}/like`);
-    if (response.ok) {
-      const data = await response.json();
-      setUsers(data);
-    } else {
-      throw new Error(`Failed to fetch likes: ${response.status}`);
+  const fetchLikeUsers = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/posts/${postId}/like`);
+      if (response.ok) {
+        const data = await response.json();
+        setUsers(data);
+      } else {
+        throw new Error(`Failed to fetch likes: ${response.status}`);
+      }
+    } catch (error) {
+      console.error("Failed to fetch like users:", error);
+      setError("Failed to load users who liked this post");
+      setUsers([]);
+    } finally {
+      setLoading(false);
     }
-  } catch (error) {
-    console.error("Failed to fetch like users:", error);
-    setError("Failed to load users who liked this post");
-    setUsers([]);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   if (!isOpen) return null;
 
@@ -387,6 +385,11 @@ export default function FeedPage() {
 
   const [posts, setPosts] = useState<PostType[]>([]);
   const [loadingPosts, setLoadingPosts] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [page, setPage] = useState(1);
+  const [initialLoad, setInitialLoad] = useState(true);
+  
   const [likeModal, setLikeModal] = useState<{
     isOpen: boolean;
     postId: string;
@@ -407,7 +410,9 @@ export default function FeedPage() {
     postUserId: "",
     comments: [],
   });
-  const loaderRef = useRef<HTMLDivElement | null>(null);
+  
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   /* ============================
      🔐 REDIRECT (SIDE EFFECT)
@@ -419,40 +424,137 @@ export default function FeedPage() {
   }, [status, router]);
 
   /* ============================
-     FETCH POSTS WITH COMMENTS
+     SHUFFLE ARRAY FUNCTION
+  ============================ */
+  const shuffleArray = <T,>(array: T[]): T[] => {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  };
+
+  /* ============================
+     FETCH POSTS WITH PAGINATION
+  ============================ */
+  const fetchPosts = useCallback(async (pageNum: number, isInitialLoad = false) => {
+    if (!session?.user?.id || (loadingPosts && isInitialLoad) || (loadingMore && !isInitialLoad)) return;
+
+    if (isInitialLoad) {
+      setLoadingPosts(true);
+    } else {
+      setLoadingMore(true);
+    }
+
+    try {
+      const response = await fetch(`/api/posts?page=${pageNum}&limit=10`);
+      if (!response.ok) throw new Error("Failed to fetch posts");
+      
+      const data = await response.json();
+      
+      // If no data returned, set hasMore to false
+      if (data.length === 0) {
+        setHasMore(false);
+        return;
+      }
+
+      // Fetch comments for each post
+      const postsWithComments = await Promise.all(
+        data.map(async (post: PostType) => {
+          try {
+            const commentsRes = await fetch(`/api/posts/${post._id}/comments`);
+            if (commentsRes.ok) {
+              const comments = await commentsRes.json();
+              return { ...post, comments: comments || [] };
+            }
+            return { ...post, comments: [] };
+          } catch (error) {
+            console.error(`Error fetching comments for post ${post._id}:`, error);
+            return { ...post, comments: [] };
+          }
+        })
+      );
+
+      // For initial load (page 1), shuffle the posts
+      if (isInitialLoad) {
+        const shuffledPosts = shuffleArray(postsWithComments);
+        setPosts(shuffledPosts);
+        setInitialLoad(false);
+      } else {
+        // For subsequent loads, append to existing posts
+        setPosts(prev => {
+          // Filter out duplicates
+          const newPosts = postsWithComments.filter(
+            newPost => !prev.some(existingPost => existingPost._id === newPost._id)
+          );
+          return [...prev, ...newPosts];
+        });
+      }
+
+      // If we got less than 10 posts, there are no more to load
+      if (data.length < 10) {
+        setHasMore(false);
+      }
+    } catch (error) {
+      console.error("Error fetching posts:", error);
+      setHasMore(false);
+    } finally {
+      setLoadingPosts(false);
+      setLoadingMore(false);
+    }
+  }, [session?.user?.id, loadingPosts, loadingMore]);
+
+  /* ============================
+     INITIAL LOAD
   ============================ */
   useEffect(() => {
-    if (status !== "authenticated") return;
+    if (status === "authenticated" && initialLoad) {
+      fetchPosts(1, true);
+    }
+  }, [status, initialLoad, fetchPosts]);
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLoadingPosts(true);
-    fetch("/api/posts")
-      .then((res) => res.json())
-      .then((data) => {
-        // Fetch comments for each post
-        const postsWithComments = data.map((post: PostType) => {
-          return fetch(`/api/posts/${post._id}/comments`)
-            .then(res => res.json())
-            .then(comments => {
-              return { ...post, comments: comments || [] };
-            })
-            .catch(error => {
-              console.error(`Error fetching comments for post ${post._id}:`, error);
-              return { ...post, comments: [] };
-            });
-        });
-        
-        return Promise.all(postsWithComments);
-      })
-      .then((postsWithComments) => {
-        setPosts(postsWithComments);
-      })
-      .catch(error => {
-        console.error("Error fetching posts:", error);
-        setPosts([]);
-      })
-      .finally(() => setLoadingPosts(false));
-  }, [status]);
+  /* ============================
+     INFINITE SCROLL OBSERVER
+  ============================ */
+  useEffect(() => {
+    if (!hasMore || loadingMore) return;
+
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore) {
+          const nextPage = page + 1;
+          setPage(nextPage);
+          fetchPosts(nextPage, false);
+        }
+      },
+      { threshold: 0.5 }
+    );
+
+    if (loadMoreRef.current) {
+      observerRef.current.observe(loadMoreRef.current);
+    }
+
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+      }
+    };
+  }, [hasMore, loadingMore, page, fetchPosts]);
+
+  /* ============================
+     HANDLE NEW POST CREATION
+  ============================ */
+  const handlePostCreated = (newPost: PostType) => {
+    // Add new post at the top of the feed
+    setPosts(prev => {
+      // Check if post already exists (to avoid duplicates)
+      if (prev.some(post => post._id === newPost._id)) {
+        return prev;
+      }
+      return [newPost, ...prev];
+    });
+  };
 
   /* ============================
      LIKE FUNCTIONALITY
@@ -628,15 +730,7 @@ export default function FeedPage() {
         </div>
 
         <div className="max-w-2xl mx-auto px-4 pb-24">
-          <CreatePost
-            onPostCreated={(post) =>
-              setPosts((prev) =>
-                prev.some((p) => p._id === post._id)
-                  ? prev
-                  : [post, ...prev]
-              )
-            }
-          />
+          <CreatePost onPostCreated={handlePostCreated} />
 
           <div className="space-y-6 mt-6">
             {posts.map((post) => {
@@ -778,6 +872,7 @@ export default function FeedPage() {
               );
             })}
 
+            {/* Loading Initial Posts */}
             {loadingPosts && (
               <div className="text-center py-8">
                 <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-purple-600"></div>
@@ -785,7 +880,41 @@ export default function FeedPage() {
               </div>
             )}
 
-            <div ref={loaderRef} className="h-10" />
+            {/* Loading More Posts */}
+            {/* {loadingMore && (
+              <div className="flex justify-center py-6">
+                <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
+                <span className="ml-2 text-gray-500">Loading more posts...</span>
+              </div>
+            )} */}
+
+            {/* No Posts Message */}
+            {!loadingPosts && posts.length === 0 && (
+              <div className="text-center py-12">
+                <Sparkles className="w-16 h-16 text-gray-300 dark:text-gray-700 mx-auto mb-4" />
+                <h3 className="text-xl font-bold text-gray-600 dark:text-gray-300 mb-2">No posts yet</h3>
+                <p className="text-gray-500 dark:text-gray-400">
+                  Be the first to share your imagination!
+                </p>
+              </div>
+            )}
+
+            {/* Infinite Scroll Trigger */}
+            {hasMore && !loadingMore && (
+              <div ref={loadMoreRef} className="h-10" />
+            )}
+
+            {/* End of Feed Message */}
+            {!hasMore && posts.length > 0 && (
+              <div className="text-center py-6">
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800">
+                  <Sparkles className="w-4 h-4 text-purple-500" />
+                  <span className="text-sm font-medium text-purple-600 dark:text-purple-400">
+                    You've reached the end of the feed
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
