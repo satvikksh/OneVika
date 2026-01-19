@@ -1,47 +1,52 @@
 import { createServer } from "http";
 import { Server } from "socket.io";
 
-const httpServer = createServer();
+const httpServer = createServer((req, res) => {
+  if (req.url === "/") {
+    res.writeHead(200, { "Content-Type": "text/plain" });
+    res.end("Socket server is running 🚀");
+    return;
+  }
+
+  res.writeHead(404);
+  res.end();
+});
 
 const io = new Server(httpServer, {
   path: "/socket.io",
   cors: {
     origin: [
       "http://localhost:3000",
-      "https://onevika-production.up.railway.app",
+      "https://onevika.vercel.app",
     ],
     methods: ["GET", "POST"],
   },
+  transports: ["websocket"], // IMPORTANT for Vercel
 });
 
 io.on("connection", (socket) => {
   const userId = socket.handshake.auth?.userId;
-
-  if (!userId) {
-    console.log("❌ Missing userId → disconnect");
-    socket.disconnect();
-    return;
-  }
+  if (!userId) return socket.disconnect();
 
   const room = `user_${userId}`;
   socket.join(room);
 
   console.log("👤 Joined room:", room);
 
-  // 🔹 SEND MESSAGE
   socket.on("send_message", (message) => {
     console.log("📨 SERVER received:", message);
 
-    const receiverRoom = `user_${message.receiverId}`;
-
-    console.log("➡️ Emitting to:", receiverRoom);
-
-    io.to(receiverRoom).emit("receive_message", message);
+    io.to(`user_${message.receiverId}`).emit(
+      "receive_message",
+      message
+    );
 
     socket.emit("message_sent", message);
   });
 });
 
-httpServer.listen(3001, () => {
-  console.log("🚀 Socket server running on 3001");
+const PORT = Number(process.env.PORT) || 3001;
+
+httpServer.listen(PORT, () => {
+  console.log("🚀 Socket server running on", PORT);
 });
