@@ -110,7 +110,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     if (!userId || socketRef.current) return;
 
   const SOCKET_URL =
-   "http://127.0.0.1:3001";
+  process.env.NEXT_PUBLIC_SOCKET_URL ?? "http://127.0.0.1:3001";
 
 
     console.log("🔥 Connecting socket:", SOCKET_URL, "user:", userId);
