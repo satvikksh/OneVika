@@ -151,7 +151,7 @@ export default function ChatArea({
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
       }, 100);
     }
-  }, [messages.length, messagesEndRef]);
+  }, [messages, messagesEndRef]);
 
   return (
     <div className="flex flex-col h-full w-full">

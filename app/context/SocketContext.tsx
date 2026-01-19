@@ -9,23 +9,23 @@ import React, {
   useCallback,
   useMemo,
 } from "react";
-import io, { type Socket } from "socket.io-client";
+import { io } from "socket.io-client";
+import type { Socket } from "socket.io-client";
 import { useSession } from "next-auth/react";
 
-// Define Message interface
+/* ---------------- TYPES ---------------- */
+
 interface Message {
   id: string;
   content: string;
   senderId: string;
   receiverId: string;
-  timestamp: Date;
+  timestamp: string | Date;
   chatId?: string;
-  type?: 'text' | 'image' | 'file';
+  type?: "text" | "image" | "file";
   status?: "sending" | "sent" | "delivered" | "read";
   seenBy?: string[];
 }
-
-
 
 interface SocketContextType {
   isConnected: boolean;
@@ -38,15 +38,16 @@ interface SocketContextType {
   leaveChat: (chatId: string) => void;
   clearMessages: () => void;
   markChatMessagesSeen: (chatId: string) => void;
-
 }
+
+/* ---------------- CONTEXT ---------------- */
 
 const SocketContext = createContext<SocketContextType>({
   isConnected: false,
   onlineUsers: [],
   messages: [],
   sendMessage: () => {},
-   addMessages: () => {},
+  addMessages: () => {},
   markMessageAsRead: () => {},
   joinChat: () => {},
   leaveChat: () => {},
@@ -54,242 +55,136 @@ const SocketContext = createContext<SocketContextType>({
   markChatMessagesSeen: () => {},
 });
 
-export const SocketProvider = ({
-  children,
-}: {
-  children: React.ReactNode;
-}) => {
+/* ---------------- PROVIDER ---------------- */
+
+export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
   const { data: session } = useSession();
-  const socketRef = useRef<typeof Socket | null>(null);
+  const userId = session?.user?.id ?? null;
+
+  const socketRef = useRef<Socket | null>(null);
 
   const [isConnected, setIsConnected] = useState(false);
-  const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
+  const [onlineUsers] = useState<string[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
-  const markChatMessagesSeen = useCallback((chatId: string) => {
-  const socket = socketRef.current;
-  if (!socket) return;
 
-  socket.emit("messages_seen", { chatId });
-}, []);
+  /* ---------------- HELPERS ---------------- */
 
-
-  // Function to send a message
- const sendMessage = useCallback((message: Partial<Message>) => {
-  const socket = socketRef.current;
-
-  if (!socket) {
-    console.error("Socket not initialized yet");
-    return;
-  }
-
- const fullMessage: Message = {
-  id: message.id ?? crypto.randomUUID(), // ✅ respect existing ID
-  content: message.content ?? "",
-  senderId: session?.user?.id!,
-  receiverId: message.receiverId!,
-  chatId: message.chatId,
-  timestamp: message.timestamp ?? new Date(),
-  status: "sent",
-  type: "text",
-};
-
-
-  // 🔥 DO NOT CHECK isConnected
- if (!socket.connected) {
-  console.warn("Socket not connected yet, message skipped");
-  return;
-}
-
-socket.emit("send_message", fullMessage);
-
-
-  // Optimistic UI update
-  setMessages(prev => [...prev, fullMessage]);
-}, [session?.user?.id]);
-
-
-  // Function to mark a message as read
-  const markMessageAsRead = useCallback((messageId: string) => {
-    if (socketRef.current && isConnected) {
-      socketRef.current.emit("mark_as_read", {
-        messageId,
-        userId: session?.user?.id,
-      });
-      
-      // Update local state
-      setMessages(prev => prev.map(msg => 
-        msg.id === messageId ? { ...msg, status: 'read' as const } : msg
-      ));
-    }
-  }, [isConnected, session?.user?.id]);
-
-  // Function to join a specific chat room
- const joinChat = useCallback((chatId: string) => {
-  const socket = socketRef.current;
-  if (!socket) return;
-
-  if (socket.connected) {
-    socket.emit("join_chat", chatId);
-  } else {
-    socket.once("connect", () => {
-      socket.emit("join_chat", chatId);
+  const upsertMessage = useCallback((msg: Message) => {
+    setMessages((prev) => {
+      const exists = prev.some((m) => m.id === msg.id);
+      return exists
+        ? prev.map((m) => (m.id === msg.id ? msg : m))
+        : [...prev, msg];
     });
-  }
-}, []);
-
-
-  // Function to leave a chat room
-  const leaveChat = useCallback((chatId: string) => {
-    if (socketRef.current && isConnected) {
-      socketRef.current.emit("leave_chat", chatId);
-    }
-  }, [isConnected]);
-
-  // Function to clear messages
-  const clearMessages = useCallback(() => {
-    setMessages([]);
   }, []);
-  
-const addMessages = useCallback((incoming: Message[]) => {
-  setMessages(prev => {
-    const existingIds = new Set(prev.map(m => m.id));
-    return [
-      ...incoming.filter(m => !existingIds.has(m.id)),
-      ...prev,
-    ];
-  });
-}, []);
 
+  /* ---------------- SEND MESSAGE ---------------- */
+
+  const sendMessage = useCallback(
+    (message: Partial<Message>) => {
+      const socket = socketRef.current;
+      if (!socket || !userId || !message.receiverId) return;
+
+      const fullMessage: Message = {
+        id: message.id ?? crypto.randomUUID(),
+        content: message.content ?? "",
+        senderId: userId,
+        receiverId: message.receiverId,
+        chatId: message.chatId,
+        timestamp: new Date().toISOString(),
+        status: "sent",
+        type: "text",
+      };
+
+      socket.emit("send_message", fullMessage);
+
+      // ✅ optimistic update for sender
+      upsertMessage(fullMessage);
+    },
+    [userId, upsertMessage]
+  );
+
+  /* ---------------- CONNECTION ---------------- */
 
   useEffect(() => {
-    if (!session?.user?.id) return;
+    if (!userId || socketRef.current) return;
 
-    if (!socketRef.current) {
-   const socket = io("http://localhost:3001", {
-  path: "/socket.io",
-  transports: ["websocket"],
-  timeout: 20000,
-  reconnection: true,
-  reconnectionAttempts: 5,
-  reconnectionDelay: 1000,
-  forceNew: true,
-  auth: {
-    userId: session.user.id,
-  },
-});
+  const SOCKET_URL =
+   "http://127.0.0.1:3001";
 
 
-      socketRef.current = socket;
+    console.log("🔥 Connecting socket:", SOCKET_URL, "user:", userId);
 
-      // Connection events
-      socket.on("connect", () => {
-        console.log("Socket connected:", socket.id);
-        setIsConnected(true);
-        socket.emit("join_user", session.user.id);
-      });
+    const socket = io(SOCKET_URL, {
+      path: "/socket.io",
+      transports: ["polling", "websocket"], // ✅ important
+      auth: { userId },
+    });
 
-      socket.on("disconnect", () => {
-        console.log("Socket disconnected");
-        setIsConnected(false);
-      });
+    socketRef.current = socket;
 
-     socket.on("connect_error", (err: { message: any; }) => {
-  console.error("❌ Socket connect_error:", err.message);
-});
+    socket.on("connect", () => {
+      console.log("🟢 Socket connected:", socket.id);
+      setIsConnected(true);
+    });
 
+    socket.on("disconnect", (reason) => {
+      console.log("🔴 Socket disconnected:", reason);
+      setIsConnected(false);
+    });
 
-      // User status events
-      socket.on("user_status", ({ userId, isOnline }: { userId: string; isOnline: boolean }) => {
-        console.log("User status update:", userId, isOnline);
-        setOnlineUsers((prev) =>
-          isOnline
-            ? [...new Set([...prev, userId])]
-            : prev.filter((id) => id !== userId)
-        );
-      });
+    socket.on("connect_error", (err) => {
+      console.error("❌ connect_error:", err.message);
+    });
 
-      // Message events
-      socket.on("receive_message", (newMessage: Message) => {
-        console.log("Received new message:", newMessage);
-        
-        // Check if message already exists (to avoid duplicates)
-        setMessages(prev => {
-          const exists = prev.some(msg => msg.id === newMessage.id);
-          if (exists) return prev;
-          
-          return [...prev, { ...newMessage, status: 'delivered' as const }];
-        });
-      });
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+      setIsConnected(false);
+    };
+  }, [userId]);
 
-      socket.on("message_sent", (message: Message) => {
-        console.log("Message sent confirmation:", message);
-        // Update the message status to delivered
-        setMessages(prev => prev.map(msg => 
-          msg.id === message.id ? { ...msg, status: 'delivered' as const } : msg
-        ));
-      });
+  /* ---------------- RECEIVE MESSAGE ---------------- */
 
-      socket.on("message_read", ({ messageId, userId }: { messageId: string; userId: string }) => {
-        console.log("Message read by:", userId);
-        // Update message status to read if it's from current user
-        setMessages(prev => prev.map(msg => 
-          msg.id === messageId && msg.senderId === session.user.id 
-            ? { ...msg, status: 'read' as const } 
-            : msg
-        ));
-      });
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!socket) return;
 
-      socket.on("typing", ({ userId, chatId, isTyping }: { userId: string; chatId: string; isTyping: boolean }) => {
-        console.log(`User ${userId} is ${isTyping ? 'typing' : 'not typing'} in chat ${chatId}`);
-        // You can add typing indicator state here if needed
-      });
+    socket.on("receive_message", (msg: Message) => {
+      console.log("📥 receive_message:", msg);
+      upsertMessage(msg);
+    });
 
-      socket.on("error", (error: { message: string }) => {
-        console.error("Socket error:", error.message);
-      });
+    socket.on("message_sent", (msg: Message) => {
+      upsertMessage(msg);
+    });
 
-      
-    
-    }
+    return () => {
+      socket.off("receive_message");
+      socket.off("message_sent");
+    };
+  }, [upsertMessage]);
 
-   return () => {
-  if (socketRef.current) {
-    socketRef.current.disconnect();
-    socketRef.current = null;
-    setIsConnected(false);
-    setOnlineUsers([]);
-    // ✅ KEEP messages
-  }
-};
-  }, [session?.user?.id]);
+  /* ---------------- CONTEXT VALUE ---------------- */
 
-  // Memoize the context value to prevent unnecessary re-renders
-  const contextValue = useMemo(() => ({
-    isConnected,
-    onlineUsers,
-    messages,
-    sendMessage,
-    addMessages,
-    markMessageAsRead,
-    joinChat,
-    leaveChat,
-    clearMessages,
-    markChatMessagesSeen,
-  }), [
-    isConnected,
-    onlineUsers,
-    messages,
-    sendMessage,
-    addMessages,
-    markMessageAsRead,
-    joinChat,
-    leaveChat,
-    clearMessages,
-    markChatMessagesSeen,
-  ]);
+  const value = useMemo(
+    () => ({
+      isConnected,
+      onlineUsers,
+      messages,
+      sendMessage,
+      addMessages: (msgs: Message[]) => msgs.forEach(upsertMessage),
+      markMessageAsRead: () => {},
+      joinChat: () => {},
+      leaveChat: () => {},
+      clearMessages: () => setMessages([]),
+      markChatMessagesSeen: () => {},
+    }),
+    [isConnected, onlineUsers, messages, sendMessage, upsertMessage]
+  );
 
   return (
-    <SocketContext.Provider value={contextValue}>
+    <SocketContext.Provider value={value}>
       {children}
     </SocketContext.Provider>
   );

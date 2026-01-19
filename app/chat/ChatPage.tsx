@@ -218,18 +218,11 @@ useEffect(() => {
   chatIdRef.current = chatId;
   joinChat(chatId);
 
-  fetchInitialMessages(selectedUser.id);
-
-  // 🔥 CLEANUP = user leaves chat
- return () => {
-  // ✅ tell server messages were seen
-  markChatMessagesSeen(chatId);
-
-  leaveChat(chatId);
-  chatIdRef.current = null;
-};
-
+  return () => {
+    leaveChat(chatId);
+  };
 }, [selectedUser?.id, session?.user?.id]);
+
 
 
 
@@ -264,14 +257,17 @@ useEffect(() => {
   const currentUserId = session?.user?.id;
   
   // Filter messages for the selected user from SocketContext
-  const filteredMessages = socketMessages.filter(msg => {
-    if (!selectedUser || !currentUserId) return false;
-    
-    return (
-      (msg.senderId === currentUserId && msg.receiverId === selectedUser.id) ||
-      (msg.receiverId === currentUserId && msg.senderId === selectedUser.id)
-    );
-  });
+ const filteredMessages = socketMessages.filter(msg => {
+  if (!selectedUser || !currentUserId) return false;
+
+  return (
+    (msg.senderId === currentUserId &&
+     msg.receiverId === selectedUser.id) ||
+    (msg.senderId === selectedUser.id &&
+     msg.receiverId === currentUserId)
+  );
+});
+
 
   // Sort messages by timestamp
   const sortedMessages = [...filteredMessages].sort((a, b) => 
@@ -363,7 +359,7 @@ useEffect(() => {
       content: messageText,
     //   text: messageText,
       receiverId: selectedUser.id,
-      chatId: chatIdRef.current!,
+        senderId: currentUserId,
     });
 
     setNewMessage("");
@@ -598,7 +594,7 @@ useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
       }, 100);
     }
-  }, [sortedMessages.length]);
+  }, [sortedMessages]);
 
   /* ---------------------------- GET UNREAD COUNT ---------------------------- */
   const getUnreadCount = useCallback((userId: string) => {

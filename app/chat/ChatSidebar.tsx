@@ -277,7 +277,7 @@ export default function ChatSidebar({
                         </p>
                         {user.lastSeen && (
                           <span className="text-xs text-gray-500 flex-shrink-0 ml-2">
-                            {formatTime(user.lastSeen)}
+                            {/* {formatTime(user.lastSeen)} */}
                           </span>
                         )}
                       </div>
@@ -423,7 +423,7 @@ export default function ChatSidebar({
                     </p>
                     {user.lastSeen && (
                       <span className="text-xs text-gray-500 flex-shrink-0 ml-2">
-                        {formatTime(user.lastSeen)}
+                        {/* {formatTime(user.lastSeen)} */}
                       </span>
                     )}
                   </div>

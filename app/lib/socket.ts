@@ -1,21 +1,26 @@
-import io, { Socket } from "socket.io-client";
+import { io, Socket } from "socket.io-client";
 
-let socket: typeof Socket | null = null;
+let socket: Socket | null = null;
 
 export const getSocket = () => {
   if (!socket) {
     socket = io(
       process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001",
       {
-        path: "/api/socket",
+        // ✅ IMPORTANT: use DEFAULT Socket.IO path
+        // ❌ DO NOT set `path` unless server matches it
         transports: ["polling", "websocket"],
-        autoConnect: false, // IMPORTANT
+
+        // ✅ let it connect automatically
+        autoConnect: true,
+
         reconnection: true,
         reconnectionAttempts: 5,
         reconnectionDelay: 1000,
       }
     );
   }
+  
 
   return socket;
 };
