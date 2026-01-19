@@ -9,7 +9,7 @@ export const getSocket = () => {
       {
         // ✅ IMPORTANT: use DEFAULT Socket.IO path
         // ❌ DO NOT set `path` unless server matches it
-        transports: ["polling", "websocket"],
+        transports: ["websocket"],
 
         // ✅ let it connect automatically
         autoConnect: true,

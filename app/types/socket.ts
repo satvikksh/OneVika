@@ -59,7 +59,7 @@ export function initSocket(res: NextApiResponseServerIO) {
           : ["http://localhost:3000"],
       credentials: true,
     },
-    transports: ["websocket", "polling"],
+    transports: ["polling"],
   });
 
   res.socket.server.io = io;

@@ -117,7 +117,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
 
     const socket = io(SOCKET_URL, {
       path: "/socket.io",
-      transports: ["polling", "websocket"], // ✅ important
+      transports: ["websocket"], // ✅ important
       auth: { userId },
     });
 

@@ -5,7 +5,7 @@ const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
     path: "/socket.io",
-    transports: ["polling", "websocket"],
+    transports: ["websocket"],
     cors: {
         origin: [
             "http://localhost:3000",
