@@ -1,7 +1,13 @@
-import { createServer } from "http";
+import express from "express";
+import http from "http";
 import { Server } from "socket.io";
 
-const httpServer = createServer();
+const app = express();
+const httpServer = http.createServer(app);
+
+app.get("/", (req, res) => {
+  res.send("Socket server running");
+});
 
 const io = new Server(httpServer, {
   path: "/socket.io",
