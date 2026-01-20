@@ -4,12 +4,9 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "outDir": "dist",
-    "rootDir": ".",
     "esModuleInterop": true,
-    "strict": true,
-    "skipLibCheck": true,
-    "noEmit": false
+    "strict": false,
+    "skipLibCheck": true
   },
-  "include": ["server.ts"],
-  "exclude": ["node_modules", ".next"]
+  "include": ["server.ts"]
 }
