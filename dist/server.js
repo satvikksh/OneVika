@@ -2,30 +2,23 @@ import express from "express";
 import { createServer } from "http";
 import { Server } from "socket.io";
 const app = express();
+/* ✅ REQUIRED — RAILWAY HEALTH CHECK */
+app.get("/", (_req, res) => {
+    res.status(200).send("🚀 Socket server is running");
+});
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
     path: "/socket.io",
-    transports: ["websocket"],
     cors: {
-        origin: [
-            "http://localhost:3000",
-            "https://onevika.vercel.app",
-        ],
+        origin: "*",
         methods: ["GET", "POST"],
-        credentials: false,
     },
 });
 io.on("connection", (socket) => {
-    const userId = socket.handshake.auth.userId;
-    console.log("✅ Socket connected:", socket.id, "user:", userId);
-    if (userId) {
-        socket.join(`user_${userId}`);
-        console.log(`👤 Joined room user_${userId}`);
-    }
-    socket.on("send_message", (msg) => {
-        io.to(`user_${msg.receiverId}`).emit("receive_message", msg);
-    });
+    console.log("✅ Socket connected:", socket.id);
 });
-httpServer.listen(3001, () => {
-    console.log("🚀 Socket server running on 3001");
+const PORT = Number(process.env.PORT) || 3001;
+httpServer.listen(PORT, () => {
+    console.log("🚀 Socket server running on", PORT);
 });
+export default io;
