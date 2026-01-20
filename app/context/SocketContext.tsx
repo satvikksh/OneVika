@@ -9,7 +9,8 @@ import React, {
   useCallback,
   useMemo,
 } from "react";
-import { io, type Socket } from "socket.io-client";
+import { io } from "socket.io-client";
+import type { Socket } from "socket.io-client";
 import { useSession } from "next-auth/react";
 
 /* ---------------- TYPES ---------------- */
@@ -23,46 +24,100 @@ interface Message {
   chatId?: string;
   type?: "text" | "image" | "file";
   status?: "sending" | "sent" | "delivered" | "read";
+  seenBy?: string[];
+}
+
+interface SocketContextType {
+  isConnected: boolean;
+  onlineUsers: string[];
+  messages: Message[];
+  sendMessage: (message: Partial<Message>) => void;
+  addMessages: (messages: Message[]) => void;
+  markMessageAsRead: (messageId: string) => void;
+  joinChat: (chatId: string) => void;
+  leaveChat: (chatId: string) => void;
+  clearMessages: () => void;
+  markChatMessagesSeen: (chatId: string) => void;
 }
 
 /* ---------------- CONTEXT ---------------- */
 
-const SocketContext = createContext<unknown>(null);
+const SocketContext = createContext<SocketContextType>({
+  isConnected: false,
+  onlineUsers: [],
+  messages: [],
+  sendMessage: () => {},
+  addMessages: () => {},
+  markMessageAsRead: () => {},
+  joinChat: () => {},
+  leaveChat: () => {},
+  clearMessages: () => {},
+  markChatMessagesSeen: () => {},
+});
 
 /* ---------------- PROVIDER ---------------- */
 
 export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
   const { data: session } = useSession();
-  const userId = session?.user?.id;
+  const userId = session?.user?.id ?? null;
 
   const socketRef = useRef<Socket | null>(null);
+
   const [isConnected, setIsConnected] = useState(false);
+  const [onlineUsers] = useState<string[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
 
+  /* ---------------- HELPERS ---------------- */
+
   const upsertMessage = useCallback((msg: Message) => {
-    setMessages((prev) =>
-      prev.some((m) => m.id === msg.id)
+    setMessages((prev) => {
+      const exists = prev.some((m) => m.id === msg.id);
+      return exists
         ? prev.map((m) => (m.id === msg.id ? msg : m))
-        : [...prev, msg]
-    );
+        : [...prev, msg];
+    });
   }, []);
 
-  /* ---------------- CONNECT ---------------- */
+  /* ---------------- SEND MESSAGE ---------------- */
+
+  const sendMessage = useCallback(
+    (message: Partial<Message>) => {
+      const socket = socketRef.current;
+      if (!socket || !userId || !message.receiverId) return;
+
+      const fullMessage: Message = {
+        id: message.id ?? crypto.randomUUID(),
+        content: message.content ?? "",
+        senderId: userId,
+        receiverId: message.receiverId,
+        chatId: message.chatId,
+        timestamp: new Date().toISOString(),
+        status: "sent",
+        type: "text",
+      };
+
+      socket.emit("send_message", fullMessage);
+
+      // ✅ optimistic update for sender
+      upsertMessage(fullMessage);
+    },
+    [userId, upsertMessage]
+  );
+
+  /* ---------------- CONNECTION ---------------- */
 
   useEffect(() => {
     if (!userId || socketRef.current) return;
 
-    const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL;
-    if (!SOCKET_URL) {
-      console.error("❌ NEXT_PUBLIC_SOCKET_URL not set");
-      return;
-    }
+  const SOCKET_URL =
+  process.env.NEXT_PUBLIC_SOCKET_URL ?? "http://127.0.0.1:3001";
 
-    console.log("🔥 Connecting socket:", SOCKET_URL);
+
+    console.log("🔥 Connecting socket:", SOCKET_URL, "user:", userId);
 
     const socket = io(SOCKET_URL, {
       path: "/socket.io",
-      withCredentials: true,
+      transports: ["websocket"], // ✅ important
       auth: { userId },
     });
 
@@ -82,44 +137,50 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
       console.error("❌ connect_error:", err.message);
     });
 
-    socket.on("receive_message", upsertMessage);
-
     return () => {
-      socket.off();
       socket.disconnect();
       socketRef.current = null;
+      setIsConnected(false);
     };
-  }, [userId, upsertMessage]);
+  }, [userId]);
 
-  /* ---------------- SEND ---------------- */
+  /* ---------------- RECEIVE MESSAGE ---------------- */
 
-  const sendMessage = useCallback(
-    (message: Partial<Message>) => {
-      const socket = socketRef.current;
-      if (!socket || !userId || !message.receiverId) return;
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!socket) return;
 
-      const fullMessage: Message = {
-        id: crypto.randomUUID(),
-        content: message.content ?? "",
-        senderId: userId,
-        receiverId: message.receiverId,
-        timestamp: new Date().toISOString(),
-        status: "sent",
-      };
+    socket.on("receive_message", (msg: Message) => {
+      console.log("📥 receive_message:", msg);
+      upsertMessage(msg);
+    });
 
-      socket.emit("send_message", fullMessage);
-      upsertMessage(fullMessage);
-    },
-    [userId, upsertMessage]
-  );
+    socket.on("message_sent", (msg: Message) => {
+      upsertMessage(msg);
+    });
+
+    return () => {
+      socket.off("receive_message");
+      socket.off("message_sent");
+    };
+  }, [upsertMessage]);
+
+  /* ---------------- CONTEXT VALUE ---------------- */
 
   const value = useMemo(
     () => ({
       isConnected,
+      onlineUsers,
       messages,
       sendMessage,
+      addMessages: (msgs: Message[]) => msgs.forEach(upsertMessage),
+      markMessageAsRead: () => {},
+      joinChat: () => {},
+      leaveChat: () => {},
+      clearMessages: () => setMessages([]),
+      markChatMessagesSeen: () => {},
     }),
-    [isConnected, messages, sendMessage]
+    [isConnected, onlineUsers, messages, sendMessage, upsertMessage]
   );
 
   return (
