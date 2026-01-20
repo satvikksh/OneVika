@@ -1,17 +1,18 @@
+import express from "express";
 import { createServer } from "http";
 import { Server } from "socket.io";
 
-const httpServer = createServer((req, res) => {
-  if (req.url === "/") {
-    res.writeHead(200, { "Content-Type": "text/plain" });
-    res.end("Socket server is running 🚀");
-    return;
-  }
+const app = express();
 
-  res.writeHead(404);
-  res.end();
+// ✅ Root route (Railway needs this)
+app.get("/", (_req, res) => {
+  res.status(200).send("Socket server running 🚀");
 });
 
+// ✅ Create HTTP server
+const httpServer = createServer(app);
+
+// ✅ Socket.IO
 const io = new Server(httpServer, {
   path: "/socket.io",
   cors: {
@@ -21,12 +22,17 @@ const io = new Server(httpServer, {
     ],
     methods: ["GET", "POST"],
   },
-  transports: ["websocket"], // IMPORTANT for Vercel
+  transports: ["websocket"], // IMPORTANT for production
 });
 
 io.on("connection", (socket) => {
   const userId = socket.handshake.auth?.userId;
-  if (!userId) return socket.disconnect();
+
+  if (!userId) {
+    console.log("❌ Missing userId, disconnecting");
+    socket.disconnect();
+    return;
+  }
 
   const room = `user_${userId}`;
   socket.join(room);
@@ -45,8 +51,14 @@ io.on("connection", (socket) => {
   });
 });
 
-const PORT = Number(process.env.PORT) || 3001;
+// ✅ CRITICAL: must use Railway PORT
+const PORT = Number(process.env.PORT);
 
-httpServer.listen(PORT, () => {
-  console.log("🚀 Socket server running on", PORT);
+if (!PORT) {
+  console.error("❌ PORT is not defined");
+  process.exit(1);
+}
+
+httpServer.listen(PORT, "0.0.0.0", () => {
+  console.log("🚀 Socket server running on port", PORT);
 });
