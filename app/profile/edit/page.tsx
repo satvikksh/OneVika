@@ -102,7 +102,7 @@ export default function EditProfilePage() {
      UI
   ============================ */
   return (
-    <div className="max-w-xl mx-auto p-6">
+    <div className="max-w-xl mx-auto p-6 pb-25">
       <button
         onClick={() => router.back()}
         className="mb-4 text-sm text-purple-600 flex items-center gap-1"
