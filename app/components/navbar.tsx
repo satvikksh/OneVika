@@ -330,24 +330,31 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
         }`}
       >
         <div className="container mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          {/* Logo & Mobile Menu Button */}
-          <div className="flex items-center gap-4">
-            <Link href="/" className="flex items-center gap-3 group">
-              <div className="relative w-10 h-10">
-                <Image
-                  src="/img/logo2.png"
-                  alt="OneVika logo"
-                  width={40}
-                  height={40}
-                  className="object-contain"
-                  priority
-                />
-              </div>
-              <span className="font-bold text-xl bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent hidden md:block">
-                {title}
-              </span>
-            </Link>
-          </div>
+        {/* Logo & Mobile Menu Button */}
+<div className="flex items-center gap-4">
+  <Link href="/" className="flex items-center gap-3 group">
+    <div className="relative w-10 h-10">
+      <Image
+        src="/img/logo2.png"
+        alt="OneVika"
+        width={40}
+        height={40}
+        className="object-contain"
+        priority
+      />
+    </div>
+
+    {/* Title + Subtitle */}
+    <div className="flex flex-col leading-tight">
+      <span className="font-bold text-base sm:text-xl bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+        {title}
+      </span>
+      <span className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">
+        Powered by Satvik&#39;s Group
+      </span>
+    </div>
+  </Link>
+</div>
 
           {/* Desktop Nav */}
           <nav className="hidden lg:flex items-center gap-1 mx-4">
