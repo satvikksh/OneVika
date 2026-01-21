@@ -32,13 +32,11 @@ export default function ChatPage() {
     isConnected, 
     onlineUsers, 
     messages: socketMessages,
-    // addMessages,
     sendMessage: socketSendMessage,
     joinChat,
     leaveChat,
     markMessageAsRead,
-    clearMessages,
-     markChatMessagesSeen
+    addMessages
   } = useSocket();
 
   // State
@@ -55,7 +53,6 @@ export default function ChatPage() {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isNavbarHidden, setIsNavbarHidden] = useState(false);
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
-  const { addMessages } = useSocket();
   
   // Chat UI state
   const [replyTo, setReplyTo] = useState<Message | null>(null);
@@ -80,7 +77,72 @@ export default function ChatPage() {
   const chatAreaRef = useRef<HTMLDivElement | null>(null);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
   const chatIdRef = useRef<string | null>(null);
-  const fileInputRefCallback = useRef<HTMLInputElement | null>(null);
+  const textAreaObserverRef = useRef<MutationObserver | null>(null);
+  const focusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  /* ---------------------------- DISPATCH FOCUS EVENTS ---------------------------- */
+  // Function to dispatch focus event to navbar
+  const dispatchFocusEvent = useCallback((isFocused: boolean) => {
+    const event = new CustomEvent('chatTextAreaFocus', { 
+      detail: { isFocused } 
+    });
+    window.dispatchEvent(event);
+  }, []);
+
+  // Setup textarea focus/blur event listeners
+  useEffect(() => {
+    const setupTextAreaListeners = () => {
+      const textAreas = document.querySelectorAll('textarea');
+      
+      const handleFocus = () => {
+        dispatchFocusEvent(true);
+        isInputFocusedRef.current = true;
+      };
+      
+      const handleBlur = () => {
+        dispatchFocusEvent(false);
+        isInputFocusedRef.current = false;
+      };
+
+      textAreas.forEach(textarea => {
+        textarea.addEventListener('focus', handleFocus);
+        textarea.addEventListener('blur', handleBlur);
+      });
+
+      return () => {
+        textAreas.forEach(textarea => {
+          textarea.removeEventListener('focus', handleFocus);
+          textarea.removeEventListener('blur', handleBlur);
+        });
+      };
+    };
+
+    // Initial setup
+    const cleanup = setupTextAreaListeners();
+
+    // Observe DOM changes for dynamically added textareas
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.type === 'childList') {
+          cleanup();
+          setupTextAreaListeners();
+        }
+      });
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+    textAreaObserverRef.current = observer;
+
+    // Cleanup on component unmount
+    return () => {
+      cleanup();
+      if (textAreaObserverRef.current) {
+        textAreaObserverRef.current.disconnect();
+      }
+      // Ensure navbar is shown when leaving chat
+      dispatchFocusEvent(false);
+    };
+  }, [dispatchFocusEvent]);
 
   /* ---------------------------- DETECT MOBILE ---------------------------- */
   useEffect(() => {
@@ -209,65 +271,58 @@ export default function ChatPage() {
   }, [status, onlineUsers]);
 
   /* ------------------------------- JOIN/LEAVE CHAT ROOMS ------------------------------- */
-useEffect(() => {
-  if (!selectedUser || !session?.user?.id) return;
+  useEffect(() => {
+    if (!selectedUser || !session?.user?.id) return;
 
-  const users = [session.user.id, selectedUser.id].sort();
-  const chatId = `chat_${users[0]}_${users[1]}`;
+    const users = [session.user.id, selectedUser.id].sort();
+    const chatId = `chat_${users[0]}_${users[1]}`;
 
-  chatIdRef.current = chatId;
-  joinChat(chatId);
+    chatIdRef.current = chatId;
+    joinChat(chatId);
 
-  return () => {
-    leaveChat(chatId);
-  };
-}, [selectedUser?.id, session?.user?.id]);
-
-
-
-
-
+    return () => {
+      leaveChat(chatId);
+    };
+  }, [selectedUser?.id, session?.user?.id, joinChat, leaveChat]);
 
   /* ---------------------------- FETCH INITIAL MESSAGES ---------------------------- */
- const fetchInitialMessages = async (userId: string) => {
-  if (!session?.user?.id) return;
+  const fetchInitialMessages = async (userId: string) => {
+    if (!session?.user?.id) return;
 
-  try {
-    setLoadingMessages(true);
+    try {
+      setLoadingMessages(true);
 
-    const res = await fetch(`/api/messages/by-user/${userId}`);
-    const data = await res.json();
+      const res = await fetch(`/api/messages/by-user/${userId}`);
+      const data = await res.json();
 
-    if (!res.ok) {
-      throw new Error(data.error || "Failed to fetch messages");
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to fetch messages");
+      }
+
+      // Push DB MESSAGES INTO SOCKET STATE
+      addMessages(data.messages);
+
+    } catch (err) {
+      console.error("Fetch initial messages failed:", err);
+    } finally {
+      setLoadingMessages(false);
     }
-
-    // ✅ PUSH DB MESSAGES INTO SOCKET STATE
-   addMessages(data.messages);
-
-  } catch (err) {
-    console.error("Fetch initial messages failed:", err);
-  } finally {
-    setLoadingMessages(false);
-  }
-};
-
+  };
 
   /* ---------------------------- FILTER MESSAGES FOR SELECTED USER ---------------------------- */
   const currentUserId = session?.user?.id;
   
   // Filter messages for the selected user from SocketContext
- const filteredMessages = socketMessages.filter(msg => {
-  if (!selectedUser || !currentUserId) return false;
+  const filteredMessages = socketMessages.filter(msg => {
+    if (!selectedUser || !currentUserId) return false;
 
-  return (
-    (msg.senderId === currentUserId &&
-     msg.receiverId === selectedUser.id) ||
-    (msg.senderId === selectedUser.id &&
-     msg.receiverId === currentUserId)
-  );
-});
-
+    return (
+      (msg.senderId === currentUserId &&
+       msg.receiverId === selectedUser.id) ||
+      (msg.senderId === selectedUser.id &&
+       msg.receiverId === currentUserId)
+    );
+  });
 
   // Sort messages by timestamp
   const sortedMessages = [...filteredMessages].sort((a, b) => 
@@ -275,20 +330,18 @@ useEffect(() => {
   );
 
   /* ---------------------------- MARK MESSAGES AS READ ---------------------------- */
-useEffect(() => {
-  if (!selectedUser || !currentUserId) return;
+  useEffect(() => {
+    if (!selectedUser || !currentUserId) return;
 
-  sortedMessages
-    .filter(
-      m =>
-        m.senderId === selectedUser.id &&
-        m.receiverId === currentUserId &&
-        m.status !== "read"
-    )
-    .forEach(m => markMessageAsRead(m.id));
-}, [sortedMessages, selectedUser, currentUserId, markMessageAsRead]);
-
-
+    sortedMessages
+      .filter(
+        m =>
+          m.senderId === selectedUser.id &&
+          m.receiverId === currentUserId &&
+          m.status !== "read"
+      )
+      .forEach(m => markMessageAsRead(m.id));
+  }, [sortedMessages, selectedUser, currentUserId, markMessageAsRead]);
 
   /* -------------------------------- TYPING -------------------------------- */
   const handleTyping = useCallback(() => {
@@ -337,41 +390,39 @@ useEffect(() => {
 
   /* ------------------------------ SEND MESSAGE ------------------------------ */
   const handleSendMessage = async (e?: React.FormEvent) => {
-  e?.preventDefault();
+    e?.preventDefault();
 
-  if (
-    !newMessage.trim() ||
-    !selectedUser ||
-    !currentUserId ||
-    sendingMessage
-  ) {
-    return;
-  }
+    if (
+      !newMessage.trim() ||
+      !selectedUser ||
+      !currentUserId ||
+      sendingMessage
+    ) {
+      return;
+    }
 
-  const messageText = newMessage.trim();
-  const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const messageText = newMessage.trim();
+    const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
-  try {
-    setSendingMessage(true);
+    try {
+      setSendingMessage(true);
 
-    socketSendMessage({
-      id: tempId,
-      content: messageText,
-    //   text: messageText,
-      receiverId: selectedUser.id,
+      socketSendMessage({
+        id: tempId,
+        content: messageText,
+        receiverId: selectedUser.id,
         senderId: currentUserId,
-    });
+      });
 
-    setNewMessage("");
-    setReplyTo(null);
-    setShowEmojiPicker(false);
+      setNewMessage("");
+      setReplyTo(null);
+      setShowEmojiPicker(false);
 
-    inputRef.current?.focus();
-  } finally {
-    setSendingMessage(false);
-  }
-};
-
+      inputRef.current?.focus();
+    } finally {
+      setSendingMessage(false);
+    }
+  };
 
   /* ---------------------------- HANDLE ENTER KEY ---------------------------- */
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -395,9 +446,9 @@ useEffect(() => {
         });
 
         if (!response.ok) {
-            const errorData = await response.json() as { error?: string };
-            throw new Error(errorData.error || "Failed to delete message");
-          }
+          const errorData = await response.json() as { error?: string };
+          throw new Error(errorData.error || "Failed to delete message");
+        }
       }
       
       // Remove from message status tracking
@@ -568,6 +619,9 @@ useEffect(() => {
   /* ----------------------------- INPUT FOCUS HANDLERS ----------------------------- */
   const handleInputFocus = () => {
     isInputFocusedRef.current = true;
+    // Dispatch focus event for navbar
+    dispatchFocusEvent(true);
+    
     if (isMobile) {
       setIsNavbarHidden(true);
       setTimeout(() => {
@@ -578,13 +632,23 @@ useEffect(() => {
 
   const handleInputBlur = () => {
     isInputFocusedRef.current = false;
-    if (isMobile && !isTyping) {
-      setTimeout(() => {
-        if (!isInputFocusedRef.current) {
+    
+    // Clear any pending focus timeout
+    if (focusTimeoutRef.current) {
+      clearTimeout(focusTimeoutRef.current);
+    }
+    
+    // Delay blur event to handle quick taps
+    focusTimeoutRef.current = setTimeout(() => {
+      if (!isInputFocusedRef.current) {
+        // Dispatch blur event for navbar
+        dispatchFocusEvent(false);
+        
+        if (isMobile && !isTyping) {
           setIsNavbarHidden(false);
         }
-      }, 300);
-    }
+      }
+    }, 100);
   };
 
   /* ----------------------------- SCROLL TO BOTTOM ----------------------------- */
@@ -655,11 +719,6 @@ useEffect(() => {
 
   return (
     <div className="h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950">
-      {/* Connection Status Indicator */}
-      {/* <div className={`fixed top-0 left-0 right-0 z-50 px-4 py-2 text-xs text-center ${isConnected ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-        {isConnected ? '✓ Connected to chat server' : '⚠️ Connecting to chat server...'}
-      </div> */}
-
       {/* Mobile Sidebar Toggle Button */}
       {isMobile && !selectedUser && (
         <button
@@ -710,7 +769,7 @@ useEffect(() => {
           <ChatArea
             selectedUser={selectedUser}
             loadingMessages={loadingMessages}
-             messages={sortedMessages}
+            messages={sortedMessages}
             newMessage={newMessage}
             setNewMessage={setNewMessage}
             sendingMessage={sendingMessage}

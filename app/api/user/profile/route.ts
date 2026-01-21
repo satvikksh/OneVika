@@ -5,10 +5,8 @@ import { dbConnect } from "../../../lib/mongodb";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../../lib/authOptions";
 
-
-
 export async function GET() {
-await dbConnect();
+  await dbConnect();
 
   const session = await getServerSession(authOptions);
 
@@ -22,15 +20,24 @@ await dbConnect();
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  const posts = await Post.find({ userId: user._id }).sort({ createdAt: -1 });
+  const followersCount = Array.isArray(user.followers)
+    ? user.followers.length
+    : 0;
 
-  const likedPosts = await Post.find({
-    likes: user._id,
-  }).sort({ createdAt: -1 });
+  const followingCount = Array.isArray(user.following)
+    ? user.following.length
+    : 0;
+
+  const posts = await Post.find({ userId: user._id }).sort({
+    createdAt: -1,
+  });
 
   return NextResponse.json({
-    user,
+    user: {
+      ...user,
+      followersCount,
+      followingCount,
+    },
     posts,
-    likedPosts,
   });
 }

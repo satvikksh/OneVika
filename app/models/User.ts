@@ -1,4 +1,4 @@
-import mongoose, { Schema, Model, Document } from "mongoose";
+import mongoose, { Schema, Model, Document , Types} from "mongoose";
 
 /* =======================
    1️⃣ User Interface
@@ -17,6 +17,8 @@ export interface IUser extends Document {
   likedPosts: mongoose.Types.ObjectId[];
   createdAt: Date;
   updatedAt: Date;
+    followers: Types.ObjectId[];
+  following: Types.ObjectId[];
 }
 
 /* =======================

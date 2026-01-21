@@ -79,13 +79,42 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
-  // const [unreadNotifications, setUnreadNotifications] = useState(3);
   const { unreadNotifications } = useNotifications();
+
+  // NEW: State to track if chat text area is focused
+  const [isChatTextAreaFocused, setIsChatTextAreaFocused] = useState(false);
 
   const searchRef = useRef<HTMLDivElement>(null);
   const userDropdownRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
+
+  // NEW: Event listener for chat text area focus
+  useEffect(() => {
+    const handleTextAreaFocus = (e: CustomEvent) => {
+      setIsChatTextAreaFocused(e.detail.isFocused);
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // If user presses Escape key in chat, show bottom nav
+      if (e.key === 'Escape' && pathname.startsWith('/chat')) {
+        setIsChatTextAreaFocused(false);
+      }
+    };
+
+    window.addEventListener('chatTextAreaFocus', handleTextAreaFocus as EventListener);
+    window.addEventListener('keydown', handleKeyDown);
+    
+    return () => {
+      window.removeEventListener('chatTextAreaFocus', handleTextAreaFocus as EventListener);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [pathname]);
+
+  // NEW: Function to dispatch focus event (to be called from chat page)
+  const setChatTextAreaFocus = useCallback((isFocused: boolean) => {
+    setIsChatTextAreaFocused(isFocused);
+  }, []);
 
   const searchSuggestions: SearchSuggestion[] = [
     {
@@ -169,6 +198,41 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
     { path: "/analytics", label: "Analytics", icon: <BarChart size={18} /> },
   ];
 
+  // Bottom navigation items for mobile
+  const bottomNavItems: NavItem[] = [
+    { path: "/", label: "Home", icon: <Home size={24} /> },
+    { path: "/feed", label: "Feed", icon: <Users size={24} /> },
+    { path: "/chat", label: "Chat", icon: <MessageSquare size={24} /> },
+    { path: "/analytics", label: "Analytics", icon: <BarChart size={24} /> },
+    { 
+      path: "/profile", 
+      label: "Profile", 
+      icon: session?.user ? (
+        <div className="relative w-8 h-8">
+          {!loading && avatar ? (
+            <Image
+              src={avatar}
+              alt="User Avatar"
+              width={32}
+              height={32}
+              className="rounded-full object-cover"
+            />
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
+              <User size={16} className="text-white" />
+            </div>
+          )}
+        </div>
+      ) : <User size={24} />
+    },
+  ];
+
+  // NEW: Check if we're on a chat page
+  const isChatPage = pathname.startsWith('/chat');
+  
+  // NEW: Determine if bottom nav should be shown
+  const showBottomNav = !(isChatPage && isChatTextAreaFocused);
+
   // Scroll blur with throttling
   useEffect(() => {
     let ticking = false;
@@ -190,7 +254,6 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
     if (typeof window === "undefined") return;
 
     const saved = localStorage.getItem("theme") as "dark" | "light" | null;
-
     const prefersDark = window.matchMedia(
       "(prefers-color-scheme: dark)"
     ).matches;
@@ -244,7 +307,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
   };
 
   const markAllAsRead = () => {
-    // setUnreadNotifications(0);
+    // Mark all notifications as read logic
   };
 
   const handleChatClick = () => {
@@ -269,7 +332,6 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
         <div className="container mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           {/* Logo & Mobile Menu Button */}
           <div className="flex items-center gap-4">
-            {/* Mobile Menu Button - Now on the right side */}
             <Link href="/" className="flex items-center gap-3 group">
               <div className="relative w-10 h-10">
                 <Image
@@ -281,7 +343,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                   priority
                 />
               </div>
-              <span className="font-bold text-xl bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+              <span className="font-bold text-xl bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent hidden md:block">
                 {title}
               </span>
             </Link>
@@ -318,7 +380,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
             ))}
           </nav>
 
-          {/* Search Bar */}
+          {/* Search Bar - Hidden on mobile */}
           {showSearch && (
             <div
               className="hidden md:flex flex-1 max-w-xl mx-6"
@@ -503,7 +565,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                   className="flex items-center gap-3 p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                   aria-label="User menu"
                 >
-                  <div className="relative w-10 h-10 rounded-full overflow-hidden bg-linear-to-br from-purple-500 to-blue-500">
+                  <div className="relative w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-purple-500 to-blue-500">
                     {!loading && avatar ? (
                       <Image
                         src={avatar}
@@ -530,7 +592,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                   <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-900 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-800 overflow-hidden z-50">
                     <div className="p-4 border-b border-gray-200 dark:border-gray-800">
                       <div className="flex items-center gap-3">
-                        <div className="relative w-10 h-10 rounded-full overflow-hidden bg-linear-to-br from-purple-500 to-blue-500">
+                        <div className="relative w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-purple-500 to-blue-500">
                           {!loading && avatar ? (
                             <Image
                               src={avatar}
@@ -609,15 +671,12 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
             )}
           </div>
 
-          {/* Mobile Dropdown Button - Shows Everything Inside */}
+          {/* Mobile Menu Button - Hidden on mobile since we have bottom nav */}
           <button
             className="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             aria-label="Toggle menu"
           >
-            <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
-              Menu
-            </span>
             {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
         </div>
@@ -626,7 +685,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
         {isMobileMenuOpen && (
           <div 
             ref={mobileMenuRef}
-            className="lg:hidden absolute top-16 inset-x-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 shadow-2xl max-h-[80vh] overflow-y-auto"
+            className="lg:hidden fixed top-16 inset-x-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 shadow-2xl max-h-[80vh] overflow-y-auto z-50"
           >
             <div className="p-4">
               {/* Mobile Search */}
@@ -703,22 +762,6 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                     </span>
                   </button>
 
-                  {/* Chat */}
-                  {session?.user && (
-                    <button
-                      onClick={handleChatClick}
-                      className="flex flex-col items-center justify-center p-4 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors relative"
-                    >
-                      <MessageSquare size={20} className="mb-2" />
-                      <span className="text-sm font-medium">Chat</span>
-                      {unreadNotifications > 0 && (
-                        <span className="absolute top-2 right-2 w-5 h-5 bg-green-500 text-white text-xs rounded-full flex items-center justify-center">
-                          {unreadNotifications}
-                        </span>
-                      )}
-                    </button>
-                  )}
-
                   {/* Notifications */}
                   {session?.user && (
                     <button
@@ -745,7 +788,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                   </h3>
                   <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4">
                     <div className="flex items-center gap-3 mb-4">
-                      <div className="relative w-12 h-12 rounded-full overflow-hidden bg-linear-to-br from-purple-500 to-blue-500">
+                      <div className="relative w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-purple-500 to-blue-500">
                         {!loading && avatar ? (
                           <Image
                             src={avatar}
@@ -768,14 +811,6 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                     </div>
                     
                     <div className="space-y-2">
-                      <Link
-                        href="/profile"
-                        onClick={() => setIsMobileMenuOpen(false)}
-                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-300"
-                      >
-                        <User size={18} />
-                        <span className="font-medium">Profile</span>
-                      </Link>
                       <Link
                         href="/settings"
                         onClick={() => setIsMobileMenuOpen(false)}
@@ -837,8 +872,41 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
         )}
       </header>
 
-      {/* Spacer */}
-      <div className="h-16" />
+      {/* Bottom Navigation Bar for Mobile - Conditionally shown */}
+      {showBottomNav && (
+  <div className="lg:hidden fixed bottom-0 inset-x-0 z-[60] bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-t border-gray-200 dark:border-gray-800 shadow-lg transition-transform duration-300 ease-in-out">          <div className="container mx-auto px-4">
+            <div className="flex items-center justify-between h-16">
+              {bottomNavItems.map((item) => {
+                const isActive = pathname === item.path;
+                
+                return (
+                  <Link
+                    key={item.path}
+                    href={item.path}
+                    className={`flex flex-col items-center justify-center flex-1 p-2 transition-all duration-200 ${
+                      isActive
+                        ? "text-purple-600 dark:text-purple-400"
+                        : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                    }`}
+                  >
+                    <div className={`relative ${isActive ? "scale-110" : ""}`}>
+                      {item.icon}
+                    </div>
+                    <span className="text-xs font-medium mt-1">{item.label}</span>
+                    {isActive && (
+                      <div className="w-1 h-1 rounded-full bg-purple-600 dark:bg-purple-400 mt-1" />
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Spacers for top and bottom navbars */}
+      <div className="h-16" /> {/* Top navbar spacer */}
+      {showBottomNav && <div className="lg:hidden h-16" />} {/* Bottom navbar spacer for mobile */}
     </>
   );
 };

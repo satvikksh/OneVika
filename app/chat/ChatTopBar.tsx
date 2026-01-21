@@ -6,7 +6,7 @@ import Image from "next/image";
 import { ArrowLeft, Phone, Video, Info, Users, MoreVertical, Menu } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useSocket } from "../context/SocketContext";
-
+import { useRouter } from "next/navigation";
 
 interface ChatTopBarProps {
   selectedUser: User | null;
@@ -28,24 +28,30 @@ export default function ChatTopBar({
   showMobileSidebar = false,
 }: ChatTopBarProps) {
   const { data: session } = useSession();
-
-  // Desktop: Top bar should start at the edge of sidebar (80px)
-  // Mobile: Top bar should be full width and NOT auto-hide
+  const router = useRouter();
+  
   const desktopLeft = "lg:left-80";
   const mobileClasses = isMobile ? "left-0 right-0" : "";
   const positionClasses = isMobile ? mobileClasses : `${desktopLeft} right-0`;
+  
   const { onlineUsers } = useSocket();
-const isUserOnline =
-  selectedUser?.id
-    ? onlineUsers.includes(selectedUser.id)
-    : false;
+  const isUserOnline =
+    selectedUser?.id
+      ? onlineUsers.includes(selectedUser.id)
+      : false;
+
+  const handleUserProfileClick = () => {
+    if (selectedUser) {
+      // Navigate to the user's profile page
+      router.push(`/profile/${selectedUser.id}`);
+    }
+  };
 
   if (!selectedUser) {
     return (
       <header className={`fixed top-16 ${positionClasses} z-40 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 h-16 transition-all duration-300`}>
         <div className="h-full flex items-center justify-between px-4">
           <div className="flex items-center gap-3">
-            {/* Hamburger menu for mobile when no user selected */}
             {isMobile && onToggleSidebar && (
               <button
                 onClick={onToggleSidebar}
@@ -77,14 +83,9 @@ const isUserOnline =
   }
 
   return (
-    <header className={`fixed top-16 ${positionClasses} z-40 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 h-16 transition-all duration-300 ${
-      // REMOVED the auto-hide transform for mobile
-      // isMobile && isNavbarHidden ? '-translate-y-full' : 'translate-y-0'
-      'translate-y-0'
-    }`}>
+    <header className={`fixed top-16 ${positionClasses} z-40 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 h-16 transition-all duration-300 translate-y-0`}>
       <div className="h-full px-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          {/* Back button on mobile, Menu button on desktop when sidebar is hidden */}
           {isMobile ? (
             <button
               onClick={onBack}
@@ -105,7 +106,11 @@ const isUserOnline =
 
           <div className="flex items-center gap-3">
             <div className="relative flex-shrink-0">
-              <div className="w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-purple-500 to-blue-500 ring-2 ring-white dark:ring-gray-900">
+              <button
+                onClick={handleUserProfileClick}
+                className="relative w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-purple-500 to-blue-500 ring-2 ring-white dark:ring-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500 active:scale-95 transition-transform"
+                aria-label="View user profile"
+              >
                 {selectedUser.avatar ? (
                   <Image
                     src={selectedUser.avatar}
@@ -121,29 +126,31 @@ const isUserOnline =
                     </span>
                   </div>
                 )}
-              </div>
-             {isUserOnline && (
-  <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white dark:border-gray-900" />
-)}
-
+              </button>
+              {isUserOnline && (
+                <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white dark:border-gray-900" />
+              )}
             </div>
-            <div>
-              <h3 className="font-bold text-gray-900 dark:text-white text-sm sm:text-base">
+            <button
+              onClick={handleUserProfileClick}
+              className="text-left focus:outline-none hover:opacity-80 transition-opacity"
+              aria-label="View user profile"
+            >
+              <h3 className="font-bold text-gray-900 dark:text-white text-sm sm:text-base hover:text-purple-600 dark:hover:text-purple-400 transition-colors">
                 {selectedUser.name}
               </h3>
               <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-              {typingUsers.has(selectedUser.id) ? (
-  <span className="text-purple-600 dark:text-purple-400 italic">
-    typing...
-  </span>
-) : isUserOnline ? (
-  "Online"
-) : (
-  "Offline"
-)}
-
+                {typingUsers.has(selectedUser.id) ? (
+                  <span className="text-purple-600 dark:text-purple-400 italic">
+                    typing...
+                  </span>
+                ) : isUserOnline ? (
+                  "Online"
+                ) : (
+                  "Offline"
+                )}
               </p>
-            </div>
+            </button>
           </div>
         </div>
 
@@ -161,8 +168,9 @@ const isUserOnline =
             <Video size={18} className="sm:w-5 sm:h-5" />
           </button>
           <button 
+            onClick={handleUserProfileClick}
             className="hidden sm:block p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors active:scale-95"
-            aria-label="Info"
+            aria-label="User info"
           >
             <Info size={20} />
           </button>
