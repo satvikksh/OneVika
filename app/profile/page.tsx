@@ -361,7 +361,7 @@ const handleFollowToggle = async () => {
             </div>
             {isCurrentUser ? (
               <button onClick={handleEditProfile} className="px-4 py-2 text-sm font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded-xl transition-colors">
-                Edit Profile
+                {/* Edit Profile */}
               </button>
             ) : (
               <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl"><MoreHorizontal size={20} /></button>

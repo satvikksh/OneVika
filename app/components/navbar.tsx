@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { useNotifications } from "@/app/context/NotificationContext"; 
+import { useNotifications } from "@/app/context/NotificationContext";
 import { useUserAvatar } from "../hooks/useUserAvatar";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -97,17 +97,23 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
 
     const handleKeyDown = (e: KeyboardEvent) => {
       // If user presses Escape key in chat, show bottom nav
-      if (e.key === 'Escape' && pathname.startsWith('/chat')) {
+      if (e.key === "Escape" && pathname.startsWith("/chat")) {
         setIsChatTextAreaFocused(false);
       }
     };
 
-    window.addEventListener('chatTextAreaFocus', handleTextAreaFocus as EventListener);
-    window.addEventListener('keydown', handleKeyDown);
-    
+    window.addEventListener(
+      "chatTextAreaFocus",
+      handleTextAreaFocus as EventListener
+    );
+    window.addEventListener("keydown", handleKeyDown);
+
     return () => {
-      window.removeEventListener('chatTextAreaFocus', handleTextAreaFocus as EventListener);
-      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener(
+        "chatTextAreaFocus",
+        handleTextAreaFocus as EventListener
+      );
+      window.removeEventListener("keydown", handleKeyDown);
     };
   }, [pathname]);
 
@@ -204,9 +210,9 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
     { path: "/feed", label: "Feed", icon: <Users size={24} /> },
     { path: "/chat", label: "Chat", icon: <MessageSquare size={24} /> },
     { path: "/analytics", label: "Analytics", icon: <BarChart size={24} /> },
-    { 
-      path: "/profile", 
-      label: "Profile", 
+    {
+      path: "/profile",
+      label: "Profile",
       icon: session?.user ? (
         <div className="relative w-8 h-8">
           {!loading && avatar ? (
@@ -223,13 +229,15 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
             </div>
           )}
         </div>
-      ) : <User size={24} />
+      ) : (
+        <User size={24} />
+      ),
     },
   ];
 
   // NEW: Check if we're on a chat page
-  const isChatPage = pathname.startsWith('/chat');
-  
+  const isChatPage = pathname.startsWith("/chat");
+
   // NEW: Determine if bottom nav should be shown
   const showBottomNav = !(isChatPage && isChatTextAreaFocused);
 
@@ -261,10 +269,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
     const resolvedTheme = saved ?? (prefersDark ? "dark" : "light");
 
     setTheme(resolvedTheme);
-    document.documentElement.classList.toggle(
-      "dark",
-      resolvedTheme === "dark"
-    );
+    document.documentElement.classList.toggle("dark", resolvedTheme === "dark");
   }, []);
 
   // Close dropdowns on outside click
@@ -330,31 +335,31 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
         }`}
       >
         <div className="container mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-        {/* Logo & Mobile Menu Button */}
-<div className="flex items-center gap-4">
-  <Link href="/" className="flex items-center gap-3 group">
-    <div className="relative w-10 h-10">
-      <Image
-        src="/img/logo2.png"
-        alt="OneVika"
-        width={40}
-        height={40}
-        className="object-contain"
-        priority
-      />
-    </div>
+          {/* Logo & Mobile Menu Button */}
+          <div className="flex items-center gap-4">
+            <Link href="/" className="flex items-center gap-3 group">
+              <div className="relative w-10 h-10">
+                <Image
+                  src="/img/logo2.png"
+                  alt="OneVika"
+                  width={40}
+                  height={40}
+                  className="object-contain"
+                  priority
+                />
+              </div>
 
-    {/* Title + Subtitle */}
-    <div className="flex flex-col leading-tight">
-      <span className="font-bold text-base sm:text-xl bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-        {title}
-      </span>
-      <span className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">
-        Powered by Satvik&#39;s Group
-      </span>
-    </div>
-  </Link>
-</div>
+              {/* Title + Subtitle */}
+              <div className="flex flex-col leading-tight">
+                <span className="font-bold text-base sm:text-xl bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                  {title}
+                </span>
+                <span className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">
+                  Powered by Satvik&#39;s Group
+                </span>
+              </div>
+            </Link>
+          </div>
 
           {/* Desktop Nav */}
           <nav className="hidden lg:flex items-center gap-1 mx-4">
@@ -690,7 +695,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
 
         {/* Mobile Menu Dropdown - Contains Everything */}
         {isMobileMenuOpen && (
-          <div 
+          <div
             ref={mobileMenuRef}
             className="lg:hidden fixed top-16 inset-x-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 shadow-2xl max-h-[80vh] overflow-y-auto z-50"
           >
@@ -810,13 +815,15 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                         )}
                       </div>
                       <div>
-                        <p className="font-bold">{session.user.name || "User"}</p>
+                        <p className="font-bold">
+                          {session.user.name || "User"}
+                        </p>
                         <p className="text-sm text-gray-500 dark:text-gray-400">
                           {session.user.email || "No email"}
                         </p>
                       </div>
                     </div>
-                    
+
                     <div className="space-y-2">
                       <Link
                         href="/settings"
@@ -878,14 +885,15 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
           </div>
         )}
       </header>
-
       {/* Bottom Navigation Bar for Mobile - Conditionally shown */}
       {showBottomNav && (
-  <div className="lg:hidden fixed bottom-0 inset-x-0 z-[60] bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-t border-gray-200 dark:border-gray-800 shadow-lg transition-transform duration-300 ease-in-out">          <div className="container mx-auto px-4">
+        <div className="lg:hidden fixed bottom-0 inset-x-0 z-[60] bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-t border-gray-200 dark:border-gray-800 shadow-lg transition-transform duration-300 ease-in-out">
+          {" "}
+          <div className="container mx-auto px-4">
             <div className="flex items-center justify-between h-16">
               {bottomNavItems.map((item) => {
                 const isActive = pathname === item.path;
-                
+
                 return (
                   <Link
                     key={item.path}
@@ -899,7 +907,9 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                     <div className={`relative ${isActive ? "scale-110" : ""}`}>
                       {item.icon}
                     </div>
-                    <span className="text-xs font-medium mt-1">{item.label}</span>
+                    <span className="text-xs font-medium mt-1">
+                      {item.label}
+                    </span>
                     {isActive && (
                       <div className="w-1 h-1 rounded-full bg-purple-600 dark:bg-purple-400 mt-1" />
                     )}
@@ -910,10 +920,10 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
           </div>
         </div>
       )}
-
       {/* Spacers for top and bottom navbars */}
       <div className="h-16" /> {/* Top navbar spacer */}
-      {showBottomNav && <div className="lg:hidden h-16" />} {/* Bottom navbar spacer for mobile */}
+      {showBottomNav && <div className="lg:hidden h-16" />}{" "}
+      {/* Bottom navbar spacer for mobile */}
     </>
   );
 };
