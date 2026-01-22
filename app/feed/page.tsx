@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
-import { Heart, MessageCircle, Sparkles, Trash2, X, User, Send, Loader2 } from "lucide-react";
+import { Heart, MessageCircle, Sparkles, Trash2, X, User, Send, Loader2, MoreVertical, Bookmark, Share2, ChevronLeft, ChevronRight, Home, Volume2, VolumeX, Play, Pause } from "lucide-react";
 import CreatePost from "./CreatePost";
 import { useTheme } from "../theme-provider";
 import { useSession } from "next-auth/react";
@@ -55,16 +55,15 @@ function LikeUserModal({ isOpen, onClose, postId, likeCount }: LikeUserModalProp
   const [users, setUsers] = useState<UserType[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     if (isOpen && postId) {
       fetchLikeUsers();
     } else {
-      // Reset when modal closes
       setUsers([]);
       setError(null);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, postId]);
 
   const fetchLikeUsers = async () => {
@@ -87,6 +86,11 @@ function LikeUserModal({ isOpen, onClose, postId, likeCount }: LikeUserModalProp
     }
   };
 
+  const handleUserAvatarClick = (userId: string) => {
+    router.push(`/profile/${userId}`);
+    onClose();
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -96,7 +100,7 @@ function LikeUserModal({ isOpen, onClose, postId, likeCount }: LikeUserModalProp
         animate={{ opacity: 1, scale: 1 }}
         className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md max-h-[80vh] flex flex-col"
       >
-        <div className="p-6 border-b dark:border-gray-700 flex items-center justify-between">
+        <div className="p-6 border-b dark:border-gray-900 flex items-center justify-between">
           <div>
             <h3 className="text-xl font-bold">Liked by</h3>
             <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -137,7 +141,10 @@ function LikeUserModal({ isOpen, onClose, postId, likeCount }: LikeUserModalProp
             <div className="space-y-3">
               {users.map((user) => (
                 <div key={user._id} className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 flex items-center justify-center overflow-hidden">
+                  <button
+                    onClick={() => handleUserAvatarClick(user._id)}
+                    className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 flex items-center justify-center overflow-hidden cursor-pointer hover:opacity-90 transition-opacity"
+                  >
                     {user.image || user.avatar ? (
                       <Image
                         src={user.image || user.avatar || ''}
@@ -151,12 +158,17 @@ function LikeUserModal({ isOpen, onClose, postId, likeCount }: LikeUserModalProp
                         {user.name?.[0]?.toUpperCase() || "U"}
                       </span>
                     )}
-                  </div>
+                  </button>
                   <div className="flex-1">
                     <p className="font-semibold">{user.name}</p>
                     <p className="text-sm text-gray-500">{user.email}</p>
                   </div>
-                  <User size={16} className="text-gray-400" />
+                  <button
+                    onClick={() => handleUserAvatarClick(user._id)}
+                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors cursor-pointer"
+                  >
+                    <User size={16} className="text-gray-400" />
+                  </button>
                 </div>
               ))}
             </div>
@@ -177,10 +189,15 @@ function CommentsModal({
   onCommentDeleted 
 }: CommentsModalProps) {
   const { data: session } = useSession();
+  const router = useRouter();
   const [newComment, setNewComment] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const commentInputRef = useRef<HTMLTextAreaElement>(null);
   const commentsContainerRef = useRef<HTMLDivElement>(null);
+
+  const handleUserAvatarClick = (userId: string) => {
+    router.push(`/profile/${userId}`);
+  };
 
   const handleSubmitComment = async () => {
     if (!newComment.trim() || !session?.user?.id) return;
@@ -198,12 +215,10 @@ function CommentsModal({
         onCommentAdded(newCommentData);
         setNewComment("");
         
-        // Clear textarea height
         if (commentInputRef.current) {
           commentInputRef.current.style.height = "auto";
         }
 
-        // Scroll to bottom of comments
         setTimeout(() => {
           if (commentsContainerRef.current) {
             commentsContainerRef.current.scrollTop = commentsContainerRef.current.scrollHeight;
@@ -233,7 +248,6 @@ function CommentsModal({
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setNewComment(e.target.value);
-    // Auto-expand textarea
     e.target.style.height = "auto";
     e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
   };
@@ -254,7 +268,7 @@ function CommentsModal({
         animate={{ opacity: 1, scale: 1 }}
         className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md max-h-[80vh] flex flex-col"
       >
-        <div className="p-6 border-b dark:border-gray-700 flex items-center justify-between">
+        <div className="p-6 border-b dark:border-gray-900 flex items-center justify-between">
           <div>
             <h3 className="text-xl font-bold">Comments</h3>
             <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -269,7 +283,6 @@ function CommentsModal({
           </button>
         </div>
 
-        {/* Comments List */}
         <div 
           ref={commentsContainerRef}
           className="flex-1 overflow-y-auto p-4 min-h-[200px]"
@@ -284,7 +297,10 @@ function CommentsModal({
             <div className="space-y-4">
               {comments.map((comment) => (
                 <div key={comment._id} className="flex gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 flex items-center justify-center overflow-hidden flex-shrink-0">
+                  <button
+                    onClick={() => handleUserAvatarClick(comment.userId?._id)}
+                    className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 flex items-center justify-center overflow-hidden flex-shrink-0 cursor-pointer hover:opacity-90 transition-opacity"
+                  >
                     {comment.userId?.image || comment.userId?.avatar ? (
                       <Image
                         src={comment.userId.image || comment.userId.avatar || ''}
@@ -298,7 +314,7 @@ function CommentsModal({
                         {comment.userId?.name?.[0]?.toUpperCase() || "U"}
                       </span>
                     )}
-                  </div>
+                  </button>
                   <div className="flex-1 min-w-0">
                     <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-3">
                       <div className="flex items-center justify-between mb-2">
@@ -332,10 +348,12 @@ function CommentsModal({
           )}
         </div>
 
-        {/* Comment Input */}
         <div className="p-4 border-t dark:border-gray-700">
           <div className="flex gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 flex items-center justify-center overflow-hidden flex-shrink-0">
+            <button
+              onClick={() => session?.user?.id && handleUserAvatarClick(session.user.id)}
+              className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 flex items-center justify-center overflow-hidden flex-shrink-0 cursor-pointer hover:opacity-90 transition-opacity"
+            >
               {session?.user?.image || session?.user?.avatar ? (
                 <Image
                   src={session.user.image || session.user.avatar || ''}
@@ -349,7 +367,7 @@ function CommentsModal({
                   {session?.user?.name?.[0]?.toUpperCase() || "Y"}
                 </span>
               )}
-            </div>
+            </button>
             <div className="flex-1">
               <div className="relative">
                 <textarea
@@ -389,6 +407,14 @@ export default function FeedPage() {
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(1);
   const [initialLoad, setInitialLoad] = useState(true);
+  const [currentPostIndex, setCurrentPostIndex] = useState(0);
+  const [showHeader, setShowHeader] = useState(true);
+  const [showCreatePost, setShowCreatePost] = useState(false);
+  
+  // Video controls
+  const [isVideoPlaying, setIsVideoPlaying] = useState<Record<string, boolean>>({});
+  const [isVideoMuted, setIsVideoMuted] = useState<Record<string, boolean>>({});
+  const [doubleTapLike, setDoubleTapLike] = useState<string | null>(null);
   
   const [likeModal, setLikeModal] = useState<{
     isOpen: boolean;
@@ -411,11 +437,17 @@ export default function FeedPage() {
     comments: [],
   });
   
+  const feedContainerRef = useRef<HTMLDivElement>(null);
+  const videoRefs = useRef<Record<string, HTMLVideoElement | null>>({});
+  const lastTapRef = useRef<number>(0);
+  const tapTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const lastScrollY = useRef(0);
+  const scrollingRef = useRef(false);
 
   /* ============================
-     🔐 REDIRECT (SIDE EFFECT)
+      🔐 REDIRECT (SIDE EFFECT)
   ============================ */
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -424,7 +456,15 @@ export default function FeedPage() {
   }, [status, router]);
 
   /* ============================
-     SHUFFLE ARRAY FUNCTION
+      CHECK IF MEDIA IS VIDEO (FIXED)
+  ============================ */
+  const isVideo = (url: string | undefined | null): boolean => {
+    if (!url) return false;
+    return url.endsWith(".mp4") || url.endsWith(".webm") || url.endsWith(".mov");
+  };
+
+  /* ============================
+      SHUFFLE ARRAY FUNCTION
   ============================ */
   const shuffleArray = <T,>(array: T[]): T[] => {
     const shuffled = [...array];
@@ -436,7 +476,7 @@ export default function FeedPage() {
   };
 
   /* ============================
-     FETCH POSTS WITH PAGINATION
+      FETCH POSTS WITH PAGINATION
   ============================ */
   const fetchPosts = useCallback(async (pageNum: number, isInitialLoad = false) => {
     if (!session?.user?.id || (loadingPosts && isInitialLoad) || (loadingMore && !isInitialLoad)) return;
@@ -453,13 +493,11 @@ export default function FeedPage() {
       
       const data = await response.json();
       
-      // If no data returned, set hasMore to false
       if (data.length === 0) {
         setHasMore(false);
         return;
       }
 
-      // Fetch comments for each post
       const postsWithComments = await Promise.all(
         data.map(async (post: PostType) => {
           try {
@@ -476,23 +514,41 @@ export default function FeedPage() {
         })
       );
 
-      // For initial load (page 1), shuffle the posts
       if (isInitialLoad) {
         const shuffledPosts = shuffleArray(postsWithComments);
         setPosts(shuffledPosts);
         setInitialLoad(false);
+        
+        // Initialize video states for all posts
+        const playingStates: Record<string, boolean> = {};
+        const muteStates: Record<string, boolean> = {};
+        shuffledPosts.forEach(post => {
+          playingStates[post._id] = true;
+          muteStates[post._id] = true;
+        });
+        setIsVideoPlaying(playingStates);
+        setIsVideoMuted(muteStates);
       } else {
-        // For subsequent loads, append to existing posts
         setPosts(prev => {
-          // Filter out duplicates
           const newPosts = postsWithComments.filter(
             newPost => !prev.some(existingPost => existingPost._id === newPost._id)
           );
+          
+          // Initialize video states for new posts
+          const newPlayingStates: Record<string, boolean> = {};
+          const newMuteStates: Record<string, boolean> = {};
+          newPosts.forEach(post => {
+            newPlayingStates[post._id] = true;
+            newMuteStates[post._id] = true;
+          });
+          
+          setIsVideoPlaying(prevStates => ({ ...prevStates, ...newPlayingStates }));
+          setIsVideoMuted(prevStates => ({ ...prevStates, ...newMuteStates }));
+          
           return [...prev, ...newPosts];
         });
       }
 
-      // If we got less than 10 posts, there are no more to load
       if (data.length < 10) {
         setHasMore(false);
       }
@@ -506,7 +562,7 @@ export default function FeedPage() {
   }, [session?.user?.id, loadingPosts, loadingMore]);
 
   /* ============================
-     INITIAL LOAD
+      INITIAL LOAD
   ============================ */
   useEffect(() => {
     if (status === "authenticated" && initialLoad) {
@@ -515,10 +571,10 @@ export default function FeedPage() {
   }, [status, initialLoad, fetchPosts]);
 
   /* ============================
-     INFINITE SCROLL OBSERVER
+      INFINITE SCROLL OBSERVER
   ============================ */
   useEffect(() => {
-    if (!hasMore || loadingMore) return;
+    if (!hasMore || loadingMore || posts.length === 0) return;
 
     observerRef.current = new IntersectionObserver(
       (entries) => {
@@ -528,7 +584,7 @@ export default function FeedPage() {
           fetchPosts(nextPage, false);
         }
       },
-      { threshold: 0.5 }
+      { threshold: 0.1 }
     );
 
     if (loadMoreRef.current) {
@@ -540,24 +596,231 @@ export default function FeedPage() {
         observerRef.current.disconnect();
       }
     };
-  }, [hasMore, loadingMore, page, fetchPosts]);
+  }, [hasMore, loadingMore, page, fetchPosts, posts.length]);
 
   /* ============================
-     HANDLE NEW POST CREATION
+      HANDLE WHEEL SCROLL
   ============================ */
-  const handlePostCreated = (newPost: PostType) => {
-    // Add new post at the top of the feed
-    setPosts(prev => {
-      // Check if post already exists (to avoid duplicates)
-      if (prev.some(post => post._id === newPost._id)) {
-        return prev;
+  const handleWheel = useCallback((e: WheelEvent) => {
+    if (scrollingRef.current || posts.length === 0) return;
+
+    const delta = e.deltaY;
+    const currentTime = Date.now();
+
+    // Prevent rapid scrolling
+    if (currentTime - lastScrollY.current < 500) return;
+    
+    if (delta > 50 && currentPostIndex < posts.length - 1) {
+      // Scroll down to next post
+      scrollingRef.current = true;
+      
+      // Pause current video
+      const currentPost = posts[currentPostIndex];
+      // FIX: safe access to images
+      if (currentPost && isVideo(currentPost.images?.[0])) {
+        const video = videoRefs.current[currentPost._id];
+        if (video) {
+          video.pause();
+        }
       }
-      return [newPost, ...prev];
-    });
+      
+      setCurrentPostIndex(prev => prev + 1);
+      lastScrollY.current = currentTime;
+      
+      // Hide header after scrolling
+      setShowHeader(false);
+      
+      setTimeout(() => {
+        scrollingRef.current = false;
+      }, 300);
+    } else if (delta < -50 && currentPostIndex > 0) {
+      // Scroll up to previous post
+      scrollingRef.current = true;
+      
+      // Pause current video
+      const currentPost = posts[currentPostIndex];
+      // FIX: safe access to images
+      if (currentPost && isVideo(currentPost.images?.[0])) {
+        const video = videoRefs.current[currentPost._id];
+        if (video) {
+          video.pause();
+        }
+      }
+      
+      setCurrentPostIndex(prev => prev - 1);
+      lastScrollY.current = currentTime;
+      
+      setTimeout(() => {
+        scrollingRef.current = false;
+      }, 300);
+    }
+  }, [currentPostIndex, posts.length]);
+
+  /* ============================
+      HANDLE TOUCH SCROLL (Mobile)
+  ============================ */
+  const handleTouchStart = useCallback((e: TouchEvent) => {
+    const touchY = e.touches[0].clientY;
+    lastScrollY.current = touchY;
+  }, []);
+
+  const handleTouchEnd = useCallback((e: TouchEvent) => {
+    if (scrollingRef.current || posts.length === 0) return;
+
+    const touchY = e.changedTouches[0].clientY;
+    const diff = lastScrollY.current - touchY;
+    const currentTime = Date.now();
+
+    // Prevent rapid scrolling
+    if (currentTime - lastScrollY.current < 500) return;
+    
+    if (diff > 100 && currentPostIndex < posts.length - 1) {
+      // Swipe down - next post
+      scrollingRef.current = true;
+      
+      // Pause current video
+      const currentPost = posts[currentPostIndex];
+      // FIX: safe access to images
+      if (currentPost && isVideo(currentPost.images?.[0])) {
+        const video = videoRefs.current[currentPost._id];
+        if (video) {
+          video.pause();
+        }
+      }
+      
+      setCurrentPostIndex(prev => prev + 1);
+      lastScrollY.current = currentTime;
+      
+      // Hide header after scrolling
+      setShowHeader(false);
+      
+      setTimeout(() => {
+        scrollingRef.current = false;
+      }, 300);
+    } else if (diff < -100 && currentPostIndex > 0) {
+      // Swipe up - previous post
+      scrollingRef.current = true;
+      
+      // Pause current video
+      const currentPost = posts[currentPostIndex];
+      // FIX: safe access to images
+      if (currentPost && isVideo(currentPost.images?.[0])) {
+        const video = videoRefs.current[currentPost._id];
+        if (video) {
+          video.pause();
+        }
+      }
+      
+      setCurrentPostIndex(prev => prev - 1);
+      lastScrollY.current = currentTime;
+      
+      setTimeout(() => {
+        scrollingRef.current = false;
+      }, 300);
+    }
+  }, [currentPostIndex, posts.length]);
+
+  /* ============================
+      ADD EVENT LISTENERS
+  ============================ */
+  useEffect(() => {
+    const container = feedContainerRef.current;
+    if (!container) return;
+
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    container.addEventListener('touchstart', handleTouchStart, { passive: true });
+    container.addEventListener('touchend', handleTouchEnd, { passive: true });
+
+    return () => {
+      container.removeEventListener('wheel', handleWheel);
+      container.removeEventListener('touchstart', handleTouchStart);
+      container.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [handleWheel, handleTouchStart, handleTouchEnd]);
+
+  /* ============================
+      HANDLE SINGLE TAP (Play/Pause)
+  ============================ */
+  const handleSingleTap = (postId: string, isVideo: boolean) => {
+    if (!isVideo) return;
+    
+    const video = videoRefs.current[postId];
+    if (video) {
+      if (video.paused) {
+        video.play();
+        setIsVideoPlaying(prev => ({ ...prev, [postId]: true }));
+      } else {
+        video.pause();
+        setIsVideoPlaying(prev => ({ ...prev, [postId]: false }));
+      }
+    }
   };
 
   /* ============================
-     LIKE FUNCTIONALITY
+      HANDLE DOUBLE TAP (Like)
+  ============================ */
+  const handleDoubleTap = (postId: string) => {
+    toggleLike(postId);
+    setDoubleTapLike(postId);
+    setTimeout(() => setDoubleTapLike(null), 1000);
+  };
+
+  /* ============================
+      HANDLE MEDIA TAP
+  ============================ */
+  const handleMediaTap = (e: React.MouseEvent | React.TouchEvent, postId: string, isVideo: boolean) => {
+    e.stopPropagation();
+    
+    const currentTime = new Date().getTime();
+    const timeDiff = currentTime - lastTapRef.current;
+    
+    if (tapTimeoutRef.current) {
+      clearTimeout(tapTimeoutRef.current);
+    }
+    
+    if (timeDiff < 300 && timeDiff > 0) {
+      // Double tap
+      handleDoubleTap(postId);
+    } else {
+      tapTimeoutRef.current = setTimeout(() => {
+        handleSingleTap(postId, isVideo);
+      }, 300);
+    }
+    
+    lastTapRef.current = currentTime;
+  };
+
+  /* ============================
+      TOGGLE VIDEO MUTE
+  ============================ */
+  const toggleMute = (postId: string) => {
+    const video = videoRefs.current[postId];
+    if (video) {
+      video.muted = !video.muted;
+      setIsVideoMuted(prev => ({ ...prev, [postId]: !prev[postId] }));
+    }
+  };
+
+  /* ============================
+      HANDLE NEW POST CREATION
+  ============================ */
+  const handlePostCreated = (newPost: PostType) => {
+    setPosts(prev => {
+      if (prev.some(post => post._id === newPost._id)) {
+        return prev;
+      }
+      // Initialize video states for new post
+      setIsVideoPlaying(prevStates => ({ ...prevStates, [newPost._id]: true }));
+      setIsVideoMuted(prevStates => ({ ...prevStates, [newPost._id]: true }));
+      
+      return [newPost, ...prev];
+    });
+    setShowCreatePost(false);
+    setCurrentPostIndex(0);
+  };
+
+  /* ============================
+      LIKE FUNCTIONALITY
   ============================ */
   const toggleLike = async (postId: string) => {
     if (!session?.user?.id) return;
@@ -570,7 +833,6 @@ export default function FeedPage() {
       ? post.likes.filter((uid: string) => uid !== session.user.id)
       : [...post.likes, session.user.id];
 
-    // Optimistic update
     setPosts((prev) =>
       prev.map((p) =>
         p._id === postId ? { ...p, likes: updatedLikes } : p
@@ -580,7 +842,6 @@ export default function FeedPage() {
     try {
       await fetch(`/api/posts/${postId}/like`, { method: "POST" });
     } catch (error) {
-      // Revert on error
       setPosts((prev) =>
         prev.map((p) =>
           p._id === postId ? { ...p, likes: post.likes } : p
@@ -607,7 +868,6 @@ export default function FeedPage() {
 
   const openCommentsModal = async (postId: string, postUserId: string, currentComments: CommentType[] = []) => {
     try {
-      // Fetch fresh comments when opening modal
       const response = await fetch(`/api/posts/${postId}/comments`);
       let comments = currentComments;
       
@@ -644,7 +904,6 @@ export default function FeedPage() {
   };
 
   const handleCommentAdded = (postId: string, newComment: CommentType) => {
-    // Update the post with new comment
     setPosts((prev) =>
       prev.map((post) =>
         post._id === postId
@@ -653,7 +912,6 @@ export default function FeedPage() {
       )
     );
 
-    // Update comments in modal if open
     if (commentsModal.isOpen && commentsModal.postId === postId) {
       setCommentsModal((prev) => ({
         ...prev,
@@ -663,7 +921,6 @@ export default function FeedPage() {
   };
 
   const handleCommentDeleted = (postId: string, commentId: string) => {
-    // Remove comment from post
     setPosts((prev) =>
       prev.map((post) =>
         post._id === postId
@@ -672,7 +929,6 @@ export default function FeedPage() {
       )
     );
 
-    // Update comments in modal if open
     if (commentsModal.isOpen && commentsModal.postId === postId) {
       setCommentsModal((prev) => ({
         ...prev,
@@ -682,7 +938,7 @@ export default function FeedPage() {
   };
 
   /* ============================
-     DELETE POST
+      DELETE POST
   ============================ */
   const deletePost = async (id: string) => {
     if (!confirm("Are you sure you want to delete this post?")) return;
@@ -694,7 +950,14 @@ export default function FeedPage() {
   };
 
   /* ============================
-     RENDER GUARD (SAFE)
+      HANDLE USER AVATAR CLICK
+  ============================ */
+  const handleUserAvatarClick = (userId: string) => {
+    router.push(`/profile/${userId}`);
+  };
+
+  /* ============================
+      RENDER GUARD (SAFE)
   ============================ */
   if (status === "loading") {
     return (
@@ -704,71 +967,202 @@ export default function FeedPage() {
     );
   }
 
-  /* ============================
-     RENDER
-  ============================ */
+  const currentPost = posts[currentPostIndex];
+  const currentImage = currentPost?.images?.[0];
+  const isCurrentVideo = currentImage ? isVideo(currentImage) : false;
+
   return (
     <>
-      <div className={`${isDark ? "dark bg-black" : "bg-gray-50"} min-h-screen`}>
-        {/* HEADER */}
-        <div className="py-10 text-center">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-          >
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-purple-200 dark:border-purple-800 bg-white/10 dark:bg-gray-800/40 backdrop-blur-sm mb-2">
-              <Sparkles className="w-4 h-4 text-purple-500" />
-              <span className="text-sm font-semibold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
-                IMAGINATION FEED
-              </span>
-            </div>
-            <h1 className="text-4xl font-extrabold bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
-              Share Your Imagination
-            </h1>
-          </motion.div>
-        </div>
-
-        <div className="max-w-2xl mx-auto px-4 pb-24">
-          <CreatePost onPostCreated={handlePostCreated} />
-
-          <div className="space-y-6 mt-6">
-            {posts.map((post) => {
-              const isLiked = session?.user?.id
-                ? post.likes.includes(session.user.id)
-                : false;
-
-              return (
-                <motion.div
-                  key={post._id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="rounded-2xl p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-lg hover:shadow-xl transition-shadow"
+      <div 
+        ref={feedContainerRef}
+        className={`relative h-screen w-screen overflow-hidden ${isDark ? "dark bg-black" : "bg-black"}`}
+      >
+        {/* FLOATING HEADER */}
+        <AnimatePresence>
+          {showHeader && (
+            <motion.div
+              initial={{ y: -100 }}
+              animate={{ y: 0 }}
+              exit={{ y: -100 }}
+              className="absolute top-0 left-0 right-0 z-30 p-4 bg-gradient-to-b from-black/80 via-black/50 to-transparent"
+            >
+              <div className="flex items-center justify-between">
+                <button
+                  onClick={() => setShowHeader(false)}
+                  className="p-2 text-white hover:bg-white/10 rounded-full transition-colors"
                 >
-                  {/* USER HEADER */}
+                  <ChevronLeft size={24} />
+                </button>
+                <div className="text-center">
+                  <h1 className="text-xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
+                    Imagination Feed
+                  </h1>
+                  <p className="text-xs text-gray-300">
+                    {currentPostIndex + 1} of {posts.length}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowCreatePost(true)}
+                  className="p-2 text-white hover:bg-white/10 rounded-full transition-colors"
+                >
+                  <Sparkles size={24} />
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* SHOW HEADER BUTTON */}
+        {!showHeader && (
+          <button
+            onClick={() => setShowHeader(true)}
+            className="absolute top-4 left-4 z-30 p-2 bg-black/50 backdrop-blur-sm text-white rounded-full hover:bg-black/70 transition-colors"
+          >
+            <Home size={20} />
+          </button>
+        )}
+
+        {/* NOTE: REMOVED LEFT AND RIGHT CHEVRON BUTTONS HERE */}
+
+        {/* CREATE POST MODAL */}
+        <AnimatePresence>
+          {showCreatePost && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden"
+              >
+                <div className="p-4 border-b dark:border-gray-800 flex items-center justify-between">
+                  <h2 className="text-xl font-bold">Create Post</h2>
+                  <button
+                    onClick={() => setShowCreatePost(false)}
+                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+                <div className="p-4">
+                  <CreatePost onPostCreated={handlePostCreated} />
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* CURRENT POST */}
+        <AnimatePresence mode="wait">
+          {currentPost ? (
+            <motion.div
+              key={currentPost._id}
+              initial={{ opacity: 0, y: 50 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -50 }}
+              transition={{ duration: 0.3 }}
+              className="absolute inset-0 flex flex-col"
+            >
+              {/* POST MEDIA */}
+              {currentImage && (
+                <div 
+                  className="flex-1 relative"
+                  onClick={(e) => handleMediaTap(e, currentPost._id, isCurrentVideo)}
+                  onTouchEnd={(e) => handleMediaTap(e, currentPost._id, isCurrentVideo)}
+                >
+                  {isCurrentVideo ? (
+                    <>
+                      <video
+                        ref={(el) => { videoRefs.current[currentPost._id] = el; }}
+                        src={currentImage}
+                        className="absolute inset-0 w-full h-full object-contain bg-black"
+                        autoPlay
+                        loop
+                        // muted={isVideoMuted[currentPost._id]}
+                        playsInline
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      {/* Play/Pause Overlay */}
+                      {!isVideoPlaying[currentPost._id] && (
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                          <div className="w-20 h-20 bg-black/50 rounded-full flex items-center justify-center">
+                            <Play size={40} className="text-white" />
+                          </div>
+                        </div>
+                      )}
+                      {/* Mute/Unmute Button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleMute(currentPost._id);
+                        }}
+                        className="absolute top-4 right-4 p-2 bg-black/50 backdrop-blur-sm text-white rounded-full z-10 hover:bg-black/70 transition-colors"
+                      >
+                        {isVideoMuted[currentPost._id] ? (
+                          <Volume2 size={24} />
+                        ) : (
+                          <VolumeX size={24} />
+                        )}
+                      </button>
+                    </>
+                  ) : (
+                    <Image
+                      src={currentImage}
+                      alt="Post image"
+                      fill
+                      className="object-contain"
+                      priority
+                    />
+                  )}
+                  
+                  {/* Double Tap Heart Animation */}
+                  <AnimatePresence>
+                    {doubleTapLike === currentPost._id && (
+                      <motion.div
+                        initial={{ scale: 0, opacity: 1 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 1.5, opacity: 0 }}
+                        transition={{ duration: 0.5 }}
+                        className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                      >
+                        <Heart size={100} className="text-white fill-red-500" />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )}
+
+              {/* POST OVERLAY */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30 pointer-events-none" />
+
+              {/* POST CONTENT OVERLAY */}
+              <div className="absolute bottom-0 left-0 right-0 p-6 pointer-events-none">
+                <div className="pointer-events-auto">
+                  {/* USER INFO */}
                   <div className="flex items-center gap-3 mb-4">
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 flex items-center justify-center overflow-hidden">
-                      {post.userId?.image || post.userId?.avatar ? (
+                    <button
+                      onClick={() => handleUserAvatarClick(currentPost.userId?._id)}
+                      className="w-12 h-12 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 flex items-center justify-center overflow-hidden cursor-pointer hover:opacity-90 transition-opacity pointer-events-auto"
+                    >
+                      {currentPost.userId?.image || currentPost.userId?.avatar ? (
                         <Image
-                          src={post.userId.image || post.userId.avatar || ''}
-                          alt={post.userId.name}
+                          src={currentPost.userId.image || currentPost.userId.avatar || ''}
+                          alt={currentPost.userId.name}
                           width={48}
                           height={48}
                           className="rounded-full w-full h-full object-cover"
                         />
                       ) : (
                         <span className="text-white font-bold text-xl">
-                          {post.userId?.name?.[0]?.toUpperCase() || "U"}
+                          {currentPost.userId?.name?.[0]?.toUpperCase() || "U"}
                         </span>
                       )}
-                    </div>
-
+                    </button>
                     <div className="flex-1">
                       <div className="flex items-center justify-between">
                         <div>
-                          <h3 className="font-bold text-lg">{post.userId?.name}</h3>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">
-                            {new Date(post.createdAt).toLocaleDateString("en-US", {
+                          <h3 className="font-bold text-white text-lg">{currentPost.userId?.name}</h3>
+                          <p className="text-sm text-gray-300">
+                            {new Date(currentPost.createdAt).toLocaleDateString("en-US", {
                               month: "short",
                               day: "numeric",
                               hour: "2-digit",
@@ -776,10 +1170,10 @@ export default function FeedPage() {
                             })}
                           </p>
                         </div>
-                        {post.userId?._id === session?.user?.id && (
+                        {currentPost.userId?._id === session?.user?.id && (
                           <button
-                            onClick={() => deletePost(post._id)}
-                            className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                            onClick={() => deletePost(currentPost._id)}
+                            className="p-2 text-gray-300 hover:text-red-400 transition-colors pointer-events-auto"
                             title="Delete post"
                           >
                             <Trash2 size={18} />
@@ -789,134 +1183,167 @@ export default function FeedPage() {
                     </div>
                   </div>
 
-                  {/* POST CONTENT */}
-                  {post.content && (
-                    <p className="mb-4 text-gray-800 dark:text-gray-200 leading-relaxed">
-                      {post.content}
-                    </p>
+                  {/* POST TEXT */}
+                  {currentPost.content && (
+                    <div className="mb-4">
+                      <p className="text-white text-lg leading-relaxed">
+                        {currentPost.content}
+                      </p>
+                    </div>
                   )}
 
-                  {/* MEDIA */}
-                  {post.images?.map((url: string, i: number) =>
-                    url.endsWith(".mp4") || url.endsWith(".webm") ? (
-                      <video
-                        key={i}
-                        src={url}
-                        controls
-                        className="rounded-xl mb-4 w-full max-h-[500px] object-cover"
-                      />
-                    ) : (
-                      <Image
-                        key={i}
-                        src={url}
-                        alt="media"
-                        width={700}
-                        height={400}
-                        className="rounded-xl mb-4 w-full max-h-[500px] object-cover"
-                      />
-                    )
-                  )}
-
-                  {/* INTERACTION STATS */}
-                  <div className="flex items-center justify-between border-y dark:border-gray-800 py-3 my-4">
-                    <button
-                      onClick={() => openLikeModal(post._id, post.likes.length)}
-                      className={`text-sm ${post.likes.length > 0 ? "text-purple-600 dark:text-purple-400 font-medium hover:underline" : "text-gray-500"}`}
-                    >
-                      {post.likes.length} {post.likes.length === 1 ? "like" : "likes"}
-                    </button>
-                    <button
-                      onClick={() => openCommentsModal(post._id, post.userId?._id, post.comments || [])}
-                      className={`text-sm ${(post.comments?.length || 0) > 0 ? "text-blue-600 dark:text-blue-400 font-medium hover:underline" : "text-gray-500"}`}
-                    >
-                      {post.comments?.length || 0} {post.comments?.length === 1 ? "comment" : "comments"}
-                    </button>
-                  </div>
-
-                  {/* ACTION BUTTONS */}
-                  <div className="flex gap-2 pt-3">
-                    {/* LIKE BUTTON */}
-                    <button
-                      onClick={() => toggleLike(post._id)}
-                      className="flex items-center gap-2 group flex-1 justify-center py-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                    >
-                      <div className="relative">
-                        <Heart
-                          size={22}
-                          className={`transition-all duration-300 ${isLiked
-                              ? "fill-red-500 text-red-500 scale-110"
-                              : "text-gray-500 group-hover:text-red-400"
-                            }`}
-                        />
+                  {/* ACTION BUTTONS WITH COUNTS */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-6">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => toggleLike(currentPost._id)}
+                          className="flex items-center gap-2 group pointer-events-auto"
+                        >
+                          <Heart
+                            size={28}
+                            className={`transition-all duration-300 ${currentPost.likes.includes(session?.user?.id || "")
+                                ? "fill-red-500 text-red-500"
+                                : "text-white"
+                              }`}
+                          />
+                        </button>
+                        <button
+                          onClick={() => openLikeModal(currentPost._id, currentPost.likes.length)}
+                          className="text-white font-medium hover:underline pointer-events-auto"
+                        >
+                          {currentPost.likes.length} likes
+                        </button>
                       </div>
-                      <span className={`font-medium ${isLiked ? "text-red-500" : "text-gray-600 dark:text-gray-400"}`}>
-                        {isLiked ? "Liked" : "Like"}
-                      </span>
-                    </button>
 
-                    {/* COMMENT BUTTON */}
-                    <button
-                      onClick={() => openCommentsModal(post._id, post.userId?._id, post.comments || [])}
-                      className="flex items-center gap-2 group flex-1 justify-center py-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                    >
-                      <MessageCircle
-                        size={22}
-                        className="text-gray-500 group-hover:text-blue-400 transition-colors"
-                      />
-                      <span className="font-medium text-gray-600 dark:text-gray-400">
-                        Comment
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => openCommentsModal(currentPost._id, currentPost.userId?._id, currentPost.comments || [])}
+                          className="flex items-center gap-2 group pointer-events-auto"
+                        >
+                          <MessageCircle
+                            size={28}
+                            className="text-white"
+                          />
+                        </button>
+                        <button
+                          onClick={() => openCommentsModal(currentPost._id, currentPost.userId?._id, currentPost.comments || [])}
+                          className="text-white font-medium hover:underline pointer-events-auto"
+                        >
+                          {currentPost.comments?.length || 0} comments
+                        </button>
+                      </div>
+
+                      <button className="p-2 text-white hover:opacity-80 transition-opacity pointer-events-auto">
+                        <Share2 size={24} />
+                      </button>
+                    </div>
+
+                    <button className="p-2 text-white hover:opacity-80 transition-opacity pointer-events-auto">
+                      <Bookmark size={24} />
                     </button>
                   </div>
-                </motion.div>
-              );
-            })}
-
-            {/* Loading Initial Posts */}
-            {loadingPosts && (
-              <div className="text-center py-8">
-                <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-purple-600"></div>
-                <p className="mt-2 text-gray-500">Loading posts...</p>
-              </div>
-            )}
-
-            {/* Loading More Posts */}
-            {/* {loadingMore && (
-              <div className="flex justify-center py-6">
-                <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
-                <span className="ml-2 text-gray-500">Loading more posts...</span>
-              </div>
-            )} */}
-
-            {/* No Posts Message */}
-            {!loadingPosts && posts.length === 0 && (
-              <div className="text-center py-12">
-                <Sparkles className="w-16 h-16 text-gray-300 dark:text-gray-700 mx-auto mb-4" />
-                <h3 className="text-xl font-bold text-gray-600 dark:text-gray-300 mb-2">No posts yet</h3>
-                <p className="text-gray-500 dark:text-gray-400">
-                  Be the first to share your imagination!
-                </p>
-              </div>
-            )}
-
-            {/* Infinite Scroll Trigger */}
-            {hasMore && !loadingMore && (
-              <div ref={loadMoreRef} className="h-10" />
-            )}
-
-            {/* End of Feed Message */}
-            {!hasMore && posts.length > 0 && (
-              <div className="text-center py-6">
-                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800">
-                  <Sparkles className="w-4 h-4 text-purple-500" />
-                  <span className="text-sm font-medium text-purple-600 dark:text-purple-400">
-                    You've reached the end of the feed
-                  </span>
                 </div>
               </div>
-            )}
+
+              {/* RIGHT SIDE ACTION BAR (Instagram Style) */}
+              <div className="absolute right-4 bottom-1/3 flex flex-col gap-6">
+                <div className="flex flex-col items-center">
+                  <button
+                    onClick={() => toggleLike(currentPost._id)}
+                    className="flex flex-col items-center gap-1 pointer-events-auto"
+                  >
+                    <Heart
+                      size={32}
+                      className={`transition-all duration-300 ${currentPost.likes.includes(session?.user?.id || "")
+                          ? "fill-red-500 text-red-500"
+                          : "text-white"
+                        }`}
+                    />
+                  </button>
+                  <button
+                    onClick={() => openLikeModal(currentPost._id, currentPost.likes.length)}
+                    className="text-white text-xs font-medium hover:underline pointer-events-auto"
+                  >
+                    {currentPost.likes.length}
+                  </button>
+                </div>
+
+                <div className="flex flex-col items-center">
+                  <button
+                    onClick={() => openCommentsModal(currentPost._id, currentPost.userId?._id, currentPost.comments || [])}
+                    className="flex flex-col items-center gap-1 pointer-events-auto"
+                  >
+                    <MessageCircle size={32} className="text-white" />
+                  </button>
+                  <button
+                    onClick={() => openCommentsModal(currentPost._id, currentPost.userId?._id, currentPost.comments || [])}
+                    className="text-white text-xs font-medium hover:underline pointer-events-auto"
+                  >
+                    {currentPost.comments?.length || 0}
+                  </button>
+                </div>
+
+                <button className="flex flex-col items-center gap-1 pointer-events-auto">
+                  <Share2 size={32} className="text-white" />
+                  <span className="text-white text-xs font-medium">Share</span>
+                </button>
+
+                <button className="flex flex-col items-center gap-1 pointer-events-auto">
+                  <Bookmark size={32} className="text-white" />
+                  <span className="text-white text-xs font-medium">Save</span>
+                </button>
+              </div>
+            </motion.div>
+          ) : (
+            /* LOADING OR NO POSTS */
+            <div className="absolute inset-0 flex items-center justify-center">
+              {loadingPosts ? (
+                <div className="text-center">
+                  <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-600"></div>
+                  <p className="mt-4 text-gray-300">Loading posts...</p>
+                </div>
+              ) : posts.length === 0 ? (
+                <div className="text-center p-8">
+                  <Sparkles className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+                  <h3 className="text-xl font-bold text-gray-300 mb-2">No posts yet</h3>
+                  <p className="text-gray-400 mb-6">
+                    Be the first to share your imagination!
+                  </p>
+                  <button
+                    onClick={() => setShowCreatePost(true)}
+                    className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-500 text-white rounded-full hover:opacity-90 transition-opacity"
+                  >
+                    Create Post
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* LOAD MORE TRIGGER */}
+        {hasMore && !loadingMore && posts.length > 0 && currentPostIndex > posts.length - 3 && (
+          <div ref={loadMoreRef} className="h-1" />
+        )}
+
+        {/* PROGRESS INDICATOR */}
+        {posts.length > 0 && (
+          <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-20">
+            <div className="flex gap-2">
+              {posts.map((_, index) => (
+                <button
+                  key={index}
+                  onClick={() => setCurrentPostIndex(index)}
+                  className={`w-2 h-2 rounded-full transition-all ${index === currentPostIndex
+                      ? "bg-white w-6"
+                      : "bg-gray-500 hover:bg-gray-300"
+                    }`}
+                />
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* LIKE USERS MODAL */}
