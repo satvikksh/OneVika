@@ -1,7 +1,7 @@
 // ChatArea.tsx
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect } from "react";
 import { Message, User } from "../types/socket";
 import { Session } from "next-auth";
 import {
@@ -53,37 +53,37 @@ interface ChatAreaProps {
   isConnected?: boolean;
 }
 
-const MessageStatusIndicator = ({ 
-  messageId, 
-  isCurrentUser, 
-  messageStatus 
-}: { 
-  messageId: string, 
-  isCurrentUser: boolean,
-  messageStatus: Record<string, 'sending' | 'sent' | 'delivered' | 'read'>
+const MessageStatusIndicator = ({
+  messageId,
+  isCurrentUser,
+  messageStatus,
+}: {
+  messageId: string;
+  isCurrentUser: boolean;
+  messageStatus: Record<string, "sending" | "sent" | "delivered" | "read">;
 }) => {
   const status = messageStatus[messageId];
-  
+
   if (!isCurrentUser || !status) return null;
 
   return (
     <div className="flex items-center justify-end ml-2">
-      {status === 'sending' && (
+      {status === "sending" && (
         <div className="flex items-center text-gray-400">
           <Check size={12} />
         </div>
       )}
-      {status === 'sent' && (
+      {status === "sent" && (
         <div className="flex items-center text-gray-400">
           <Check size={12} />
         </div>
       )}
-      {status === 'delivered' && (
+      {status === "delivered" && (
         <div className="flex items-center text-gray-400">
           <CheckCheck size={12} />
         </div>
       )}
-      {status === 'read' && (
+      {status === "read" && (
         <div className="flex items-center text-blue-500">
           <CheckCheck size={12} />
         </div>
@@ -128,13 +128,12 @@ export default function ChatArea({
   isConnected = true,
 }: ChatAreaProps) {
   const currentUserId = session?.user?.id;
-  const messagesContainerRef = useRef<HTMLDivElement>(null);
-  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
-  const [isAtBottom, setIsAtBottom] = useState(true);
 
   // Handle enter key for sending
-  const handleKeyDownOverride = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !isMobile && !e.shiftKey) {
+  const handleKeyDownOverride = (
+    e: React.KeyboardEvent<HTMLTextAreaElement>
+  ) => {
+    if (e.key === "Enter" && !isMobile && !e.shiftKey) {
       e.preventDefault();
       onSendMessage();
     } else {
@@ -142,74 +141,19 @@ export default function ChatArea({
     }
   };
 
-  // Handle send button click
   const handleSendClick = () => {
     onSendMessage();
-    // Auto scroll when sending message
-    setShouldAutoScroll(true);
   };
 
-  // Format message text with line breaks
-  const formatMessageText = (text: string) => {
-    return text.split('\n').map((line, index) => (
-      <React.Fragment key={index}>
-        {line}
-        {index < text.split('\n').length - 1 && <br />}
-      </React.Fragment>
-    ));
-  };
-
-  // Handle scroll events
-  const handleScroll = () => {
-    if (!messagesContainerRef.current) return;
-    
-    const container = messagesContainerRef.current;
-    const { scrollTop, scrollHeight, clientHeight } = container;
-    
-    // Check if we're at the bottom
-    const isBottom = Math.abs(scrollHeight - scrollTop - clientHeight) < 50;
-    setIsAtBottom(isBottom);
-    
-    // Only auto-scroll if user is at bottom
-    setShouldAutoScroll(isBottom);
-  };
-
-  // Auto-scroll to bottom when messages change and shouldAutoScroll is true
-  useEffect(() => {
-    if (messages.length > 0 && shouldAutoScroll && messagesContainerRef.current) {
-      const container = messagesContainerRef.current;
-      container.scrollTop = container.scrollHeight;
-    }
-  }, [messages, shouldAutoScroll]);
-
-  // Auto-scroll when sending a new message
-  useEffect(() => {
-    if (sendingMessage && messagesContainerRef.current) {
-      const container = messagesContainerRef.current;
-      setTimeout(() => {
-        container.scrollTop = container.scrollHeight;
-      }, 100);
-    }
-  }, [sendingMessage]);
-
-  // Reset auto-scroll when selecting new user
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setShouldAutoScroll(true);
-  }, [selectedUser]);
+  // NOTE: Auto-scroll useEffect has been removed as per request to allow manual scrolling
 
   return (
-    <div className="flex flex-col h-full w-full">
-      {/* Main Messages Area - Takes remaining space */}
-      <div 
-        ref={messagesContainerRef}
-        onScroll={handleScroll}
-        className={`flex-1 overflow-y-auto ${selectedUser ? 'pb-24' : ''} lg:ml-80`}
-        style={{ 
-          overflowAnchor: "none",
-          scrollBehavior: "smooth"
-        }}
-      >
+    // FIX: Use h-[100dvh] and overflow-hidden on the parent to prevent the whole page (and topbar) from scrolling.
+    <div className="flex flex-col h-[100dvh] w-full relative overflow-hidden">
+      
+      {/* Main Messages Area */}
+      {/* FIX: Ensure only this section scrolls (overflow-y-auto) */}
+      <div className={`flex-1 overflow-y-auto ${selectedUser ? "pb-32" : ""} lg:ml-80 scroll-smooth`}>
         {selectedUser ? (
           loadingMessages ? (
             <div className="flex items-center justify-center h-full">
@@ -227,48 +171,52 @@ export default function ChatArea({
               ) : (
                 messages.map((msg) => {
                   const isCurrentUser = msg.senderId === currentUserId;
-                  
+
                   return (
                     <div
                       key={msg.id}
-                      className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
+                      className={`flex ${
+                        isCurrentUser ? "justify-end" : "justify-start"
+                      }`}
                       onMouseEnter={() => setHoveredMessageId(msg.id)}
                       onMouseLeave={() => setHoveredMessageId(null)}
                     >
                       <div className="relative group max-w-[70%] w-fit">
                         {/* Message Bubble */}
                         <div
-                          className={`rounded-2xl px-4 py-3 whitespace-pre-wrap break-words ${
+                          className={`rounded-2xl px-4 py-3 ${
                             isCurrentUser
-                              ? 'bg-purple-600 text-white rounded-br-none'
-                              : 'bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-white rounded-bl-none'
-                          } ${msg.status === 'sending' ? 'opacity-80' : ''}`}
-                          onContextMenu={(e) => handleMessageContextMenu(e, msg)}
+                              ? "bg-purple-600 text-white rounded-br-none"
+                              : "bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-white rounded-bl-none"
+                          } ${msg.status === "sending" ? "opacity-80" : ""}`}
+                          onContextMenu={(e) =>
+                            handleMessageContextMenu(e, msg)
+                          }
                         >
                           {/* Reply indicator */}
                           {msg.replyToId && (
                             <div className="mb-2 p-2 bg-black/10 dark:bg-white/10 rounded-lg border-l-4 border-purple-400">
-                              <p className="text-xs italic opacity-75">Replying to a message</p>
+                              <p className="text-xs italic opacity-75">
+                                Replying to a message
+                              </p>
                             </div>
                           )}
-                          
-                          <div className="break-words max-w-full">
-                            {formatMessageText(msg.text || msg.content || "")}
-                          </div>
-                          
+
+                          <div>{msg.text || msg.content}</div>
+
                           {/* Message timestamp and status */}
                           <div className="flex items-center justify-end mt-1">
                             <span className="text-xs opacity-75 mr-2">
-                              {new Date(msg.timestamp).toLocaleTimeString([], { 
-                                hour: '2-digit', 
-                                minute: '2-digit', 
-                                hour12: true 
+                              {new Date(msg.timestamp).toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                hour12: true,
                               })}
                             </span>
-                            
+
                             {/* Read/unread indicators */}
                             {isCurrentUser && (
-                              <MessageStatusIndicator 
+                              <MessageStatusIndicator
                                 messageId={msg.id}
                                 isCurrentUser={isCurrentUser}
                                 messageStatus={messageStatus}
@@ -276,12 +224,17 @@ export default function ChatArea({
                             )}
                           </div>
                         </div>
-                        
-                        {/* Dropdown Arrow (only shows on hover) */}
-                        {(hoveredMessageId === msg.id || activeDropdownId === msg.id) && (
-                          <div 
+
+                        {/* Dropdown Arrow */}
+                        {(hoveredMessageId === msg.id ||
+                          activeDropdownId === msg.id) && (
+                          <div
                             ref={dropdownRef}
-                            className={`absolute ${isCurrentUser ? 'left-0 -translate-x-8' : 'right-0 translate-x-8'} top-1/2 -translate-y-1/2`}
+                            className={`absolute ${
+                              isCurrentUser
+                                ? "left-0 -translate-x-8"
+                                : "right-0 translate-x-8"
+                            } top-1/2 -translate-y-1/2`}
                           >
                             <button
                               onClick={(e) => handleDropdownClick(e, msg)}
@@ -297,6 +250,7 @@ export default function ChatArea({
                   );
                 })
               )}
+              {/* Ref is kept for logical structure but auto-scroll is removed */}
               <div ref={messagesEndRef} />
             </div>
           )
@@ -317,16 +271,20 @@ export default function ChatArea({
         )}
       </div>
 
-      {/* Input Area - Fixed at bottom within chat area */}
+      {/* Input Area - Fixed at bottom */}
       {selectedUser && (
-        <div className="fixed bottom-0 left-0 lg:left-80 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
+        <div className="fixed bottom-0 left-0 lg:left-80 right-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-t border-gray-200 dark:border-gray-800 z-10 pb-safe">
           {/* Reply Preview */}
           {replyTo && (
             <div className="px-4 pt-3 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border-b border-purple-200 dark:border-purple-800">
               <div className="flex justify-between items-center">
                 <div className="flex-1">
-                  <p className="text-xs font-medium text-purple-600 dark:text-purple-400 mb-1">Replying to</p>
-                  <p className="text-sm text-gray-800 dark:text-gray-200 truncate">{replyTo.text || replyTo.content}</p>
+                  <p className="text-xs font-medium text-purple-600 dark:text-purple-400 mb-1">
+                    Replying to
+                  </p>
+                  <p className="text-sm text-gray-800 dark:text-gray-200 truncate">
+                    {replyTo.text || replyTo.content}
+                  </p>
                 </div>
                 <button
                   onClick={() => setReplyTo(null)}
@@ -337,12 +295,12 @@ export default function ChatArea({
               </div>
             </div>
           )}
-          
+
           {/* Input Form */}
-          <div className="p-4">
-            <div className="flex items-end space-x-3">
+          <div className="p-3 sm:p-4">
+            <div className="flex items-end space-x-2 sm:space-x-3">
               {/* Left Sidebar for additional actions */}
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-1 sm:space-x-2 mb-1">
                 {/* File Upload */}
                 <input
                   type="file"
@@ -350,8 +308,8 @@ export default function ChatArea({
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (file) {
-                      console.log('Selected file:', file);
-                      e.target.value = '';
+                      console.log("Selected file:", file);
+                      e.target.value = "";
                     }
                   }}
                   className="hidden"
@@ -360,27 +318,27 @@ export default function ChatArea({
                 <button
                   type="button"
                   onClick={handleFileSelect}
-                  className="p-2 text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                  className="p-2 text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
                   aria-label="Attach file"
                 >
                   <Paperclip size={20} />
                 </button>
-                
+
                 {/* Emoji Picker */}
                 <div className="relative">
                   <button
                     type="button"
                     onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                    className="p-2 text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                    className="p-2 text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
                     aria-label="Emoji"
                   >
                     <Smile size={20} />
                   </button>
-                  
+
                   {showEmojiPicker && (
                     <div
                       ref={emojiPickerRef}
-                      className="absolute bottom-full left-0 mb-6 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 p-8 w-105 z-50 animate-fadeIn"
+                      className="absolute bottom-full left-0 mb-6 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 p-8 w-80 sm:w-105 z-50 animate-fadeIn"
                     >
                       <div className="grid grid-cols-5 gap-4">
                         {commonEmojis.map((emoji, idx) => (
@@ -398,46 +356,44 @@ export default function ChatArea({
                   )}
                 </div>
               </div>
-              
-              {/* Text Area with Send Button on Side */}
-              <div className="flex-1 flex items-end space-x-3">
-                <div className="flex-1 relative">
-                  <textarea
-                    ref={inputRef}
-                    value={newMessage}
-                    onChange={(e) => {
-                      setNewMessage(e.target.value);
-                      handleTyping();
-                    }}
-                    onKeyDown={handleKeyDownOverride}
-                    onFocus={handleInputFocus}
-                    onBlur={handleInputBlur}
-                    placeholder="Type a message..."
-                    className="w-full resize-none rounded-xl border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    style={{ 
-                      minHeight: '44px',
-                      maxHeight: '120px',
-                      lineHeight: '1.5'
-                    }}
-                    rows={1}
-                  />
-                </div>
-                
-                {/* Send Button on Side */}
-                <button
-                  type="button"
-                  onClick={handleSendClick}
-                  disabled={sendingMessage || !newMessage.trim() || (isConnected !== undefined && !isConnected)}
-                  className="p-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg flex items-center justify-center"
-                  style={{ minHeight: '44px', minWidth: '44px' }}
-                >
-                  {sendingMessage ? (
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                  ) : (
-                    <Send size={20} />
-                  )}
-                </button>
+
+              {/* Refined Text Area */}
+              <div className="flex-1 relative bg-gray-50 dark:bg-gray-800 rounded-3xl border border-gray-200 dark:border-gray-700 focus-within:ring-2 focus-within:ring-purple-500/50 focus-within:border-purple-500 transition-all">
+                <textarea
+                  ref={inputRef}
+                  value={newMessage}
+                  onChange={(e) => {
+                    setNewMessage(e.target.value);
+                    handleTyping();
+                  }}
+                  onKeyDown={handleKeyDownOverride}
+                  onFocus={handleInputFocus}
+                  onBlur={handleInputBlur}
+                  placeholder="Type a message..."
+                  className="w-full resize-none bg-transparent px-4 py-3 focus:outline-none max-h-32 min-h-[44px] text-gray-900 dark:text-gray-100"
+                  style={{ height: 'auto', overflow: 'hidden' }}
+                  rows={1}
+                />
               </div>
+
+              {/* Send Button */}
+              <button
+                type="button"
+                onClick={handleSendClick}
+                disabled={
+                  sendingMessage ||
+                  !newMessage.trim() ||
+                  (isConnected !== undefined && !isConnected)
+                }
+                className="p-3 bg-purple-600 text-white rounded-full hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg flex items-center justify-center mb-1"
+                style={{ width: "44px", height: "44px" }}
+              >
+                {sendingMessage ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <Send size={20} className="ml-0.5" />
+                )}
+              </button>
             </div>
             {isConnected !== undefined && !isConnected && (
               <p className="text-xs text-red-500 mt-2 text-center">
