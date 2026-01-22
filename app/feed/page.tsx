@@ -1238,10 +1238,10 @@ export default function FeedPage() {
                         <Share2 size={24} />
                       </button> */}
                     </div>
-
+{/* 
                     <button className="p-2 text-white hover:opacity-80 transition-opacity pointer-events-auto">
                       <Bookmark size={24} />
-                    </button>
+                    </button> */}
                   </div>
                 </div>
               </div>
