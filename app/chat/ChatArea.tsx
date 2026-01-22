@@ -1,7 +1,7 @@
 // ChatArea.tsx
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Message, User } from "../types/socket";
 import { Session } from "next-auth";
 import {
@@ -18,7 +18,7 @@ interface ChatAreaProps {
   selectedUser: User | null;
   loadingMessages: boolean;
   newMessage: string;
-    messages: Message[];
+  messages: Message[];
   setNewMessage: (message: string) => void;
   sendingMessage: boolean;
   handleTyping: () => void;
@@ -50,7 +50,7 @@ interface ChatAreaProps {
   isMobile: boolean;
   handleKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   onSendMessage: () => void;
-  isConnected?: boolean; // Optional for connection status
+  isConnected?: boolean;
 }
 
 const MessageStatusIndicator = ({ 
@@ -125,9 +125,12 @@ export default function ChatArea({
   isMobile,
   handleKeyDown,
   onSendMessage,
-  isConnected = true, // Default to true for backward compatibility
+  isConnected = true,
 }: ChatAreaProps) {
   const currentUserId = session?.user?.id;
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
+  const [isAtBottom, setIsAtBottom] = useState(true);
 
   // Handle enter key for sending
   const handleKeyDownOverride = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -142,28 +145,71 @@ export default function ChatArea({
   // Handle send button click
   const handleSendClick = () => {
     onSendMessage();
+    // Auto scroll when sending message
+    setShouldAutoScroll(true);
   };
 
-  // Auto-scroll to bottom when messages change
+  // Format message text with line breaks
+  const formatMessageText = (text: string) => {
+    return text.split('\n').map((line, index) => (
+      <React.Fragment key={index}>
+        {line}
+        {index < text.split('\n').length - 1 && <br />}
+      </React.Fragment>
+    ));
+  };
+
+  // Handle scroll events
+  const handleScroll = () => {
+    if (!messagesContainerRef.current) return;
+    
+    const container = messagesContainerRef.current;
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    
+    // Check if we're at the bottom
+    const isBottom = Math.abs(scrollHeight - scrollTop - clientHeight) < 50;
+    setIsAtBottom(isBottom);
+    
+    // Only auto-scroll if user is at bottom
+    setShouldAutoScroll(isBottom);
+  };
+
+  // Auto-scroll to bottom when messages change and shouldAutoScroll is true
   useEffect(() => {
-    if (messages.length > 0) {
+    if (messages.length > 0 && shouldAutoScroll && messagesContainerRef.current) {
+      const container = messagesContainerRef.current;
+      container.scrollTop = container.scrollHeight;
+    }
+  }, [messages, shouldAutoScroll]);
+
+  // Auto-scroll when sending a new message
+  useEffect(() => {
+    if (sendingMessage && messagesContainerRef.current) {
+      const container = messagesContainerRef.current;
       setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        container.scrollTop = container.scrollHeight;
       }, 100);
     }
-  }, [messages, messagesEndRef]);
+  }, [sendingMessage]);
+
+  // Reset auto-scroll when selecting new user
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setShouldAutoScroll(true);
+  }, [selectedUser]);
 
   return (
     <div className="flex flex-col h-full w-full">
-      {/* Connection Status Indicator (optional) */}
-      {/* {isConnected !== undefined && (
-        <div className={`px-4 py-2 text-xs text-center ${isConnected ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-          {isConnected ? 'Connected' : 'Disconnected'} • Messages update in real-time
-        </div>
-      )}
-       */}
       {/* Main Messages Area - Takes remaining space */}
-      <div className={`flex-1 overflow-y-auto ${selectedUser ? 'pb-24' : ''} lg:ml-80`}>
+      <div 
+        ref={messagesContainerRef}
+        onScroll={handleScroll}
+        className={`flex-1 overflow-y-auto ${selectedUser ? 'pb-24' : ''} lg:ml-80`}
+        style={{ 
+          overflowAnchor: "none",
+          scrollBehavior: "smooth"
+        }}
+      >
         {selectedUser ? (
           loadingMessages ? (
             <div className="flex items-center justify-center h-full">
@@ -192,7 +238,7 @@ export default function ChatArea({
                       <div className="relative group max-w-[70%] w-fit">
                         {/* Message Bubble */}
                         <div
-                          className={`rounded-2xl px-4 py-3 ${
+                          className={`rounded-2xl px-4 py-3 whitespace-pre-wrap break-words ${
                             isCurrentUser
                               ? 'bg-purple-600 text-white rounded-br-none'
                               : 'bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-white rounded-bl-none'
@@ -206,7 +252,9 @@ export default function ChatArea({
                             </div>
                           )}
                           
-                          <div>{msg.text || msg.content}</div>
+                          <div className="break-words max-w-full">
+                            {formatMessageText(msg.text || msg.content || "")}
+                          </div>
                           
                           {/* Message timestamp and status */}
                           <div className="flex items-center justify-end mt-1">
@@ -366,7 +414,12 @@ export default function ChatArea({
                     onBlur={handleInputBlur}
                     placeholder="Type a message..."
                     className="w-full resize-none rounded-xl border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    style={{ minHeight: '30px', maxHeight: '50px' }}
+                    style={{ 
+                      minHeight: '44px',
+                      maxHeight: '120px',
+                      lineHeight: '1.5'
+                    }}
+                    rows={1}
                   />
                 </div>
                 
