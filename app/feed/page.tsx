@@ -1200,43 +1200,43 @@ export default function FeedPage() {
                           onClick={() => toggleLike(currentPost._id)}
                           className="flex items-center gap-2 group pointer-events-auto"
                         >
-                          <Heart
+                          {/* <Heart
                             size={28}
                             className={`transition-all duration-300 ${currentPost.likes.includes(session?.user?.id || "")
                                 ? "fill-red-500 text-red-500"
                                 : "text-white"
                               }`}
-                          />
+                          /> */}
                         </button>
-                        <button
+                        {/* <button
                           onClick={() => openLikeModal(currentPost._id, currentPost.likes.length)}
                           className="text-white font-medium hover:underline pointer-events-auto"
                         >
                           {currentPost.likes.length} likes
-                        </button>
+                        </button> */}
                       </div>
 
                       <div className="flex items-center gap-2">
-                        <button
+                        {/* <button
                           onClick={() => openCommentsModal(currentPost._id, currentPost.userId?._id, currentPost.comments || [])}
                           className="flex items-center gap-2 group pointer-events-auto"
-                        >
-                          <MessageCircle
+                        > */}
+                          {/* <MessageCircle
                             size={28}
                             className="text-white"
-                          />
-                        </button>
+                          /> */}
+                        {/* </button> */}
                         <button
                           onClick={() => openCommentsModal(currentPost._id, currentPost.userId?._id, currentPost.comments || [])}
                           className="text-white font-medium hover:underline pointer-events-auto"
                         >
-                          {currentPost.comments?.length || 0} comments
+                          {/* {currentPost.comments?.length || 0} comments */}
                         </button>
                       </div>
 
-                      <button className="p-2 text-white hover:opacity-80 transition-opacity pointer-events-auto">
+                      {/* <button className="p-2 text-white hover:opacity-80 transition-opacity pointer-events-auto">
                         <Share2 size={24} />
-                      </button>
+                      </button> */}
                     </div>
 
                     <button className="p-2 text-white hover:opacity-80 transition-opacity pointer-events-auto">

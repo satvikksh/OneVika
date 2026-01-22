@@ -575,7 +575,7 @@ export default function Home() {
         </div>
 
         {/* Call to Action Section */}
-        <div className="relative py-20 md:py-32 overflow-hidden">
+        <div className="relative py-20 md:py-32overflow-hidden ">
           {/* Background linear */}
           <div className="absolute inset-0 bg-linear-to-br from-purple-900/20 via-blue-900/20 to-pink-900/20" />
 
