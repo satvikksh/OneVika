@@ -3,7 +3,15 @@
 import React from "react";
 import { User } from "../types/socket";
 import Image from "next/image";
-import { ArrowLeft, Phone, Video, Info, Users, MoreVertical, Menu } from "lucide-react";
+import {
+  ArrowLeft,
+  Phone,
+  Video,
+  Info,
+  Users,
+  MoreVertical,
+  Menu,
+} from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useSocket } from "../context/SocketContext";
 import { useRouter } from "next/navigation";
@@ -32,22 +40,24 @@ export default function ChatTopBar({
   const { data: session } = useSession();
   const router = useRouter();
 
-  // Audio Call Hook integration
-  const roomId = selectedUser && session?.user?.id
-  ? `onevika-audio-${[session.user.id, selectedUser.id].sort().join("-")}`
-  : "";
- const { startCall, endCall, inCall } = useAudioCall(roomId);
+ const roomName = `audio-${session?.user?.id}-${selectedUser?.id}`;
 
+const {
+  startCall,
+  endCall,
+  inCall,
+  loading,
+  isReady,
+} = useAudioCall(roomName);
 
   const desktopLeft = "lg:left-80";
   const mobileClasses = isMobile ? "left-0 right-0" : "";
   const positionClasses = isMobile ? mobileClasses : `${desktopLeft} right-0`;
 
   const { onlineUsers } = useSocket();
-  const isUserOnline =
-    selectedUser?.id
-      ? onlineUsers.includes(selectedUser.id)
-      : false;
+  const isUserOnline = selectedUser?.id
+    ? onlineUsers.includes(selectedUser.id)
+    : false;
 
   const handleUserProfileClick = () => {
     if (selectedUser) {
@@ -57,15 +67,16 @@ export default function ChatTopBar({
   };
 
   const handleStartCall = () => {
-    if (selectedUser) {
-      startCall(selectedUser.id);
-    }
+    if (!selectedUser) return;
+    startCall();
   };
 
   if (!selectedUser) {
     return (
       <>
-        <header className={`fixed top-16 ${positionClasses} z-40 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 h-16 transition-all duration-300`}>
+        <header
+          className={`fixed top-16 ${positionClasses} z-40 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 h-16 transition-all duration-300`}
+        >
           <div className="h-full flex items-center justify-between px-4">
             <div className="flex items-center gap-3">
               {isMobile && onToggleSidebar && (
@@ -95,7 +106,7 @@ export default function ChatTopBar({
             </div>
           </div>
         </header>
-        
+
         {/* Call UI included here as well to catch incoming calls even if no user selected */}
         <AudioCallModal
           incoming={false}
@@ -110,7 +121,9 @@ export default function ChatTopBar({
 
   return (
     <>
-      <header className={`fixed top-16 ${positionClasses} z-40 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 h-16 transition-all duration-300 translate-y-0`}>
+      <header
+        className={`fixed top-16 ${positionClasses} z-40 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 h-16 transition-all duration-300 translate-y-0`}
+      >
         <div className="h-full px-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             {isMobile ? (
@@ -121,14 +134,16 @@ export default function ChatTopBar({
               >
                 <ArrowLeft size={20} />
               </button>
-            ) : onToggleSidebar && (
-              <button
-                onClick={onToggleSidebar}
-                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors active:scale-95 flex-shrink-0"
-                aria-label="Toggle sidebar"
-              >
-                <Menu size={20} />
-              </button>
+            ) : (
+              onToggleSidebar && (
+                <button
+                  onClick={onToggleSidebar}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors active:scale-95 flex-shrink-0"
+                  aria-label="Toggle sidebar"
+                >
+                  <Menu size={20} />
+                </button>
+              )
             )}
 
             <div className="flex items-center gap-3">
@@ -184,13 +199,20 @@ export default function ChatTopBar({
           <div className="flex items-center gap-2 flex-shrink-0">
             {/* Phone Call Button */}
             <button
-              onClick={handleStartCall}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors active:scale-95"
+              onClick={startCall}
+              disabled={!isReady || loading}
+              className={`p-2 rounded-xl transition-colors
+    ${
+      !isReady
+        ? "opacity-50 cursor-not-allowed"
+        : "hover:bg-gray-100 dark:hover:bg-gray-800"
+    }
+  `}
               aria-label="Voice call"
             >
-              <Phone size={18} className="sm:w-5 sm:h-5" />
+              <Phone size={18} />
             </button>
-            
+
             <button
               className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors active:scale-95"
               aria-label="Video call"

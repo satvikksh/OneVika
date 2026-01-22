@@ -22,8 +22,8 @@ export default function RootLayout({
     <html lang="en">
         <head>
         <Script
-          src="https://cdn.metered.ca/sdk/video/1.4.5/sdk.min.js"
-          strategy="beforeInteractive"
+          src="https://cdn.metered.ca/sdk/frame/1.4.3/sdk-frame.min.js"
+          strategy="afterInteractive"
         />
       </head>
       <body className={`${inter.className} antialiased`}>
