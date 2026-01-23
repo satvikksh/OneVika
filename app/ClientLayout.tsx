@@ -13,7 +13,16 @@ export default function ClientLayout({
     <SessionProvider>
       <Providers>
         <Navbar />
+        
+         <main
+        className={`
+          pt-16                 /* top navbar height */
+          pb-16 lg:pb-0         /* bottom nav only on mobile */
+         
+        `}
+      >
         {children}
+      </main>
       </Providers>
     </SessionProvider>
   );

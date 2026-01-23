@@ -26,6 +26,7 @@ import {
   MessageSquare,
   BarChart,
   TrendingUp,
+  PenSquare, // Added post icon
 } from "lucide-react";
 import Image from "next/image";
 import { useSession, signOut } from "next-auth/react";
@@ -81,15 +82,21 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
   const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
   const { unreadNotifications } = useNotifications();
 
-  // NEW: State to track if chat text area is focused
+  // State to track if chat text area is focused
   const [isChatTextAreaFocused, setIsChatTextAreaFocused] = useState(false);
+  // State for auto-hide bottom nav
+  const [showBottomNav, setShowBottomNav] = useState(true);
+  const [lastScrollY, setLastScrollY] = useState(0);
+  const [isVisible, setIsVisible] = useState(true);
 
   const searchRef = useRef<HTMLDivElement>(null);
   const userDropdownRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
+  const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // NEW: Event listener for chat text area focus
+  // Event listener for chat text area focus
   useEffect(() => {
     const handleTextAreaFocus = (e: CustomEvent) => {
       setIsChatTextAreaFocused(e.detail.isFocused);
@@ -117,10 +124,90 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
     };
   }, [pathname]);
 
-  // NEW: Function to dispatch focus event (to be called from chat page)
-  const setChatTextAreaFocus = useCallback((isFocused: boolean) => {
-    setIsChatTextAreaFocused(isFocused);
-  }, []);
+  // Auto-hide bottom nav on scroll for mobile
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    const isMobile = window.innerWidth < 1024; // lg breakpoint
+    if (!isMobile) return;
+
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      const isScrollingDown = currentScrollY > lastScrollY;
+      const isAtTop = currentScrollY < 50;
+      const isScrollingUp = currentScrollY < lastScrollY;
+
+      // Always show at the top
+      if (isAtTop) {
+        setShowBottomNav(true);
+        setIsVisible(true);
+        if (hideTimeoutRef.current) {
+          clearTimeout(hideTimeoutRef.current);
+          hideTimeoutRef.current = null;
+        }
+        setLastScrollY(currentScrollY);
+        return;
+      }
+
+      // Clear any existing timeout
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+
+      if (isScrollingDown && currentScrollY > 100) {
+        // Hide immediately when scrolling down past 100px
+        setIsVisible(false);
+        // Set timeout to actually hide after 3 seconds
+        if (hideTimeoutRef.current) {
+          clearTimeout(hideTimeoutRef.current);
+        }
+        hideTimeoutRef.current = setTimeout(() => {
+          setShowBottomNav(false);
+        }, 3000);
+      } else if (isScrollingUp) {
+        // Show immediately when scrolling up
+        setIsVisible(true);
+        setShowBottomNav(true);
+        // Reset hide timeout
+        if (hideTimeoutRef.current) {
+          clearTimeout(hideTimeoutRef.current);
+          hideTimeoutRef.current = null;
+        }
+        // Set timeout to hide again after 4 seconds of no scrolling
+        scrollTimeoutRef.current = setTimeout(() => {
+          setIsVisible(false);
+          setTimeout(() => {
+            setShowBottomNav(false);
+          }, 300);
+        }, 4000);
+      }
+
+      setLastScrollY(currentScrollY);
+    };
+
+    // Add passive scroll listener for better performance
+    window.addEventListener('scroll', handleScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      if (hideTimeoutRef.current) {
+        clearTimeout(hideTimeoutRef.current);
+      }
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+    };
+  }, [lastScrollY, pathname]);
+
+  // Reset bottom nav when route changes
+  useEffect(() => {
+    setShowBottomNav(true);
+    setIsVisible(true);
+    if (hideTimeoutRef.current) {
+      clearTimeout(hideTimeoutRef.current);
+      hideTimeoutRef.current = null;
+    }
+  }, [pathname]);
 
   const searchSuggestions: SearchSuggestion[] = [
     {
@@ -204,7 +291,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
     { path: "/analytics", label: "Analytics", icon: <BarChart size={18} /> },
   ];
 
-  // Bottom navigation items for mobile
+  // Bottom navigation items for mobile - Fixed set of items
   const bottomNavItems: NavItem[] = [
     { path: "/", label: "Home", icon: <Home size={24} /> },
     { path: "/feed", label: "Feed", icon: <Users size={24} /> },
@@ -214,18 +301,18 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
       path: "/profile",
       label: "Profile",
       icon: session?.user ? (
-        <div className="relative w-8 h-8">
+        <div className="relative w-6 h-6">
           {!loading && avatar ? (
             <Image
               src={avatar}
               alt="User Avatar"
-              width={32}
-              height={32}
+              width={24}
+              height={24}
               className="rounded-full object-cover"
             />
           ) : (
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
-              <User size={16} className="text-white" />
+            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
+              <User size={12} className="text-white" />
             </div>
           )}
         </div>
@@ -235,11 +322,8 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
     },
   ];
 
-  // NEW: Check if we're on a chat page
   const isChatPage = pathname.startsWith("/chat");
-
-  // NEW: Determine if bottom nav should be shown
-  const showBottomNav = !(isChatPage && isChatTextAreaFocused);
+  const finalShowBottomNav = showBottomNav && !(isChatPage && isChatTextAreaFocused);
 
   // Scroll blur with throttling
   useEffect(() => {
@@ -325,20 +409,26 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
     setIsMobileMenuOpen(false);
   };
 
+  // Handle post creation
+  const handlePostCreate = () => {
+    router.push("/post");
+    setIsMobileMenuOpen(false);
+  };
+
   return (
     <>
       <header
         className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${
           scrolled
-            ? "bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-b border-gray-200 dark:border-gray-800 shadow-sm"
-            : "bg-white/80 dark:bg-gray-900/80 backdrop-blur-lg"
+            ? "bg-white/80 dark:bg-gray-950/80 backdrop-blur-xl border-b border-gray-200 dark:border-gray-800 shadow-sm"
+            : "bg-white/0 dark:bg-gray-950/0 backdrop-blur-md"
         }`}
       >
-        <div className="container mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+        <div className="container mx-auto px-4 sm:px-6 h-16  flex items-center justify-between">
           {/* Logo & Mobile Menu Button */}
           <div className="flex items-center gap-4">
             <Link href="/" className="flex items-center gap-3 group">
-              <div className="relative w-10 h-10">
+              <div className="relative w-10 h-10 transition-transform group-hover:scale-105">
                 <Image
                   src="/img/logo2.png"
                   alt="OneVika"
@@ -351,10 +441,10 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
 
               {/* Title + Subtitle */}
               <div className="flex flex-col leading-tight">
-                <span className="font-bold text-base sm:text-xl bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                <span className="font-bold text-lg sm:text-xl bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
                   {title}
                 </span>
-                <span className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">
+                <span className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 font-medium">
                   Powered by Satvik&#39;s Group
                 </span>
               </div>
@@ -362,19 +452,19 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
           </div>
 
           {/* Desktop Nav */}
-          <nav className="hidden lg:flex items-center gap-1 mx-4">
+          <nav className="hidden lg:flex items-center gap-1 mx-4 p-1 rounded-2xl bg-gray-50/50 dark:bg-gray-800/30 border border-gray-100 dark:border-gray-800/50 backdrop-blur-sm">
             {navItems.map((item) => (
               <Link
                 key={item.path}
                 href={item.path}
-                className={`relative flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 group ${
+                className={`relative flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-300 group ${
                   pathname === item.path
-                    ? "bg-gradient-to-r from-purple-500/10 to-pink-500/10 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800"
-                    : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white"
+                    ? "bg-white dark:bg-gray-800 text-purple-600 dark:text-purple-400 shadow-sm"
+                    : "text-gray-600 dark:text-gray-400 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-white"
                 }`}
               >
                 <span
-                  className={`transition-transform group-hover:scale-110 ${
+                  className={`transition-transform duration-300 group-hover:scale-110 ${
                     pathname === item.path
                       ? "text-purple-600 dark:text-purple-400"
                       : ""
@@ -382,9 +472,9 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                 >
                   {item.icon}
                 </span>
-                <span className="font-medium">{item.label}</span>
+                <span className="font-medium text-sm">{item.label}</span>
                 {item.badge && (
-                  <span className="absolute -top-1 -right-1 px-1.5 py-0.5 text-xs bg-red-500 text-white rounded-full">
+                  <span className="absolute -top-1 -right-1 px-1.5 py-0.5 text-[10px] font-bold bg-red-500 text-white rounded-full shadow-sm">
                     {item.badge}
                   </span>
                 )}
@@ -395,19 +485,19 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
           {/* Search Bar - Hidden on mobile */}
           {showSearch && (
             <div
-              className="hidden md:flex flex-1 max-w-xl mx-6"
+              className="hidden md:flex flex-1 max-w-sm mx-6"
               ref={searchRef}
             >
-              <form onSubmit={handleSearch} className="relative w-full">
+              <form onSubmit={handleSearch} className="relative w-full group">
                 <div className="relative">
                   <Search
-                    className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                    className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-purple-500 transition-colors"
                     size={18}
                   />
                   <input
                     type="text"
-                    placeholder="Search projects, docs, users..."
-                    className="w-full pl-10 pr-4 py-2.5 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                    placeholder="Search..."
+                    className="w-full pl-10 pr-4 py-2 bg-gray-100/50 dark:bg-gray-800/50 border border-transparent dark:border-gray-700 rounded-full focus:outline-none focus:bg-white dark:focus:bg-gray-900 focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500/50 transition-all shadow-inner"
                     value={searchQuery}
                     onChange={(e) => {
                       setSearchQuery(e.target.value);
@@ -429,7 +519,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                 </div>
 
                 {showSearchSuggestions && searchSuggestions.length > 0 && (
-                  <div className="absolute top-full mt-2 w-full bg-white dark:bg-gray-900 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-800 overflow-hidden z-50">
+                  <div className="absolute top-full mt-3 w-full bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-800 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
                     <div className="p-2">
                       {searchSuggestions
                         .filter((suggestion) =>
@@ -444,16 +534,16 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                               setSearchQuery(suggestion.text);
                               setShowSearchSuggestions(false);
                             }}
-                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-left transition-colors"
+                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 text-left transition-colors group/item"
                           >
-                            <div className="text-gray-400">
+                            <div className="text-gray-400 group-hover/item:text-purple-500 transition-colors">
                               {suggestion.icon}
                             </div>
                             <div className="flex-1">
-                              <div className="font-medium text-gray-900 dark:text-white">
+                              <div className="font-medium text-sm text-gray-900 dark:text-white">
                                 {suggestion.text}
                               </div>
-                              <div className="text-xs text-gray-500 dark:text-gray-400">
+                              <div className="text-[10px] text-gray-500 dark:text-gray-400">
                                 {suggestion.category}
                               </div>
                             </div>
@@ -467,17 +557,32 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
           )}
 
           {/* Desktop Right Actions - Hidden on Mobile */}
-          <div className="hidden lg:flex items-center gap-2">
+          <div className="hidden lg:flex items-center gap-3">
+            {/* Post Creation Button - Added left of message icon */}
+            {session?.user && (
+              <button
+                onClick={handlePostCreate}
+                className="p-2.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-all hover:scale-105 active:scale-95 relative text-gray-600 dark:text-gray-300 group"
+                aria-label="Create Post"
+                title="Create Post"
+              >
+                <PenSquare size={20} />
+                <span className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 text-xs bg-gray-900 text-white px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                  Create Post
+                </span>
+              </button>
+            )}
+
             {/* Chat Button/Icon */}
             {session?.user && (
               <button
                 onClick={handleChatClick}
-                className="p-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors relative"
+                className="p-2.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-all hover:scale-105 active:scale-95 relative text-gray-600 dark:text-gray-300"
                 aria-label="Chat"
               >
                 <MessageSquare size={20} />
                 {unreadNotifications > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 bg-green-500 text-white text-xs rounded-full flex items-center justify-center">
+                  <span className="absolute top-0 right-0 min-w-[18px] h-[18px] px-1 bg-green-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-sm border-2 border-white dark:border-gray-950">
                     {unreadNotifications}
                   </span>
                 )}
@@ -486,7 +591,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
 
             <button
               onClick={handleThemeToggle}
-              className="p-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              className="p-2.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-all hover:scale-105 active:scale-95 text-gray-600 dark:text-gray-300"
               aria-label="Toggle theme"
             >
               {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
@@ -497,60 +602,60 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
               <div className="relative" ref={notificationsRef}>
                 <button
                   onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-                  className="p-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 relative transition-colors"
+                  className="p-2.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 relative transition-all hover:scale-105 active:scale-95 text-gray-600 dark:text-gray-300"
                   aria-label="Notifications"
                 >
                   <Bell size={20} />
                   {unreadNotifications > 0 && (
-                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+                    <span className="absolute top-0 right-0 w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-sm border-2 border-white dark:border-gray-950">
                       {unreadNotifications}
                     </span>
                   )}
                 </button>
 
                 {isNotificationsOpen && (
-                  <div className="absolute right-0 mt-2 w-96 bg-white dark:bg-gray-900 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-800 overflow-hidden z-50">
-                    <div className="p-4 border-b border-gray-200 dark:border-gray-800">
+                  <div className="absolute right-0 mt-4 w-96 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-800 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
+                    <div className="p-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50">
                       <div className="flex justify-between items-center">
                         <h3 className="font-bold text-lg">Notifications</h3>
                         <button
                           onClick={markAllAsRead}
-                          className="text-sm text-purple-600 dark:text-purple-400 hover:underline"
+                          className="text-xs font-medium text-purple-600 dark:text-purple-400 hover:text-purple-700 transition-colors"
                         >
                           Mark all as read
                         </button>
                       </div>
                     </div>
-                    <div className="max-h-96 overflow-y-auto">
+                    <div className="max-h-[28rem] overflow-y-auto custom-scrollbar">
                       {notifications.map((notification) => (
                         <div
                           key={notification.id}
-                          className={`p-4 border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${
+                          className={`p-4 border-b border-gray-50 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${
                             !notification.read
-                              ? "bg-purple-50/50 dark:bg-purple-900/10"
+                              ? "bg-purple-50/40 dark:bg-purple-900/10"
                               : ""
                           }`}
                         >
                           <div className="flex gap-3">
                             <div
-                              className={`p-2 rounded-lg ${
+                              className={`p-2 h-fit rounded-xl ${
                                 !notification.read
-                                  ? "bg-purple-100 dark:bg-purple-900"
-                                  : "bg-gray-100 dark:bg-gray-800"
+                                  ? "bg-purple-100 text-purple-600 dark:bg-purple-900/50 dark:text-purple-300"
+                                  : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
                               }`}
                             >
                               {notification.icon}
                             </div>
                             <div className="flex-1">
-                              <div className="flex justify-between items-start">
-                                <h4 className="font-semibold">
+                              <div className="flex justify-between items-start mb-1">
+                                <h4 className="font-semibold text-sm">
                                   {notification.title}
                                 </h4>
-                                <span className="text-xs text-gray-500">
+                                <span className="text-[10px] text-gray-400 whitespace-nowrap ml-2">
                                   {notification.time}
                                 </span>
                               </div>
-                              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                              <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
                                 {notification.description}
                               </p>
                             </div>
@@ -560,7 +665,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                     </div>
                     <Link
                       href="/notifications"
-                      className="block p-4 text-center text-purple-600 dark:text-purple-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                      className="block p-3 text-center text-xs font-medium text-gray-500 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-t border-gray-100 dark:border-gray-800"
                     >
                       View all notifications
                     </Link>
@@ -571,13 +676,13 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
 
             {/* User Menu */}
             {session?.user ? (
-              <div className="relative" ref={userDropdownRef}>
+              <div className="relative ml-2" ref={userDropdownRef}>
                 <button
                   onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)}
-                  className="flex items-center gap-3 p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  className="flex items-center gap-2 p-1 pl-1 pr-3 rounded-full border border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all hover:shadow-sm group"
                   aria-label="User menu"
                 >
-                  <div className="relative w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-purple-500 to-blue-500">
+                  <div className="relative w-8 h-8 rounded-full overflow-hidden bg-gradient-to-br from-purple-500 to-blue-500 ring-2 ring-white dark:ring-gray-900">
                     {!loading && avatar ? (
                       <Image
                         src={avatar}
@@ -586,25 +691,24 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                         className="object-cover"
                       />
                     ) : (
-                      <span className="flex items-center justify-center w-full h-full text-white font-bold">
+                      <span className="flex items-center justify-center w-full h-full text-white font-bold text-xs">
                         {session?.user?.name?.[0]?.toUpperCase() ?? "U"}
                       </span>
                     )}
                   </div>
-
                   <ChevronDown
-                    className={`transition-transform ${
+                    className={`text-gray-400 transition-transform duration-300 ${
                       isUserDropdownOpen ? "rotate-180" : ""
                     }`}
-                    size={16}
+                    size={14}
                   />
                 </button>
 
                 {isUserDropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-900 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-800 overflow-hidden z-50">
-                    <div className="p-4 border-b border-gray-200 dark:border-gray-800">
-                      <div className="flex items-center gap-3">
-                        <div className="relative w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-purple-500 to-blue-500">
+                  <div className="absolute right-0 mt-3 w-72 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-800 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
+                    <div className="p-5 border-b border-gray-100 dark:border-gray-800 bg-gradient-to-br from-purple-500/5 to-pink-500/5">
+                      <div className="flex items-center gap-4">
+                        <div className="relative w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-purple-500 to-blue-500 shadow-md">
                           {!loading && avatar ? (
                             <Image
                               src={avatar}
@@ -613,53 +717,47 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                               className="object-cover"
                             />
                           ) : (
-                            <span className="flex items-center justify-center w-full h-full text-white font-bold">
+                            <span className="flex items-center justify-center w-full h-full text-white font-bold text-lg">
                               {session?.user?.name?.[0]?.toUpperCase() ?? "U"}
                             </span>
                           )}
                         </div>
 
-                        <div>
-                          <p className="font-bold">
+                        <div className="overflow-hidden">
+                          <p className="font-bold text-gray-900 dark:text-white truncate">
                             {session.user.name || "User"}
                           </p>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">
+                          <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
                             {session.user.email || "No email"}
                           </p>
                         </div>
                       </div>
                     </div>
-                    <div className="p-2">
+                    <div className="p-2 space-y-1">
                       <Link
                         href="/profile"
-                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-sm font-medium text-gray-700 dark:text-gray-300"
                       >
-                        <User size={18} /> Profile
+                        <User size={16} /> Profile
                       </Link>
                       <Link
                         href="/settings"
-                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-sm font-medium text-gray-700 dark:text-gray-300"
                       >
-                        <Settings size={18} /> Settings
+                        <Settings size={16} /> Settings
                       </Link>
                       <Link
                         href="/chat"
-                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-sm font-medium text-gray-700 dark:text-gray-300"
                       >
-                        <MessageSquare size={18} /> Chat
+                        <MessageSquare size={16} /> Chat
                       </Link>
-                      <Link
-                        href="/help"
-                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                      >
-                        <HelpCircle size={18} /> Help & Support
-                      </Link>
-                      <div className="h-px bg-gray-200 dark:bg-gray-800 my-2" />
+                      <div className="h-px bg-gray-100 dark:bg-gray-800 my-1 mx-2" />
                       <button
                         onClick={() => signOut({ callbackUrl: "/login" })}
-                        className="flex items-center gap-3 w-full px-3 py-2.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                        className="flex items-center gap-3 w-full px-3 py-2.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors text-sm font-medium"
                       >
-                        <LogOut size={18} /> Logout
+                        <LogOut size={16} /> Logout
                       </button>
                     </div>
                   </div>
@@ -669,13 +767,13 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => router.push("/login")}
-                  className="px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  className="px-5 py-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-sm font-medium"
                 >
                   Login
                 </button>
                 <button
                   onClick={() => router.push("/register")}
-                  className="px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all shadow-md hover:shadow-lg"
+                  className="px-5 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-full hover:from-purple-700 hover:to-pink-700 transition-all shadow-md hover:shadow-lg text-sm font-medium transform hover:-translate-y-0.5"
                 >
                   Sign Up
                 </button>
@@ -685,21 +783,21 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
 
           {/* Mobile Menu Button - Hidden on mobile since we have bottom nav */}
           <button
-            className="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2"
+            className="lg:hidden p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2 transition-colors"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             aria-label="Toggle menu"
           >
-            {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+            {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
           </button>
         </div>
 
-        {/* Mobile Menu Dropdown - Contains Everything */}
+        {/* Mobile Menu Dropdown - Just for extra items not in bottom nav */}
         {isMobileMenuOpen && (
           <div
             ref={mobileMenuRef}
-            className="lg:hidden fixed top-16 inset-x-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 shadow-2xl max-h-[80vh] overflow-y-auto z-50"
+            className="lg:hidden fixed top-16 inset-x-0 bg-white/95 dark:bg-gray-950/95 backdrop-blur-xl border-t border-gray-100 dark:border-gray-800 shadow-2xl h-[calc(100vh-4rem)] overflow-y-auto z-50 animate-in slide-in-from-top-5"
           >
-            <div className="p-4">
+            <div className="p-4 pb-24">
               {/* Mobile Search */}
               {showSearch && (
                 <div className="mb-6">
@@ -710,8 +808,8 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                     />
                     <input
                       type="text"
-                      placeholder="Search projects, docs, users..."
-                      className="w-full pl-10 pr-4 py-3 bg-gray-100 dark:bg-gray-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 text-gray-900 dark:text-white"
+                      placeholder="Search..."
+                      className="w-full pl-10 pr-4 py-3 bg-gray-100 dark:bg-gray-900 rounded-2xl focus:outline-none focus:ring-2 focus:ring-purple-500 text-gray-900 dark:text-white border border-transparent dark:border-gray-800"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                     />
@@ -719,211 +817,173 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                 </div>
               )}
 
-              {/* Navigation Tabs */}
+              {/* Navigation Tabs - Full list */}
               <div className="mb-6">
-                <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 px-2">
-                  Navigation
+                <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-4 px-2">
+                  Menu
                 </h3>
                 <div className="space-y-1">
+                  {/* Add Create Post option in mobile menu */}
+                  {session?.user && (
+                    <button
+                      onClick={handlePostCreate}
+                      className="flex items-center justify-between w-full px-4 py-3.5 rounded-2xl transition-all hover:bg-gray-50 dark:hover:bg-gray-900 text-gray-700 dark:text-gray-300"
+                    >
+                      <div className="flex items-center gap-4">
+                        <PenSquare size={18} />
+                        <span className="font-medium">Create Post</span>
+                      </div>
+                      <ChevronRight
+                        size={16}
+                        className="text-gray-300 dark:text-gray-600"
+                      />
+                    </button>
+                  )}
+                  
                   {navItems.map((item) => (
                     <Link
                       key={item.path}
                       href={item.path}
                       onClick={() => setIsMobileMenuOpen(false)}
-                      className={`flex items-center justify-between px-4 py-3 rounded-xl transition-colors ${
+                      className={`flex items-center justify-between px-4 py-3.5 rounded-2xl transition-all ${
                         pathname === item.path
-                          ? "bg-gradient-to-r from-purple-500/10 to-pink-500/10 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800"
-                          : "hover:bg-gray-100 dark:hover:bg-gray-800"
+                          ? "bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400"
+                          : "hover:bg-gray-50 dark:hover:bg-gray-900 text-gray-700 dark:text-gray-300"
                       }`}
                     >
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-4">
                         {item.icon}
                         <span className="font-medium">{item.label}</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {item.badge && (
-                          <span className="px-2 py-0.5 text-xs bg-red-500 text-white rounded-full">
-                            {item.badge}
-                          </span>
-                        )}
-                        <ChevronRight size={16} className="text-gray-400" />
-                      </div>
+                      <ChevronRight
+                        size={16}
+                        className="text-gray-300 dark:text-gray-600"
+                      />
                     </Link>
                   ))}
                 </div>
               </div>
 
               {/* Quick Actions */}
-              <div className="mb-6">
-                <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 px-2">
-                  Quick Actions
+              <div className="mb-8">
+                <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-4 px-2">
+                  Preferences
                 </h3>
-                <div className="grid grid-cols-2 gap-3">
-                  {/* Theme Toggle */}
+                <div className="grid grid-cols-2 gap-4">
                   <button
                     onClick={handleThemeToggle}
-                    className="flex flex-col items-center justify-center p-4 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                    className="flex flex-col items-center justify-center p-5 rounded-2xl bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 active:scale-95 transition-all"
                   >
                     {theme === "dark" ? (
-                      <Sun size={20} className="mb-2" />
+                      <Sun size={24} className="mb-3 text-amber-400" />
                     ) : (
-                      <Moon size={20} className="mb-2" />
+                      <Moon size={24} className="mb-3 text-purple-600" />
                     )}
                     <span className="text-sm font-medium">
                       {theme === "dark" ? "Light Mode" : "Dark Mode"}
                     </span>
                   </button>
 
-                  {/* Notifications */}
                   {session?.user && (
                     <button
                       onClick={handleNotificationClick}
-                      className="flex flex-col items-center justify-center p-4 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors relative"
+                      className="flex flex-col items-center justify-center p-5 rounded-2xl bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 active:scale-95 transition-all relative"
                     >
-                      <Bell size={20} className="mb-2" />
+                      <div className="relative">
+                        <Bell
+                          size={24}
+                          className="mb-3 text-gray-700 dark:text-gray-300"
+                        />
+                        {unreadNotifications > 0 && (
+                          <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-gray-50 dark:border-gray-900" />
+                        )}
+                      </div>
                       <span className="text-sm font-medium">Notifications</span>
-                      {unreadNotifications > 0 && (
-                        <span className="absolute top-2 right-2 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
-                          {unreadNotifications}
-                        </span>
-                      )}
                     </button>
                   )}
                 </div>
               </div>
 
-              {/* User Section */}
-              {session?.user ? (
-                <div className="mb-6">
-                  <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 px-2">
-                    Account
-                  </h3>
-                  <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="relative w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-purple-500 to-blue-500">
-                        {!loading && avatar ? (
-                          <Image
-                            src={avatar}
-                            alt="User Avatar"
-                            fill
-                            className="object-cover"
-                          />
-                        ) : (
-                          <span className="flex items-center justify-center w-full h-full text-white font-bold text-lg">
-                            {session?.user?.name?.[0]?.toUpperCase() ?? "U"}
-                          </span>
-                        )}
-                      </div>
-                      <div>
-                        <p className="font-bold">
-                          {session.user.name || "User"}
-                        </p>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                          {session.user.email || "No email"}
-                        </p>
-                      </div>
-                    </div>
+              {/* Auth Actions */}
+              {!session?.user && (
+                <div className="flex flex-col gap-3 mt-6">
+                  <button
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      router.push("/login");
+                    }}
+                    className="w-full py-3.5 rounded-2xl border border-gray-200 dark:border-gray-800 font-semibold"
+                  >
+                    Login
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      router.push("/register");
+                    }}
+                    className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold shadow-lg shadow-purple-500/30"
+                  >
+                    Sign Up
+                  </button>
+                </div>
+              )}
 
-                    <div className="space-y-2">
-                      <Link
-                        href="/settings"
-                        onClick={() => setIsMobileMenuOpen(false)}
-                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-300"
-                      >
-                        <Settings size={18} />
-                        <span className="font-medium">Settings</span>
-                      </Link>
-                      <Link
-                        href="/help"
-                        onClick={() => setIsMobileMenuOpen(false)}
-                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-300"
-                      >
-                        <HelpCircle size={18} />
-                        <span className="font-medium">Help & Support</span>
-                      </Link>
-                      <button
-                        onClick={() => {
-                          setIsMobileMenuOpen(false);
-                          signOut({ callbackUrl: "/login" });
-                        }}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 text-red-600 hover:bg-red-100 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                      >
-                        <LogOut size={18} />
-                        <span className="font-medium">Logout</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="mb-6">
-                  <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 px-2">
-                    Account
-                  </h3>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      onClick={() => {
-                        setIsMobileMenuOpen(false);
-                        router.push("/login");
-                      }}
-                      className="px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors font-medium"
-                    >
-                      Login
-                    </button>
-                    <button
-                      onClick={() => {
-                        setIsMobileMenuOpen(false);
-                        router.push("/register");
-                      }}
-                      className="px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all font-medium"
-                    >
-                      Sign Up
-                    </button>
-                  </div>
-                </div>
+              {session?.user && (
+                <button
+                  onClick={() => {
+                    setIsMobileMenuOpen(false);
+                    signOut({ callbackUrl: "/login" });
+                  }}
+                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-red-50 dark:bg-red-900/20 text-red-600 font-semibold mt-4"
+                >
+                  <LogOut size={18} /> Logout
+                </button>
               )}
             </div>
           </div>
         )}
       </header>
-      {/* Bottom Navigation Bar for Mobile - Conditionally shown */}
-      {showBottomNav && (
-        <div className="lg:hidden fixed bottom-0 inset-x-0 z-[60] bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-t border-gray-200 dark:border-gray-800 shadow-lg transition-transform duration-300 ease-in-out">
-          {" "}
-          <div className="container mx-auto px-4">
-            <div className="flex items-center justify-between h-16">
-              {bottomNavItems.map((item) => {
-                const isActive = pathname === item.path;
 
-                return (
-                  <Link
-                    key={item.path}
-                    href={item.path}
-                    className={`flex flex-col items-center justify-center flex-1 p-2 transition-all duration-200 ${
-                      isActive
-                        ? "text-purple-600 dark:text-purple-400"
-                        : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-                    }`}
-                  >
-                    <div className={`relative ${isActive ? "scale-110" : ""}`}>
-                      {item.icon}
+      {/* FIXED FULL-WIDTH BOTTOM NAVIGATION (Mobile Only) */}
+      {finalShowBottomNav && (
+        <div 
+          className={`lg:hidden fixed bottom-0 inset-x-0 z-[60] bg-white dark:bg-black border-t border-gray-200 dark:border-gray-800 shadow-lg transition-all duration-300 ${
+            isVisible ? 'translate-y-0' : 'translate-y-full'
+          }`}
+        >
+          <div className="flex items-center justify-around h-15 px-0">
+            {bottomNavItems.map((item) => {
+              const isActive = pathname === item.path;
+
+              return (
+                <Link
+                  key={item.path}
+                  href={item.path}
+                  className="relative flex flex-col items-center justify-center w-full h-full"
+                >
+                  <div className="flex flex-col items-center justify-center">
+                    <div className="relative">
+                      <div
+                        className={`transform transition-transform duration-200 ${
+                          isActive ? "scale-110" : ""
+                        }`}
+                      >
+                        {item.icon}
+                      </div>
+                      
+                      {/* Active Indicator */}
+                      {isActive && (
+                        <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 bg-purple-600 dark:bg-purple-400 rounded-full"></div>
+                      )}
                     </div>
-                    <span className="text-xs font-medium mt-1">
-                      {item.label}
-                    </span>
-                    {isActive && (
-                      <div className="w-1 h-1 rounded-full bg-purple-600 dark:bg-purple-400 mt-1" />
-                    )}
-                  </Link>
-                );
-              })}
-            </div>
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         </div>
       )}
-      {/* Spacers for top and bottom navbars */}
-      <div className="h-16" /> {/* Top navbar spacer */}
-      {showBottomNav && <div className="lg:hidden h-16" />}{" "}
-      {/* Bottom navbar spacer for mobile */}
+
     </>
   );
 };

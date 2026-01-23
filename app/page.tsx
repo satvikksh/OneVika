@@ -45,10 +45,10 @@ export default function Home() {
   // Get theme from useTheme hook
   const { theme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  
+
   // Use resolvedTheme for accurate theme detection
   const isDarkMode = resolvedTheme === "dark";
-  
+
   const { data: session, status } = useSession();
   const isLoggedIn = !!session?.user;
 
@@ -230,8 +230,8 @@ export default function Home() {
     return variants[variant] || variants.purple;
   };
 
-  const getVariantlinear = (variant: string) => {
-    const linears: Record<string, string> = {
+  const getVariantgradient = (variant: string) => {
+    const gradients: Record<string, string> = {
       purple: "from-purple-600 to-blue-500",
       emerald: "from-emerald-600 to-green-500",
       amber: "from-amber-600 to-yellow-500",
@@ -239,7 +239,7 @@ export default function Home() {
       sky: "from-sky-600 to-cyan-500",
       gray: "from-gray-600 to-gray-500",
     };
-    return linears[variant] || linears.purple;
+    return gradients[variant] || gradients.purple;
   };
 
   // Don't render theme-dependent content until mounted
@@ -264,8 +264,9 @@ export default function Home() {
       <SimpleNavbar />
       <div className={`min-h-screen ${isDarkMode ? "dark" : ""}`}>
         {/* Carousel Section */}
+        {/* FIXED: -mt-16 to pull image behind navbar, and 100dvh for proper mobile full screen */}
         <div
-          className="relative:h-[85vh] md:h-[90vh] overflow-hidden"
+          className="relative h-[100dvh] w-full overflow-hidden -mt-16"
           ref={carouselRef}
         >
           {/* Slides */}
@@ -280,60 +281,56 @@ export default function Home() {
             >
               {/* Background Image */}
               <div
-                className="absolute inset-0 bg-cover bg-center transition-transform duration-700 ease-out scale-100 hover:scale-105"
+                className="absolute inset-0 bg-cover bg-center transition-transform duration-[2000ms] ease-out scale-100 hover:scale-105"
                 style={{
-                  backgroundImage: `linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.5)), url(${slide.image})`,
+                  backgroundImage: `linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.8)), url(${slide.image})`,
                 }}
               />
 
               {/* Content Overlay */}
-              <div className="absolute inset-0 flex items-center justify-center">
+              <div className="absolute inset-0 flex items-center justify-center pt-16">
                 <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
-                  <div className="max-w-4xl mx-auto space-y-6">
+                  <div className="max-w-5xl mx-auto space-y-6 md:space-y-8 animate-in slide-in-from-bottom-10 fade-in duration-700">
                     {/* Badge */}
-                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-sm border border-white/20">
-                      <Sparkles className="w-4 h-4" />
-                      <span className="text-sm font-semibold text-white">
-                        IMAGINARY INITIATIVE
+                    <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/20 shadow-lg">
+                      <Sparkles className="w-3.5 h-3.5 text-purple-300" />
+                      <span className="text-xs md:text-sm font-bold tracking-widest text-white uppercase">
+                        Imaginary Initiative
                       </span>
                     </div>
 
                     {/* Title */}
-                    <h1 className="text-4xl sm:text-5xl lg:text-7xl font-bold text-white mb-4 leading-tight">
-                      <span className="bg-linear-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
+                    <h1 className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-black text-white mb-4 leading-[1.1] tracking-tight drop-shadow-sm">
+                      <span className="bg-gradient-to-r from-purple-300 via-pink-300 to-blue-300 bg-clip-text text-transparent">
                         {slide.title}
                       </span>
                     </h1>
 
                     {/* Subtitle */}
-                    <h2 className="text-xl sm:text-2xl lg:text-3xl font-semibold text-white/90 mb-6">
+                    <h2 className="text-lg sm:text-2xl md:text-3xl font-medium text-gray-200 mb-6 max-w-3xl mx-auto">
                       {slide.subtitle}
                     </h2>
 
                     {/* Description */}
-                    <p className="text-lg sm:text-xl lg:text-2xl text-white/80 mb-8 max-w-2xl mx-auto leading-relaxed">
+                    <p className="hidden sm:block text-base sm:text-lg md:text-xl text-gray-300/90 mb-8 max-w-2xl mx-auto leading-relaxed">
                       {slide.description}
                     </p>
 
                     {/* Buttons */}
-                    <div className="flex flex-wrap gap-4 justify-center">
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
                       <Link
                         href={slide.button.link}
-                        className="group px-8 py-4 rounded-xl bg-white/10 backdrop-blur-sm border border-white/20 hover:bg-white/20 transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:shadow-purple-500/25 flex items-center gap-3"
+                        className="w-full sm:w-auto px-8 py-4 rounded-full bg-white text-gray-900 font-bold text-sm sm:text-base hover:bg-gray-100 transition-all duration-300 hover:scale-105 hover:shadow-[0_0_20px_rgba(255,255,255,0.3)] flex items-center justify-center gap-2"
                       >
-                        <span className="font-semibold text-white">
-                          {slide.button.text}
-                        </span>
-                        <ArrowRight className="w-5 h-5 text-white group-hover:translate-x-1 transition-transform" />
+                        <span>{slide.button.text}</span>
+                        <ArrowRight className="w-4 h-4" />
                       </Link>
                       <Link
                         href="/discover"
-                        className="group px-8 py-4 rounded-xl bg-linear-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:shadow-amber-500/25 flex items-center gap-3"
+                        className="w-full sm:w-auto px-8 py-4 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white font-bold text-sm sm:text-base hover:bg-white/20 transition-all duration-300 hover:scale-105 flex items-center justify-center gap-2"
                       >
-                        <Sparkles className="w-5 h-5" />
-                        <span className="font-semibold text-white">
-                          Discover Wonders
-                        </span>
+                        <Globe className="w-4 h-4" />
+                        <span>Discover Worlds</span>
                       </Link>
                     </div>
                   </div>
@@ -342,32 +339,32 @@ export default function Home() {
             </div>
           ))}
 
-          {/* Navigation Arrows */}
+          {/* Navigation Arrows - Hidden on very small mobile to save space */}
           <button
             onClick={prevSlide}
-            className="absolute left-4 top-1/2 transform -translate-y-1/2 z-20 p-3 rounded-full bg-black/30 backdrop-blur-sm border border-white/20 hover:bg-black/50 transition-all duration-300 group"
+            className="hidden sm:flex absolute left-4 md:left-8 top-1/2 transform -translate-y-1/2 z-20 p-4 rounded-full bg-black/20 backdrop-blur-md border border-white/10 text-white hover:bg-white/20 transition-all duration-300 group"
             aria-label="Previous slide"
           >
-            <ChevronLeft className="w-6 h-6 text-white group-hover:scale-110 transition-transform" />
+            <ChevronLeft className="w-6 h-6 group-hover:-translate-x-1 transition-transform" />
           </button>
           <button
             onClick={nextSlide}
-            className="absolute right-4 top-1/2 transform -translate-y-1/2 z-20 p-3 rounded-full bg-black/30 backdrop-blur-sm border border-white/20 hover:bg-black/50 transition-all duration-300 group"
+            className="hidden sm:flex absolute right-4 md:right-8 top-1/2 transform -translate-y-1/2 z-20 p-4 rounded-full bg-black/20 backdrop-blur-md border border-white/10 text-white hover:bg-white/20 transition-all duration-300 group"
             aria-label="Next slide"
           >
-            <ChevronRight className="w-6 h-6 text-white group-hover:scale-110 transition-transform" />
+            <ChevronRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
           </button>
 
           {/* Indicators */}
-          <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-20 flex gap-2">
+          <div className="absolute bottom-10 left-1/2 transform -translate-x-1/2 z-20 flex gap-3">
             {slidesData.map((_, index) => (
               <button
                 key={index}
                 onClick={() => goToSlide(index)}
-                className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                className={`h-1.5 rounded-full transition-all duration-300 ${
                   index === currentSlide
                     ? "w-8 bg-white"
-                    : "bg-white/50 hover:bg-white/80"
+                    : "w-2 bg-white/40 hover:bg-white/60"
                 }`}
                 aria-label={`Go to slide ${index + 1}`}
               />
@@ -379,98 +376,88 @@ export default function Home() {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-24">
           {/* Header */}
           <div className="text-center max-w-3xl mx-auto mb-16">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-linear-to-r from-purple-500 to-blue-500 mb-6">
-              <Rocket className="w-4 h-4" />
-              <span className="text-sm font-semibold text-white">
-                🚀 IMAGINARY INITIATIVE
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 mb-6 shadow-lg shadow-purple-500/25">
+              <Rocket className="w-4 h-4 text-white" />
+              <span className="text-sm font-bold text-white tracking-wide">
+                IMAGINARY INITIATIVE
               </span>
             </div>
 
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 bg-linear-to-r from-purple-600 via-pink-600 to-blue-600 bg-clip-text text-transparent">
-              Satvik&#39;s Imaginary Collective
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black mb-6 tracking-tight text-gray-900 dark:text-white">
+              Satvik&#39;s{" "}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600">
+                Imaginary Collective
+              </span>
             </h1>
 
-            <p className="text-xl lg:text-2xl text-gray-700 dark:text-gray-300 mb-8 leading-relaxed">
+            <p className="text-lg sm:text-xl text-gray-600 dark:text-gray-400 mb-8 leading-relaxed">
               Building{" "}
-              <span className="font-bold text-purple-600 dark:text-purple-400">
+              <span className="font-bold text-gray-900 dark:text-white underline decoration-purple-500 decoration-2 underline-offset-4">
                 impossible things
               </span>{" "}
-              in a world that doesn&#39;t exist
+              in a world that doesn&#39;t exist.
             </p>
 
             {/* Action Buttons */}
             <div className="flex flex-wrap gap-4 justify-center mb-8">
               <Link
                 href="/manifesto"
-                className="group px-6 py-3 rounded-xl border-2 border-purple-500 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all duration-300 hover:scale-105 flex items-center gap-2"
+                className="px-6 py-3 rounded-xl border border-purple-500/30 bg-purple-50/50 dark:bg-purple-900/10 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-all duration-300 font-medium flex items-center gap-2"
               >
                 <BookOpen className="w-4 h-4" />
-                Read Our Manifesto
+                Read Manifesto
               </Link>
               <Link
                 href="/projects"
-                className="group px-6 py-3 rounded-xl border-2 border-emerald-500 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-all duration-300 hover:scale-105 flex items-center gap-2"
+                className="px-6 py-3 rounded-xl border border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-900/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-all duration-300 font-medium flex items-center gap-2"
               >
                 <Globe className="w-4 h-4" />
                 Explore Projects
               </Link>
-              <Link
-                href="/create"
-                className="group px-6 py-3 rounded-xl border-2 border-amber-500 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-all duration-300 hover:scale-105 flex items-center gap-2"
-              >
-                <Sparkles className="w-4 h-4" />
-                Create With Us
-              </Link>
             </div>
-
-            <p className="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-              Imaginary Technology is a conceptual space where boundaries don&#39;t
-              exist. Founded by {"Satvik's Group"} as a thought experiment
-              turned creative engine.
-            </p>
           </div>
 
           {/* Feature Cards */}
-          <div className="grid md:grid-cols-3 gap-6 mb-16">
+          <div className="grid md:grid-cols-3 gap-6 mb-20">
             {[
               {
-                icon: <Globe className="w-8 h-8" />,
+                icon: <Globe className="w-6 h-6" />,
                 title: "No Limits",
-                description: "Physics, logic, and reality are optional here",
+                description: "Physics, logic, and reality are optional here.",
                 color: "purple",
               },
               {
-                icon: <Sparkles className="w-8 h-8" />,
+                icon: <Sparkles className="w-6 h-6" />,
                 title: "Pure Creation",
-                description: "Bringing impossible ideas to conceptual life",
+                description: "Bringing impossible ideas to conceptual life.",
                 color: "pink",
               },
               {
-                icon: <Infinity className="w-8 h-8" />,
+                icon: <Infinity className="w-6 h-6" />,
                 title: "Infinite Scale",
-                description: "From micro-realms to entire imaginary universes",
+                description: "From micro-realms to entire universes.",
                 color: "blue",
               },
             ].map((feature, index) => (
               <div
                 key={index}
-                className="group p-6 rounded-2xl border border-gray-200 dark:border-gray-800 hover:border-purple-300 dark:hover:border-purple-700 transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:shadow-purple-500/10"
+                className="group p-8 rounded-3xl bg-white dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800 hover:border-purple-500/30 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-purple-500/5"
               >
                 <div
-                  className={`w-14 h-14 rounded-xl ${
-                    feature.color === "purple" 
-                      ? "bg-linear-to-br from-purple-500 to-purple-600"
+                  className={`w-12 h-12 rounded-2xl ${
+                    feature.color === "purple"
+                      ? "bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400"
                       : feature.color === "pink"
-                      ? "bg-linear-to-br from-pink-500 to-rose-600"
-                      : "bg-linear-to-br from-blue-500 to-cyan-600"
-                  } flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}
+                      ? "bg-pink-100 text-pink-600 dark:bg-pink-900/30 dark:text-pink-400"
+                      : "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
+                  } flex items-center justify-center mb-6 transition-transform group-hover:scale-110 rotate-3 group-hover:rotate-0`}
                 >
-                  <div className="text-white">{feature.icon}</div>
+                  {feature.icon}
                 </div>
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">
                   {feature.title}
                 </h3>
-                <p className="text-gray-600 dark:text-gray-400">
+                <p className="text-gray-500 dark:text-gray-400 leading-relaxed">
                   {feature.description}
                 </p>
               </div>
@@ -479,79 +466,69 @@ export default function Home() {
 
           {/* Projects Section */}
           <div className="mb-20">
-            <div className="text-center mb-12">
-              <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white mb-4">
-                <span className="relative">
+            <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-6">
+              <div className="max-w-2xl">
+                <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
                   Imaginary Initiatives
-                  <span className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-24 h-1 bg-linear-to-r from-purple-500 to-blue-500 rounded-full" />
-                </span>
-              </h2>
-              <p className="text-lg text-gray-600 dark:text-gray-600 max-w-2xl mx-auto">
-                Explore our ongoing conceptual projects. Each represents an
-                exploration into what could exist if reality were more...
-                flexible.
-              </p>
+                </h2>
+                <p className="text-gray-600 dark:text-gray-400">
+                  Explore our ongoing conceptual projects. Each represents an
+                  exploration into flexible reality.
+                </p>
+              </div>
+              <Link
+                href="/projects"
+                className="inline-flex items-center gap-2 font-semibold text-purple-600 dark:text-purple-400 hover:gap-3 transition-all"
+              >
+                View all projects <ArrowRight className="w-4 h-4" />
+              </Link>
             </div>
 
             {/* Project Cards Grid */}
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
               {cardsData.map((card, index) => (
                 <div key={index} className="group relative">
-                  <div className="h-full rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-800 hover:border-purple-300 dark:hover:border-purple-700 transition-all duration-500 hover:scale-[1.02] hover:shadow-2xl hover:shadow-purple-500/10">
+                  <div className="h-full rounded-3xl overflow-hidden bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:border-purple-500/30 transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl hover:shadow-purple-500/10">
                     {/* Card Header with Image */}
-                    <div className="relative h-48 overflow-hidden">
-                      {/* Tag */}
-                      <div className="absolute top-3 left-3 z-10">
+                    <div className="relative h-56 overflow-hidden">
+                      <div className="absolute top-4 left-4 z-10 flex gap-2">
                         <span
-                          className={`px-3 py-1 rounded-full text-xs font-semibold ${getVariantClasses(
+                          className={`px-3 py-1 rounded-full text-xs font-bold shadow-sm ${getVariantClasses(
                             card.variant
-                          )}`}
+                          )} bg-white/90 dark:bg-black/80 backdrop-blur-md`}
                         >
                           {card.tag}
                         </span>
                       </div>
 
-                      {/* Category */}
-                      <div className="absolute bottom-3 left-3 z-10">
-                        <span className="px-3 py-1 rounded-full text-xs font-semibold bg-black/50 backdrop-blur-sm text-white">
-                          {card.category}
-                        </span>
-                      </div>
+                      <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-transparent to-transparent opacity-60 z-10" />
 
-                      {/* Image */}
-                      <div className="absolute inset-0 bg-linear-to-br from-gray-900/50 to-transparent">
-                        <div
-                          className="w-full h-full bg-cover bg-center transition-transform duration-700 group-hover:scale-110"
-                          style={{ backgroundImage: `url(${card.image})` }}
-                        />
-                      </div>
+                      <div
+                        className="w-full h-full bg-cover bg-center transition-transform duration-700 group-hover:scale-110"
+                        style={{ backgroundImage: `url(${card.image})` }}
+                      />
                     </div>
 
                     {/* Card Body */}
-                    <div className="p-6 bg-white dark:bg-gray-900">
-                      <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+                    <div className="p-6 md:p-8">
+                      <div className="text-xs font-semibold text-purple-600 dark:text-purple-400 mb-2 uppercase tracking-wider">
+                        {card.category}
+                      </div>
+                      <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3 leading-tight">
                         {card.title}
                       </h3>
-                      <p className="text-gray-600 dark:text-gray-400 mb-6">
+                      <p className="text-gray-600 dark:text-gray-400 mb-6 line-clamp-2">
                         {card.text}
                       </p>
 
                       {/* Footer */}
-                      <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-800">
-                        <div className="flex flex-col">
-                          <span className="text-xs text-gray-500 dark:text-gray-400">
-                            Imaginary Technology
-                          </span>
-                          <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                            Satvik&#39;s Group
-                          </span>
-                        </div>
+                      <div className="pt-6 border-t border-gray-100 dark:border-gray-800">
                         {isLoggedIn ? (
                           <Link
                             href={card.link}
-                            className={`px-4 py-2 rounded-lg bg-linear-to-r ${getVariantlinear(
+                            className={`w-full py-3 rounded-xl bg-gradient-to-r ${getVariantgradient(
                               card.variant
-                            )} text-white font-semibold flex items-center gap-2 group-hover:gap-3 transition-all`}
+                            )} text-white font-bold flex items-center justify-center gap-2 opacity-90 hover:opacity-100 hover:shadow-lg transition-all`}
                           >
                             Enter Portal
                             <ArrowRight className="w-4 h-4" />
@@ -559,7 +536,7 @@ export default function Home() {
                         ) : (
                           <Link
                             href="/login"
-                            className="px-4 py-2 rounded-lg bg-gray-700 text-gray-300 font-semibold flex items-center gap-2 cursor-pointer hover:bg-gray-600 transition"
+                            className="w-full py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 font-semibold flex items-center justify-center gap-2 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all"
                           >
                             <Lock className="w-4 h-4" />
                             Login Required
@@ -575,61 +552,64 @@ export default function Home() {
         </div>
 
         {/* Call to Action Section */}
-        <div className="relative py-20 md:py-32overflow-hidden ">
-          {/* Background linear */}
-          <div className="absolute inset-0 bg-linear-to-br from-purple-900/20 via-blue-900/20 to-pink-900/20" />
+        <div className="relative py-24 md:py-32 overflow-hidden">
+          {/* Background Gradient */}
+          <div className="absolute inset-0 bg-gradient-to-br from-indigo-900 via-purple-900 to-black" />
 
           {/* Animated Background Elements */}
           <div className="absolute inset-0 overflow-hidden">
-            <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl" />
-            <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl" />
+            <div className="absolute -top-40 -right-40 w-[500px] h-[500px] bg-purple-500/20 rounded-full blur-[100px] animate-pulse" />
+            <div className="absolute -bottom-40 -left-40 w-[500px] h-[500px] bg-blue-500/20 rounded-full blur-[100px] animate-pulse delay-700" />
           </div>
 
           <div className="container relative mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="max-w-6xl mx-auto">
-              <div className="bg-white/10 dark:bg-gray-900/10 backdrop-blur-xl border border-white/20 dark:border-gray-800/20 rounded-3xl p-8 md:p-12 lg:p-16">
-                <div className="grid lg:grid-cols-2 gap-8 md:gap-12 items-center">
+            <div className="max-w-5xl mx-auto">
+              <div className="bg-white/5 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-8 md:p-16 overflow-hidden relative shadow-2xl">
+                {/* Decorative Grid */}
+                <div
+                  className="absolute inset-0 opacity-20"
+                  style={{
+                    backgroundImage:
+                      "linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)",
+                    backgroundSize: "40px 40px",
+                  }}
+                />
+
+                <div className="relative z-10 grid lg:grid-cols-2 gap-12 items-center">
                   {/* Left Column */}
                   <div>
-                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-linear-to-r from-purple-500 to-blue-500 mb-6">
-                      <Sparkles className="w-4 h-4" />
+                    <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 border border-white/20 mb-8">
+                      <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
                       <span className="text-sm font-semibold text-white">
-                        JOIN THE REVOLUTION
+                        Access Granted
                       </span>
                     </div>
 
-                    <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-6">
+                    <h2 className="text-4xl sm:text-5xl font-black text-white mb-6 tracking-tight">
                       Ready to Imagine With Us?
                     </h2>
 
-                    <p className="text-lg text-white/80 mb-8 leading-relaxed">
+                    <p className="text-lg text-gray-300 mb-10 leading-relaxed">
                       Join {"Satvik's Group"} at Imaginary Technology. No
-                      experience required—just bring your imagination. We&#39;re
-                      building concepts that have never been thought of before.
+                      experience required—just bring your imagination.
                     </p>
 
                     <Link
                       href="/join"
-                      className="inline-flex items-center gap-3 px-8 py-4 rounded-xl bg-white text-gray-900 font-bold hover:bg-gray-100 transition-all duration-300 hover:scale-105 hover:shadow-2xl"
+                      className="inline-flex items-center gap-3 px-8 py-4 rounded-xl bg-white text-black font-bold text-lg hover:bg-purple-50 transition-all duration-300 hover:scale-105 hover:shadow-[0_0_30px_rgba(255,255,255,0.3)]"
                     >
                       <Rocket className="w-5 h-5" />
-                      Launch Your Imagination
+                      Launch Concept
                     </Link>
                   </div>
 
                   {/* Right Column */}
-                  <div className="text-center">
-                    <div className="inline-flex items-center justify-center w-32 h-32 rounded-full bg-linear-to-r from-purple-500/20 to-blue-500/20 border border-white/20 mb-6">
-                      <div className="text-4xl">⚡✨🌌</div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <h3 className="text-2xl font-semibold text-white/90">
-                        The Only Rule:
-                      </h3>
-                      <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold bg-linear-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
-                        No Rules
-                      </h1>
+                  <div className="text-center lg:text-right">
+                    <div className="inline-block relative">
+                      <div className="absolute -inset-4 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full blur-xl opacity-50 animate-pulse" />
+                      <div className="relative w-40 h-40 rounded-full bg-black/50 border-2 border-white/20 flex items-center justify-center backdrop-blur-md">
+                        <span className="text-6xl">🌌</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -640,231 +620,139 @@ export default function Home() {
 
         {/* Footer */}
         <footer
-          className={`py-12 ${
-            isDarkMode ? "bg-gray-900 text-white" : "bg-gray-50 text-gray-900"
+          className={`py-16 border-t ${
+            isDarkMode
+              ? "bg-black border-gray-800 text-white"
+              : "bg-gray-50 border-gray-200 text-gray-900"
           }`}
         >
           <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid lg:grid-cols-3 gap-8 md:gap-12 mb-12">
-              {/* Column 1 */}
-              <div>
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-12 mb-16">
+              {/* Brand */}
+              <div className="lg:col-span-1">
                 <div className="flex items-center gap-3 mb-6">
-                  <div className="w-10 h-10 rounded-full bg-linear-to-br from-purple-500 to-blue-500 flex items-center justify-center">
-                    <span className="text-white font-bold">⚡</span>
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center">
+                    <span className="text-white font-bold text-lg">S</span>
                   </div>
-                  <h3 className="text-xl font-bold">Satvik&#39;s Group</h3>
+                  <h3 className="text-xl font-bold tracking-tight">
+                    Satvik&#39;s Group
+                  </h3>
                 </div>
                 <p
-                  className={`mb-6 ${
+                  className={`mb-6 text-sm leading-relaxed ${
                     isDarkMode ? "text-gray-400" : "text-gray-600"
                   }`}
                 >
                   A conceptual collective exploring the boundaries of
-                  imagination. We create, imagine, and build things that don&#39;t
-                  exist—yet.
+                  imagination. We create, imagine, and build things that
+                  don&#39;t exist—yet.
                 </p>
-                <div className="flex gap-3">
-                  <Link
-                    href="/about"
-                    className={`px-4 py-2 rounded-lg border ${
-                      isDarkMode
-                        ? "border-gray-700 hover:border-purple-500 text-gray-300 hover:text-purple-400"
-                        : "border-gray-300 hover:border-purple-500 text-gray-700 hover:text-purple-600"
-                    } transition-colors`}
-                  >
-                    Our Origin Story
-                  </Link>
-                  <Link
-                    href="/philosophy"
-                    className={`px-4 py-2 rounded-lg border ${
-                      isDarkMode
-                        ? "border-gray-700 hover:border-gray-500 text-gray-300 hover:text-gray-400"
-                        : "border-gray-300 hover:border-gray-400 text-gray-700 hover:text-gray-900"
-                    } transition-colors`}
-                  >
-                    Philosophy
-                  </Link>
+                <div className="flex gap-4">
+                  {["twitter", "github", "discord"].map((social) => (
+                    <Link
+                      key={social}
+                      href={`#${social}`}
+                      className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+                        isDarkMode
+                          ? "bg-gray-900 hover:bg-gray-800 text-gray-400"
+                          : "bg-white hover:bg-gray-100 text-gray-500 shadow-sm"
+                      }`}
+                    >
+                      <span className="capitalize text-xs">{social[0]}</span>
+                    </Link>
+                  ))}
                 </div>
               </div>
 
-              {/* Column 2 */}
+              {/* Links Column */}
               <div>
-                <h5 className="text-lg font-bold mb-6">Imaginary Realms</h5>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Link
-                      href="/realms/cosmic"
-                      className={`block hover:text-purple-500 transition-colors ${
-                        isDarkMode ? "text-gray-400" : "text-gray-600"
-                      }`}
-                    >
-                      Cosmic Archives
-                    </Link>
-                    <Link
-                      href="/realms/neural"
-                      className={`block hover:text-emerald-500 transition-colors ${
-                        isDarkMode ? "text-gray-400" : "text-gray-600"
-                      }`}
-                    >
-                      Neural Nexus
-                    </Link>
-                    <Link
-                      href="/realms/quantum"
-                      className={`block hover:text-amber-500 transition-colors ${
-                        isDarkMode ? "text-gray-400" : "text-gray-600"
-                      }`}
-                    >
-                      Quantum Constructs
-                    </Link>
-                  </div>
-                  <div className="space-y-2">
-                    <Link
-                      href="/realms/chrono"
-                      className={`block hover:text-rose-500 transition-colors ${
-                        isDarkMode ? "text-gray-400" : "text-gray-600"
-                      }`}
-                    >
-                      Chrono Visions
-                    </Link>
-                    <Link
-                      href="/realms/aether"
-                      className={`block hover:text-sky-500 transition-colors ${
-                        isDarkMode ? "text-gray-400" : "text-gray-600"
-                      }`}
-                    >
-                      Aether Gardens
-                    </Link>
-                    <Link
-                      href="/realms/stellar"
-                      className={`block hover:text-gray-500 transition-colors ${
-                        isDarkMode ? "text-gray-400" : "text-gray-600"
-                      }`}
-                    >
-                      Stellar Forge
-                    </Link>
-                  </div>
-                </div>
+                <h4 className="font-bold mb-6">Explore</h4>
+                <ul className="space-y-4 text-sm">
+                  {["About Us", "Manifesto", "Timeline", "Careers"].map(
+                    (item) => (
+                      <li key={item}>
+                        <Link
+                          href="#"
+                          className={`hover:text-purple-500 transition-colors ${
+                            isDarkMode ? "text-gray-400" : "text-gray-600"
+                          }`}
+                        >
+                          {item}
+                        </Link>
+                      </li>
+                    )
+                  )}
+                </ul>
               </div>
 
-              {/* Column 3 */}
+              {/* Links Column */}
               <div>
-                <h5 className="text-lg font-bold mb-6">Join The Imagination</h5>
-                <div className="space-y-4">
+                <h4 className="font-bold mb-6">Realms</h4>
+                <ul className="space-y-4 text-sm">
+                  {[
+                    "Cosmic Archives",
+                    "Neural Nexus",
+                    "Quantum Constructs",
+                    "Aether Gardens",
+                  ].map((item) => (
+                    <li key={item}>
+                      <Link
+                        href="#"
+                        className={`hover:text-purple-500 transition-colors ${
+                          isDarkMode ? "text-gray-400" : "text-gray-600"
+                        }`}
+                      >
+                        {item}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Contact */}
+              <div>
+                <h4 className="font-bold mb-6">Contact</h4>
+                <div
+                  className={`text-sm space-y-4 ${
+                    isDarkMode ? "text-gray-400" : "text-gray-600"
+                  }`}
+                >
+                  <p>imagination@satviksgroup.tech</p>
+                  <p>New Delhi, India</p>
                   <Link
-                    href="/apply"
-                    className="block w-full py-3 rounded-lg bg-linear-to-r from-purple-600 to-blue-500 text-white font-semibold text-center hover:from-purple-700 hover:to-blue-600 transition-all duration-300 hover:scale-105"
+                    href="/contact"
+                    className="inline-block px-4 py-2 rounded-lg border border-purple-500/30 text-purple-500 hover:bg-purple-500 hover:text-white transition-all text-xs font-bold"
                   >
-                    Submit Concept Proposal
+                    Send Signal
                   </Link>
-                  <Link
-                    href="/collaborate"
-                    className={`block w-full py-3 rounded-lg border text-center font-semibold ${
-                      isDarkMode
-                        ? "border-gray-700 hover:border-gray-500 text-gray-300 hover:text-white"
-                        : "border-gray-300 hover:border-gray-400 text-gray-700 hover:text-gray-900"
-                    } transition-colors`}
-                  >
-                    Request Collaboration
-                  </Link>
-                  <div
-                    className={`mt-4 ${
-                      isDarkMode ? "text-gray-400" : "text-gray-600"
-                    }`}
-                  >
-                    <p>Email: imagination@satviksgroup.tech</p>
-                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Divider */}
-            <hr
-              className={`mb-8 ${
-                isDarkMode ? "border-gray-800" : "border-gray-200"
+            <div
+              className={`pt-8 border-t flex flex-col md:flex-row items-center justify-between gap-4 ${
+                isDarkMode ? "border-gray-900" : "border-gray-200"
               }`}
-            />
-
-            {/* Footer Bottom */}
-            <div className="text-center">
+            >
               <p
-                className={`mb-4 ${
-                  isDarkMode ? "text-gray-400" : "text-gray-600"
+                className={`text-xs ${
+                  isDarkMode ? "text-gray-600" : "text-gray-400"
                 }`}
               >
-                © {new Date().getFullYear()} {"Satvik's Group"} • Imaginary
-                Technology
+                © {new Date().getFullYear()} Satvik&#39;s Group. All rights
+                reserved.
               </p>
-              <p
-                className={`text-sm mb-6 ${
-                  isDarkMode ? "text-gray-500" : "text-gray-500"
-                }`}
-              >
-                This institution exists purely in imagination. All concepts,
-                projects, and realms are fictional.
-              </p>
-              <div className="flex gap-2 justify-center">
-                <span
-                  className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                    isDarkMode
-                      ? "bg-gray-800 text-gray-300"
-                      : "bg-gray-200 text-gray-700"
-                  }`}
-                >
-                  Conceptual
+              <div className="flex gap-2">
+                <span className="px-2 py-1 rounded text-[10px] font-bold bg-purple-500/10 text-purple-500">
+                  CONCEPTUAL
                 </span>
-                <span
-                  className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                    isDarkMode
-                      ? "bg-gray-800 text-gray-300"
-                      : "bg-gray-200 text-gray-700"
-                  }`}
-                >
-                  Imaginary
-                </span>
-                <span
-                  className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                    isDarkMode
-                      ? "bg-gray-800 text-gray-300"
-                      : "bg-gray-200 text-gray-700"
-                  }`}
-                >
-                  Unreal
+                <span className="px-2 py-1 rounded text-[10px] font-bold bg-blue-500/10 text-blue-500">
+                  IMAGINARY
                 </span>
               </div>
             </div>
           </div>
         </footer>
-
-        {/* Custom animations */}
-        <style jsx global>{`
-          @keyframes float {
-            0%,
-            100% {
-              transform: translateY(0px);
-            }
-            50% {
-              transform: translateY(-10px);
-            }
-          }
-
-          @keyframes glow {
-            0%,
-            100% {
-              opacity: 1;
-            }
-            50% {
-              opacity: 0.7;
-            }
-          }
-
-          .animate-float {
-            animation: float 3s ease-in-out infinite;
-          }
-
-          .animate-glow {
-            animation: glow 2s ease-in-out infinite;
-          }
-        `}</style>
       </div>
     </>
   );

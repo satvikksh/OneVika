@@ -3,12 +3,29 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
-import { Heart, MessageCircle, Sparkles, Trash2, X, User, Send, Loader2, MoreVertical, Bookmark, Share2, ChevronLeft, ChevronRight, Home, Volume2, VolumeX, Play, Pause } from "lucide-react";
-import CreatePost from "./CreatePost";
+import {
+  Heart,
+  MessageCircle,
+  Sparkles,
+  Trash2,
+  X,
+  User,
+  Send,
+  Bookmark,
+  Share2,
+  Home,
+  Volume2,
+  VolumeX,
+  Play,
+  Pause,
+  MoreVertical,
+  Flag,
+} from "lucide-react";
 import { useTheme } from "../theme-provider";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
+// --- TYPES ---
 interface UserType {
   _id: string;
   name: string;
@@ -51,7 +68,13 @@ interface CommentsModalProps {
   onCommentDeleted: (commentId: string) => void;
 }
 
-function LikeUserModal({ isOpen, onClose, postId, likeCount }: LikeUserModalProps) {
+// --- LIKE USER MODAL COMPONENT ---
+function LikeUserModal({
+  isOpen,
+  onClose,
+  postId,
+  likeCount,
+}: LikeUserModalProps) {
   const [users, setUsers] = useState<UserType[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -94,7 +117,7 @@ function LikeUserModal({ isOpen, onClose, postId, likeCount }: LikeUserModalProp
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
       <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -135,19 +158,24 @@ function LikeUserModal({ isOpen, onClose, postId, likeCount }: LikeUserModalProp
             <div className="text-center py-8">
               <Heart className="w-12 h-12 text-gray-300 dark:text-gray-700 mx-auto mb-3" />
               <p className="text-gray-500">No likes yet</p>
-              <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">Be the first to like this post!</p>
+              <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
+                Be the first to like this post!
+              </p>
             </div>
           ) : (
             <div className="space-y-3">
               {users.map((user) => (
-                <div key={user._id} className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                <div
+                  key={user._id}
+                  className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                >
                   <button
                     onClick={() => handleUserAvatarClick(user._id)}
                     className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 flex items-center justify-center overflow-hidden cursor-pointer hover:opacity-90 transition-opacity"
                   >
                     {user.image || user.avatar ? (
                       <Image
-                        src={user.image || user.avatar || ''}
+                        src={user.image || user.avatar || ""}
                         alt={user.name}
                         width={40}
                         height={40}
@@ -179,14 +207,15 @@ function LikeUserModal({ isOpen, onClose, postId, likeCount }: LikeUserModalProp
   );
 }
 
-function CommentsModal({ 
-  isOpen, 
-  onClose, 
-  postId, 
+// --- COMMENTS MODAL COMPONENT ---
+function CommentsModal({
+  isOpen,
+  onClose,
+  postId,
   postUserId,
-  comments, 
-  onCommentAdded, 
-  onCommentDeleted 
+  comments,
+  onCommentAdded,
+  onCommentDeleted,
 }: CommentsModalProps) {
   const { data: session } = useSession();
   const router = useRouter();
@@ -214,14 +243,15 @@ function CommentsModal({
         const newCommentData = await response.json();
         onCommentAdded(newCommentData);
         setNewComment("");
-        
+
         if (commentInputRef.current) {
           commentInputRef.current.style.height = "auto";
         }
 
         setTimeout(() => {
           if (commentsContainerRef.current) {
-            commentsContainerRef.current.scrollTop = commentsContainerRef.current.scrollHeight;
+            commentsContainerRef.current.scrollTop =
+              commentsContainerRef.current.scrollHeight;
           }
         }, 100);
       }
@@ -234,9 +264,12 @@ function CommentsModal({
 
   const handleDeleteComment = async (commentId: string) => {
     try {
-      const response = await fetch(`/api/posts/${postId}/comments?commentId=${commentId}`, {
-        method: "DELETE",
-      });
+      const response = await fetch(
+        `/api/posts/${postId}/comments?commentId=${commentId}`,
+        {
+          method: "DELETE",
+        }
+      );
 
       if (response.ok) {
         onCommentDeleted(commentId);
@@ -262,7 +295,7 @@ function CommentsModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
       <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -283,15 +316,19 @@ function CommentsModal({
           </button>
         </div>
 
-        <div 
+        <div
           ref={commentsContainerRef}
           className="flex-1 overflow-y-auto p-4 min-h-[200px]"
         >
           {comments.length === 0 ? (
             <div className="text-center py-8">
               <MessageCircle className="w-12 h-12 text-gray-300 dark:text-gray-700 mx-auto mb-3" />
-              <p className="text-gray-500 dark:text-gray-400">No comments yet</p>
-              <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">Be the first to comment!</p>
+              <p className="text-gray-500 dark:text-gray-400">
+                No comments yet
+              </p>
+              <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
+                Be the first to comment!
+              </p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -303,7 +340,9 @@ function CommentsModal({
                   >
                     {comment.userId?.image || comment.userId?.avatar ? (
                       <Image
-                        src={comment.userId.image || comment.userId.avatar || ''}
+                        src={
+                          comment.userId.image || comment.userId.avatar || ""
+                        }
                         alt={comment.userId.name}
                         width={40}
                         height={40}
@@ -319,14 +358,19 @@ function CommentsModal({
                     <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-3">
                       <div className="flex items-center justify-between mb-2">
                         <div>
-                          <p className="font-semibold text-sm">{comment.userId?.name}</p>
+                          <p className="font-semibold text-sm">
+                            {comment.userId?.name}
+                          </p>
                           <p className="text-xs text-gray-500">
-                            {new Date(comment.createdAt).toLocaleDateString("en-US", {
-                              month: "short",
-                              day: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
+                            {new Date(comment.createdAt).toLocaleDateString(
+                              "en-US",
+                              {
+                                month: "short",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              }
+                            )}
                           </p>
                         </div>
                         {session?.user?.id === comment.userId?._id && (
@@ -339,7 +383,9 @@ function CommentsModal({
                           </button>
                         )}
                       </div>
-                      <p className="text-gray-700 dark:text-gray-300 break-words">{comment.content}</p>
+                      <p className="text-gray-700 dark:text-gray-300 break-words">
+                        {comment.content}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -351,13 +397,15 @@ function CommentsModal({
         <div className="p-4 border-t dark:border-gray-700">
           <div className="flex gap-3">
             <button
-              onClick={() => session?.user?.id && handleUserAvatarClick(session.user.id)}
+              onClick={() =>
+                session?.user?.id && handleUserAvatarClick(session.user.id)
+              }
               className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 flex items-center justify-center overflow-hidden flex-shrink-0 cursor-pointer hover:opacity-90 transition-opacity"
             >
               {session?.user?.image || session?.user?.avatar ? (
                 <Image
-                  src={session.user.image || session.user.avatar || ''}
-                  alt={session.user.name || ''}
+                  src={session.user.image || session.user.avatar || ""}
+                  alt={session.user.name || ""}
                   width={40}
                   height={40}
                   className="rounded-full w-full h-full object-cover"
@@ -395,6 +443,7 @@ function CommentsModal({
   );
 }
 
+// --- MAIN FEED PAGE ---
 export default function FeedPage() {
   const { theme } = useTheme();
   const isDark = theme === "dark";
@@ -408,14 +457,18 @@ export default function FeedPage() {
   const [page, setPage] = useState(1);
   const [initialLoad, setInitialLoad] = useState(true);
   const [currentPostIndex, setCurrentPostIndex] = useState(0);
-  const [showHeader, setShowHeader] = useState(true);
-  const [showCreatePost, setShowCreatePost] = useState(false);
-  
+
+  // NAVBAR & OPTIONS VISIBILITY STATE
+  const [isNavbarVisible, setIsNavbarVisible] = useState(true);
+  const [showOptions, setShowOptions] = useState(false);
+
   // Video controls
-  const [isVideoPlaying, setIsVideoPlaying] = useState<Record<string, boolean>>({});
+  const [isVideoPlaying, setIsVideoPlaying] = useState<Record<string, boolean>>(
+    {}
+  );
   const [isVideoMuted, setIsVideoMuted] = useState<Record<string, boolean>>({});
   const [doubleTapLike, setDoubleTapLike] = useState<string | null>(null);
-  
+
   const [likeModal, setLikeModal] = useState<{
     isOpen: boolean;
     postId: string;
@@ -436,7 +489,7 @@ export default function FeedPage() {
     postUserId: "",
     comments: [],
   });
-  
+
   const feedContainerRef = useRef<HTMLDivElement>(null);
   const videoRefs = useRef<Record<string, HTMLVideoElement | null>>({});
   const lastTapRef = useRef<number>(0);
@@ -447,7 +500,7 @@ export default function FeedPage() {
   const scrollingRef = useRef(false);
 
   /* ============================
-      🔐 REDIRECT (SIDE EFFECT)
+       🔐 REDIRECT (SIDE EFFECT)
   ============================ */
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -456,15 +509,17 @@ export default function FeedPage() {
   }, [status, router]);
 
   /* ============================
-      CHECK IF MEDIA IS VIDEO (FIXED)
+       CHECK IF MEDIA IS VIDEO
   ============================ */
   const isVideo = (url: string | undefined | null): boolean => {
     if (!url) return false;
-    return url.endsWith(".mp4") || url.endsWith(".webm") || url.endsWith(".mov");
+    return (
+      url.endsWith(".mp4") || url.endsWith(".webm") || url.endsWith(".mov")
+    );
   };
 
   /* ============================
-      SHUFFLE ARRAY FUNCTION
+       SHUFFLE ARRAY FUNCTION
   ============================ */
   const shuffleArray = <T,>(array: T[]): T[] => {
     const shuffled = [...array];
@@ -476,93 +531,112 @@ export default function FeedPage() {
   };
 
   /* ============================
-      FETCH POSTS WITH PAGINATION
+       FETCH POSTS WITH PAGINATION
   ============================ */
-  const fetchPosts = useCallback(async (pageNum: number, isInitialLoad = false) => {
-    if (!session?.user?.id || (loadingPosts && isInitialLoad) || (loadingMore && !isInitialLoad)) return;
-
-    if (isInitialLoad) {
-      setLoadingPosts(true);
-    } else {
-      setLoadingMore(true);
-    }
-
-    try {
-      const response = await fetch(`/api/posts?page=${pageNum}&limit=10`);
-      if (!response.ok) throw new Error("Failed to fetch posts");
-      
-      const data = await response.json();
-      
-      if (data.length === 0) {
-        setHasMore(false);
+  const fetchPosts = useCallback(
+    async (pageNum: number, isInitialLoad = false) => {
+      if (
+        !session?.user?.id ||
+        (loadingPosts && isInitialLoad) ||
+        (loadingMore && !isInitialLoad)
+      )
         return;
-      }
-
-      const postsWithComments = await Promise.all(
-        data.map(async (post: PostType) => {
-          try {
-            const commentsRes = await fetch(`/api/posts/${post._id}/comments`);
-            if (commentsRes.ok) {
-              const comments = await commentsRes.json();
-              return { ...post, comments: comments || [] };
-            }
-            return { ...post, comments: [] };
-          } catch (error) {
-            console.error(`Error fetching comments for post ${post._id}:`, error);
-            return { ...post, comments: [] };
-          }
-        })
-      );
 
       if (isInitialLoad) {
-        const shuffledPosts = shuffleArray(postsWithComments);
-        setPosts(shuffledPosts);
-        setInitialLoad(false);
-        
-        // Initialize video states for all posts
-        const playingStates: Record<string, boolean> = {};
-        const muteStates: Record<string, boolean> = {};
-        shuffledPosts.forEach(post => {
-          playingStates[post._id] = true;
-          muteStates[post._id] = true;
-        });
-        setIsVideoPlaying(playingStates);
-        setIsVideoMuted(muteStates);
+        setLoadingPosts(true);
       } else {
-        setPosts(prev => {
-          const newPosts = postsWithComments.filter(
-            newPost => !prev.some(existingPost => existingPost._id === newPost._id)
-          );
-          
-          // Initialize video states for new posts
-          const newPlayingStates: Record<string, boolean> = {};
-          const newMuteStates: Record<string, boolean> = {};
-          newPosts.forEach(post => {
-            newPlayingStates[post._id] = true;
-            newMuteStates[post._id] = true;
-          });
-          
-          setIsVideoPlaying(prevStates => ({ ...prevStates, ...newPlayingStates }));
-          setIsVideoMuted(prevStates => ({ ...prevStates, ...newMuteStates }));
-          
-          return [...prev, ...newPosts];
-        });
+        setLoadingMore(true);
       }
 
-      if (data.length < 10) {
+      try {
+        const response = await fetch(`/api/posts?page=${pageNum}&limit=10`);
+        if (!response.ok) throw new Error("Failed to fetch posts");
+
+        const data = await response.json();
+
+        if (data.length === 0) {
+          setHasMore(false);
+          return;
+        }
+
+        const postsWithComments = await Promise.all(
+          data.map(async (post: PostType) => {
+            try {
+              const commentsRes = await fetch(
+                `/api/posts/${post._id}/comments`
+              );
+              if (commentsRes.ok) {
+                const comments = await commentsRes.json();
+                return { ...post, comments: comments || [] };
+              }
+              return { ...post, comments: [] };
+            } catch (error) {
+              console.error(
+                `Error fetching comments for post ${post._id}:`,
+                error
+              );
+              return { ...post, comments: [] };
+            }
+          })
+        );
+
+        if (isInitialLoad) {
+          const shuffledPosts = shuffleArray(postsWithComments);
+          setPosts(shuffledPosts);
+          setInitialLoad(false);
+
+          // Initialize video states for all posts
+          const playingStates: Record<string, boolean> = {};
+          const muteStates: Record<string, boolean> = {};
+          shuffledPosts.forEach((post) => {
+            playingStates[post._id] = true;
+            muteStates[post._id] = false; // Default UNMUTED
+          });
+          setIsVideoPlaying(playingStates);
+          setIsVideoMuted(muteStates);
+        } else {
+          setPosts((prev) => {
+            const newPosts = postsWithComments.filter(
+              (newPost) =>
+                !prev.some((existingPost) => existingPost._id === newPost._id)
+            );
+
+            const newPlayingStates: Record<string, boolean> = {};
+            const newMuteStates: Record<string, boolean> = {};
+            newPosts.forEach((post) => {
+              newPlayingStates[post._id] = true;
+              newMuteStates[post._id] = false; // Default UNMUTED
+            });
+
+            setIsVideoPlaying((prevStates) => ({
+              ...prevStates,
+              ...newPlayingStates,
+            }));
+            setIsVideoMuted((prevStates) => ({
+              ...prevStates,
+              ...newMuteStates,
+            }));
+
+            return [...prev, ...newPosts];
+          });
+        }
+
+        if (data.length < 10) {
+          setHasMore(false);
+        }
+      } catch (error) {
+        console.error("Error fetching posts:", error);
         setHasMore(false);
+      } finally {
+        setLoadingPosts(false);
+        setLoadingMore(false);
       }
-    } catch (error) {
-      console.error("Error fetching posts:", error);
-      setHasMore(false);
-    } finally {
-      setLoadingPosts(false);
-      setLoadingMore(false);
-    }
-  }, [session?.user?.id, loadingPosts, loadingMore]);
+    },
+    [session?.user?.id, loadingPosts, loadingMore]
+  );
 
   /* ============================
-      INITIAL LOAD
+       INITIAL LOAD
   ============================ */
   useEffect(() => {
     if (status === "authenticated" && initialLoad) {
@@ -571,7 +645,16 @@ export default function FeedPage() {
   }, [status, initialLoad, fetchPosts]);
 
   /* ============================
-      INFINITE SCROLL OBSERVER
+       FORCE NAVBAR SHOW ON TOP (INDEX 0)
+  ============================ */
+  useEffect(() => {
+    if (currentPostIndex === 0) {
+      setIsNavbarVisible(true);
+    }
+  }, [currentPostIndex]);
+
+  /* ============================
+       INFINITE SCROLL OBSERVER
   ============================ */
   useEffect(() => {
     if (!hasMore || loadingMore || posts.length === 0) return;
@@ -599,284 +682,338 @@ export default function FeedPage() {
   }, [hasMore, loadingMore, page, fetchPosts, posts.length]);
 
   /* ============================
-      HANDLE WHEEL SCROLL
+       HANDLE WHEEL SCROLL
   ============================ */
-  const handleWheel = useCallback((e: WheelEvent) => {
-    if (scrollingRef.current || posts.length === 0) return;
+  const handleWheel = useCallback(
+    (e: WheelEvent) => {
+      e.preventDefault();
 
-    const delta = e.deltaY;
-    const currentTime = Date.now();
+      if (scrollingRef.current || posts.length === 0) return;
 
-    // Prevent rapid scrolling
-    if (currentTime - lastScrollY.current < 500) return;
-    
-    if (delta > 50 && currentPostIndex < posts.length - 1) {
-      // Scroll down to next post
-      scrollingRef.current = true;
-      
-      // Pause current video
-      const currentPost = posts[currentPostIndex];
-      // FIX: safe access to images
-      if (currentPost && isVideo(currentPost.images?.[0])) {
-        const video = videoRefs.current[currentPost._id];
-        if (video) {
-          video.pause();
+      const delta = e.deltaY;
+      const currentTime = Date.now();
+
+      const isTouchpadScroll = Math.abs(delta) < 5;
+      if (isTouchpadScroll) return;
+
+      if (currentTime - lastScrollY.current < 500) return;
+
+      if (delta > 50 && currentPostIndex < posts.length - 1) {
+        // SCROLL DOWN -> HIDE NAVBAR & CLOSE MENU
+        scrollingRef.current = true;
+        setIsNavbarVisible(false);
+        setShowOptions(false);
+
+        const currentPost = posts[currentPostIndex];
+        if (currentPost && isVideo(currentPost.images?.[0])) {
+          const video = videoRefs.current[currentPost._id];
+          if (video) {
+            video.pause();
+            setIsVideoPlaying((prev) => ({
+              ...prev,
+              [currentPost._id]: false,
+            }));
+          }
         }
-      }
-      
-      setCurrentPostIndex(prev => prev + 1);
-      lastScrollY.current = currentTime;
-      
-      // Hide header after scrolling
-      setShowHeader(false);
-      
-      setTimeout(() => {
-        scrollingRef.current = false;
-      }, 300);
-    } else if (delta < -50 && currentPostIndex > 0) {
-      // Scroll up to previous post
-      scrollingRef.current = true;
-      
-      // Pause current video
-      const currentPost = posts[currentPostIndex];
-      // FIX: safe access to images
-      if (currentPost && isVideo(currentPost.images?.[0])) {
-        const video = videoRefs.current[currentPost._id];
-        if (video) {
-          video.pause();
+
+        setCurrentPostIndex((prev) => prev + 1);
+        lastScrollY.current = currentTime;
+
+        setTimeout(() => {
+          scrollingRef.current = false;
+        }, 300);
+      } else if (delta < -50 && currentPostIndex > 0) {
+        // SCROLL UP -> SHOW NAVBAR & CLOSE MENU
+        scrollingRef.current = true;
+        setIsNavbarVisible(true);
+        setShowOptions(false);
+
+        const currentPost = posts[currentPostIndex];
+        if (currentPost && isVideo(currentPost.images?.[0])) {
+          const video = videoRefs.current[currentPost._id];
+          if (video) {
+            video.pause();
+            setIsVideoPlaying((prev) => ({
+              ...prev,
+              [currentPost._id]: false,
+            }));
+          }
         }
+
+        setCurrentPostIndex((prev) => prev - 1);
+        lastScrollY.current = currentTime;
+
+        setTimeout(() => {
+          scrollingRef.current = false;
+        }, 300);
       }
-      
-      setCurrentPostIndex(prev => prev - 1);
-      lastScrollY.current = currentTime;
-      
-      setTimeout(() => {
-        scrollingRef.current = false;
-      }, 300);
-    }
-  }, [currentPostIndex, posts.length]);
+    },
+    [currentPostIndex, posts.length]
+  );
 
   /* ============================
-      HANDLE TOUCH SCROLL (Mobile)
+       HANDLE TOUCH SCROLL (Mobile)
   ============================ */
   const handleTouchStart = useCallback((e: TouchEvent) => {
     const touchY = e.touches[0].clientY;
     lastScrollY.current = touchY;
   }, []);
 
-  const handleTouchEnd = useCallback((e: TouchEvent) => {
-    if (scrollingRef.current || posts.length === 0) return;
+  const handleTouchEnd = useCallback(
+    (e: TouchEvent) => {
+      // --- FIX START: Check for interactive elements ---
+      const target = e.target as HTMLElement;
+      // If the user touched a button, link, or input, do NOT prevent default behavior.
+      // This allows the "click" event to fire.
+      const isInteractive =
+        target.closest("button") ||
+        target.closest("a") ||
+        target.closest("textarea") ||
+        target.closest("input");
 
-    const touchY = e.changedTouches[0].clientY;
-    const diff = lastScrollY.current - touchY;
-    const currentTime = Date.now();
-
-    // Prevent rapid scrolling
-    if (currentTime - lastScrollY.current < 500) return;
-    
-    if (diff > 100 && currentPostIndex < posts.length - 1) {
-      // Swipe down - next post
-      scrollingRef.current = true;
-      
-      // Pause current video
-      const currentPost = posts[currentPostIndex];
-      // FIX: safe access to images
-      if (currentPost && isVideo(currentPost.images?.[0])) {
-        const video = videoRefs.current[currentPost._id];
-        if (video) {
-          video.pause();
-        }
+      if (isInteractive) {
+        return;
       }
-      
-      setCurrentPostIndex(prev => prev + 1);
-      lastScrollY.current = currentTime;
-      
-      // Hide header after scrolling
-      setShowHeader(false);
-      
-      setTimeout(() => {
-        scrollingRef.current = false;
-      }, 300);
-    } else if (diff < -100 && currentPostIndex > 0) {
-      // Swipe up - previous post
-      scrollingRef.current = true;
-      
-      // Pause current video
-      const currentPost = posts[currentPostIndex];
-      // FIX: safe access to images
-      if (currentPost && isVideo(currentPost.images?.[0])) {
-        const video = videoRefs.current[currentPost._id];
-        if (video) {
-          video.pause();
-        }
-      }
-      
-      setCurrentPostIndex(prev => prev - 1);
-      lastScrollY.current = currentTime;
-      
-      setTimeout(() => {
-        scrollingRef.current = false;
-      }, 300);
-    }
-  }, [currentPostIndex, posts.length]);
+      // --- FIX END ---
 
+      e.preventDefault();
+
+      if (scrollingRef.current || posts.length === 0) return;
+
+      const touchY = e.changedTouches[0].clientY;
+      const diff = lastScrollY.current - touchY;
+      const currentTime = Date.now();
+
+      if (currentTime - lastScrollY.current < 500) return;
+
+      if (diff > 100 && currentPostIndex < posts.length - 1) {
+        // SWIPE DOWN (Next Post)
+        scrollingRef.current = true;
+        setIsNavbarVisible(false);
+        setShowOptions(false);
+
+        const currentPost = posts[currentPostIndex];
+        if (currentPost && isVideo(currentPost.images?.[0])) {
+          const video = videoRefs.current[currentPost._id];
+          if (video) {
+            video.pause();
+            setIsVideoPlaying((prev) => ({
+              ...prev,
+              [currentPost._id]: false,
+            }));
+          }
+        }
+
+        setCurrentPostIndex((prev) => prev + 1);
+        lastScrollY.current = currentTime;
+
+        setTimeout(() => {
+          scrollingRef.current = false;
+        }, 300);
+      } else if (diff < -100 && currentPostIndex > 0) {
+        // SWIPE UP (Prev Post)
+        scrollingRef.current = true;
+        setIsNavbarVisible(true);
+        setShowOptions(false);
+
+        const currentPost = posts[currentPostIndex];
+        if (currentPost && isVideo(currentPost.images?.[0])) {
+          const video = videoRefs.current[currentPost._id];
+          if (video) {
+            video.pause();
+            setIsVideoPlaying((prev) => ({
+              ...prev,
+              [currentPost._id]: false,
+            }));
+          }
+        }
+
+        setCurrentPostIndex((prev) => prev - 1);
+        lastScrollY.current = currentTime;
+
+        setTimeout(() => {
+          scrollingRef.current = false;
+        }, 300);
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    },
+    [currentPostIndex, posts.length]
+  );
   /* ============================
-      ADD EVENT LISTENERS
+       ADD EVENT LISTENERS
   ============================ */
   useEffect(() => {
     const container = feedContainerRef.current;
     if (!container) return;
 
-    container.addEventListener('wheel', handleWheel, { passive: false });
-    container.addEventListener('touchstart', handleTouchStart, { passive: true });
-    container.addEventListener('touchend', handleTouchEnd, { passive: true });
+    container.addEventListener("wheel", handleWheel, { passive: false });
+    container.addEventListener("touchstart", handleTouchStart, {
+      passive: true,
+    });
+    container.addEventListener("touchend", handleTouchEnd, { passive: false });
 
     return () => {
-      container.removeEventListener('wheel', handleWheel);
-      container.removeEventListener('touchstart', handleTouchStart);
-      container.removeEventListener('touchend', handleTouchEnd);
+      container.removeEventListener("wheel", handleWheel);
+      container.removeEventListener("touchstart", handleTouchStart);
+      container.removeEventListener("touchend", handleTouchEnd);
     };
   }, [handleWheel, handleTouchStart, handleTouchEnd]);
 
+  // --- FIX: toggleLike MOVED UP HERE (Before it is used in callbacks) ---
   /* ============================
-      HANDLE SINGLE TAP (Play/Pause)
+       LIKE FUNCTIONALITY
   ============================ */
-  const handleSingleTap = (postId: string, isVideo: boolean) => {
+  const toggleLike = useCallback(
+    async (postId: string) => {
+      if (!session?.user?.id) return;
+
+      const post = posts.find((p) => p._id === postId);
+      if (!post) return;
+
+      const wasLiked = post.likes.includes(session.user.id);
+      const updatedLikes = wasLiked
+        ? post.likes.filter((uid: string) => uid !== session.user.id)
+        : [...post.likes, session.user.id];
+
+      setPosts((prev) =>
+        prev.map((p) => (p._id === postId ? { ...p, likes: updatedLikes } : p))
+      );
+
+      try {
+        await fetch(`/api/posts/${postId}/like`, { method: "POST" });
+      } catch (error) {
+        setPosts((prev) =>
+          prev.map((p) => (p._id === postId ? { ...p, likes: post.likes } : p))
+        );
+      }
+    },
+    [posts, session?.user?.id]
+  );
+
+  /* ============================
+       HANDLE SINGLE TAP (Play/Pause)
+  ============================ */
+  const handleSingleTap = useCallback((postId: string, isVideo: boolean) => {
     if (!isVideo) return;
-    
+
     const video = videoRefs.current[postId];
     if (video) {
       if (video.paused) {
         video.play();
-        setIsVideoPlaying(prev => ({ ...prev, [postId]: true }));
+        setIsVideoPlaying((prev) => ({ ...prev, [postId]: true }));
       } else {
         video.pause();
-        setIsVideoPlaying(prev => ({ ...prev, [postId]: false }));
+        setIsVideoPlaying((prev) => ({ ...prev, [postId]: false }));
       }
     }
-  };
+
+    setIsNavbarVisible(true);
+    setShowOptions(false);
+  }, []);
 
   /* ============================
-      HANDLE DOUBLE TAP (Like)
+       HANDLE DOUBLE TAP (Like)
   ============================ */
-  const handleDoubleTap = (postId: string) => {
-    toggleLike(postId);
-    setDoubleTapLike(postId);
-    setTimeout(() => setDoubleTapLike(null), 1000);
-  };
+  // --- FIX: Added toggleLike to dependency array ---
+  const handleDoubleTap = useCallback(
+    (postId: string) => {
+      toggleLike(postId);
+      setDoubleTapLike(postId);
+      setTimeout(() => setDoubleTapLike(null), 1000);
+      setIsNavbarVisible(true);
+    },
+    [toggleLike]
+  );
 
   /* ============================
-      HANDLE MEDIA TAP
+       HANDLE MEDIA CLICK (Desktop)
   ============================ */
-  const handleMediaTap = (e: React.MouseEvent | React.TouchEvent, postId: string, isVideo: boolean) => {
-    e.stopPropagation();
-    
-    const currentTime = new Date().getTime();
-    const timeDiff = currentTime - lastTapRef.current;
-    
-    if (tapTimeoutRef.current) {
-      clearTimeout(tapTimeoutRef.current);
-    }
-    
-    if (timeDiff < 300 && timeDiff > 0) {
-      // Double tap
-      handleDoubleTap(postId);
-    } else {
-      tapTimeoutRef.current = setTimeout(() => {
+  const handleMediaClick = useCallback(
+    (e: React.MouseEvent, postId: string, isVideo: boolean) => {
+      e.stopPropagation();
+      if (showOptions) {
+        setShowOptions(false);
+        return;
+      }
+
+      const currentTime = new Date().getTime();
+      const timeDiff = currentTime - lastTapRef.current;
+
+      if (timeDiff < 500 && timeDiff > 0) {
+        handleDoubleTap(postId);
+      } else {
         handleSingleTap(postId, isVideo);
-      }, 300);
-    }
-    
-    lastTapRef.current = currentTime;
-  };
+      }
+
+      lastTapRef.current = currentTime;
+    },
+    [handleSingleTap, handleDoubleTap, showOptions]
+  );
 
   /* ============================
-      TOGGLE VIDEO MUTE
+       HANDLE TOUCH TAP (Mobile)
   ============================ */
-  const toggleMute = (postId: string) => {
+  const handleMediaTap = useCallback(
+    (e: React.TouchEvent, postId: string, isVideo: boolean) => {
+      e.stopPropagation();
+      if (showOptions) {
+        setShowOptions(false);
+        return;
+      }
+
+      const currentTime = new Date().getTime();
+      const timeDiff = currentTime - lastTapRef.current;
+
+      if (tapTimeoutRef.current) {
+        clearTimeout(tapTimeoutRef.current);
+      }
+
+      if (timeDiff < 300 && timeDiff > 0) {
+        handleDoubleTap(postId);
+      } else {
+        tapTimeoutRef.current = setTimeout(() => {
+          handleSingleTap(postId, isVideo);
+        }, 300);
+      }
+
+      lastTapRef.current = currentTime;
+    },
+    [handleSingleTap, handleDoubleTap, showOptions]
+  );
+
+  /* ============================
+       TOGGLE VIDEO MUTE
+  ============================ */
+  const toggleMute = useCallback((postId: string) => {
     const video = videoRefs.current[postId];
     if (video) {
       video.muted = !video.muted;
-      setIsVideoMuted(prev => ({ ...prev, [postId]: !prev[postId] }));
+      setIsVideoMuted((prev) => ({ ...prev, [postId]: !prev[postId] }));
     }
-  };
-
-  /* ============================
-      HANDLE NEW POST CREATION
-  ============================ */
-  const handlePostCreated = (newPost: PostType) => {
-    setPosts(prev => {
-      if (prev.some(post => post._id === newPost._id)) {
-        return prev;
-      }
-      // Initialize video states for new post
-      setIsVideoPlaying(prevStates => ({ ...prevStates, [newPost._id]: true }));
-      setIsVideoMuted(prevStates => ({ ...prevStates, [newPost._id]: true }));
-      
-      return [newPost, ...prev];
-    });
-    setShowCreatePost(false);
-    setCurrentPostIndex(0);
-  };
-
-  /* ============================
-      LIKE FUNCTIONALITY
-  ============================ */
-  const toggleLike = async (postId: string) => {
-    if (!session?.user?.id) return;
-
-    const post = posts.find((p) => p._id === postId);
-    if (!post) return;
-
-    const wasLiked = post.likes.includes(session.user.id);
-    const updatedLikes = wasLiked
-      ? post.likes.filter((uid: string) => uid !== session.user.id)
-      : [...post.likes, session.user.id];
-
-    setPosts((prev) =>
-      prev.map((p) =>
-        p._id === postId ? { ...p, likes: updatedLikes } : p
-      )
-    );
-
-    try {
-      await fetch(`/api/posts/${postId}/like`, { method: "POST" });
-    } catch (error) {
-      setPosts((prev) =>
-        prev.map((p) =>
-          p._id === postId ? { ...p, likes: post.likes } : p
-        )
-      );
-    }
-  };
+    setIsNavbarVisible(true);
+  }, []);
 
   const openLikeModal = (postId: string, likeCount: number) => {
-    setLikeModal({
-      isOpen: true,
-      postId,
-      likeCount,
-    });
+    setLikeModal({ isOpen: true, postId, likeCount });
+    setIsNavbarVisible(true);
   };
 
   const closeLikeModal = () => {
-    setLikeModal({
-      isOpen: false,
-      postId: "",
-      likeCount: 0,
-    });
+    setLikeModal({ isOpen: false, postId: "", likeCount: 0 });
   };
 
-  const openCommentsModal = async (postId: string, postUserId: string, currentComments: CommentType[] = []) => {
+  const openCommentsModal = async (
+    postId: string,
+    postUserId: string,
+    currentComments: CommentType[] = []
+  ) => {
     try {
       const response = await fetch(`/api/posts/${postId}/comments`);
       let comments = currentComments;
-      
+
       if (response.ok) {
         comments = await response.json();
-      } else {
-        console.error("Failed to fetch comments, using cached comments");
       }
-
       setCommentsModal({
         isOpen: true,
         postId,
@@ -884,7 +1021,6 @@ export default function FeedPage() {
         comments: comments || [],
       });
     } catch (error) {
-      console.error("Error fetching comments for modal:", error);
       setCommentsModal({
         isOpen: true,
         postId,
@@ -892,6 +1028,7 @@ export default function FeedPage() {
         comments: currentComments || [],
       });
     }
+    setIsNavbarVisible(true);
   };
 
   const closeCommentsModal = () => {
@@ -911,11 +1048,10 @@ export default function FeedPage() {
           : post
       )
     );
-
     if (commentsModal.isOpen && commentsModal.postId === postId) {
       setCommentsModal((prev) => ({
         ...prev,
-        comments: [...prev.comments, newComment]
+        comments: [...prev.comments, newComment],
       }));
     }
   };
@@ -924,41 +1060,34 @@ export default function FeedPage() {
     setPosts((prev) =>
       prev.map((post) =>
         post._id === postId
-          ? { ...post, comments: post.comments.filter(c => c._id !== commentId) }
+          ? {
+              ...post,
+              comments: post.comments.filter((c) => c._id !== commentId),
+            }
           : post
       )
     );
-
     if (commentsModal.isOpen && commentsModal.postId === postId) {
       setCommentsModal((prev) => ({
         ...prev,
-        comments: prev.comments.filter(c => c._id !== commentId)
+        comments: prev.comments.filter((c) => c._id !== commentId),
       }));
     }
   };
 
-  /* ============================
-      DELETE POST
-  ============================ */
   const deletePost = async (id: string) => {
     if (!confirm("Are you sure you want to delete this post?")) return;
-
     const res = await fetch(`/api/posts/${id}`, { method: "DELETE" });
     if (!res.ok) return alert("Failed to delete post");
-
     setPosts((prev) => prev.filter((p) => p._id !== id));
+    setIsNavbarVisible(true);
+    setShowOptions(false);
   };
 
-  /* ============================
-      HANDLE USER AVATAR CLICK
-  ============================ */
   const handleUserAvatarClick = (userId: string) => {
     router.push(`/profile/${userId}`);
   };
 
-  /* ============================
-      RENDER GUARD (SAFE)
-  ============================ */
   if (status === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -973,85 +1102,13 @@ export default function FeedPage() {
 
   return (
     <>
-      <div 
+      <div
         ref={feedContainerRef}
-        className={`relative h-screen w-screen overflow-hidden ${isDark ? "dark bg-black" : "bg-black"}`}
+        className={`fixed inset-0 w-screen h-screen overflow-hidden ${
+          isDark ? "dark bg-black" : "bg-black"
+        }`}
       >
-        {/* FLOATING HEADER */}
-        <AnimatePresence>
-          {showHeader && (
-            <motion.div
-              initial={{ y: -100 }}
-              animate={{ y: 0 }}
-              exit={{ y: -100 }}
-              className="absolute top-0 left-0 right-0 z-30 p-4 bg-gradient-to-b from-black/80 via-black/50 to-transparent"
-            >
-              <div className="flex items-center justify-between">
-                <button
-                  onClick={() => setShowHeader(false)}
-                  className="p-2 text-white hover:bg-white/10 rounded-full transition-colors"
-                >
-                  <ChevronLeft size={24} />
-                </button>
-                <div className="text-center">
-                  <h1 className="text-xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
-                    Imagination Feed
-                  </h1>
-                  <p className="text-xs text-gray-300">
-                    {currentPostIndex + 1} of {posts.length}
-                  </p>
-                </div>
-                <button
-                  onClick={() => setShowCreatePost(true)}
-                  className="p-2 text-white hover:bg-white/10 rounded-full transition-colors"
-                >
-                  <Sparkles size={24} />
-                </button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* SHOW HEADER BUTTON */}
-        {!showHeader && (
-          <button
-            onClick={() => setShowHeader(true)}
-            className="absolute top-4 left-4 z-30 p-2 bg-black/50 backdrop-blur-sm text-white rounded-full hover:bg-black/70 transition-colors"
-          >
-            <Home size={20} />
-          </button>
-        )}
-
-        {/* NOTE: REMOVED LEFT AND RIGHT CHEVRON BUTTONS HERE */}
-
-        {/* CREATE POST MODAL */}
-        <AnimatePresence>
-          {showCreatePost && (
-            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden"
-              >
-                <div className="p-4 border-b dark:border-gray-800 flex items-center justify-between">
-                  <h2 className="text-xl font-bold">Create Post</h2>
-                  <button
-                    onClick={() => setShowCreatePost(false)}
-                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full"
-                  >
-                    <X size={20} />
-                  </button>
-                </div>
-                <div className="p-4">
-                  <CreatePost onPostCreated={handlePostCreated} />
-                </div>
-              </motion.div>
-            </div>
-          )}
-        </AnimatePresence>
-
-        {/* CURRENT POST */}
+        {/* CURRENT POST - FULL SCREEN */}
         <AnimatePresence mode="wait">
           {currentPost ? (
             <motion.div
@@ -1062,24 +1119,29 @@ export default function FeedPage() {
               transition={{ duration: 0.3 }}
               className="absolute inset-0 flex flex-col"
             >
-              {/* POST MEDIA */}
+              {/* POST MEDIA - FULL SCREEN */}
               {currentImage && (
-                <div 
+                <div
                   className="flex-1 relative"
-                  onClick={(e) => handleMediaTap(e, currentPost._id, isCurrentVideo)}
-                  onTouchEnd={(e) => handleMediaTap(e, currentPost._id, isCurrentVideo)}
+                  onClick={(e) =>
+                    handleMediaClick(e, currentPost._id, isCurrentVideo)
+                  }
+                  onTouchEnd={(e) =>
+                    handleMediaTap(e, currentPost._id, isCurrentVideo)
+                  }
                 >
                   {isCurrentVideo ? (
                     <>
                       <video
-                        ref={(el) => { videoRefs.current[currentPost._id] = el; }}
+                        ref={(el) => {
+                          videoRefs.current[currentPost._id] = el;
+                        }}
                         src={currentImage}
-                        className="absolute inset-0 w-full h-full object-contain bg-black"
+                        className="absolute inset-0 w-full h-full object-contain bg-black pointer-events-none"
                         autoPlay
                         loop
-                        // muted={isVideoMuted[currentPost._id]}
+                        muted={isVideoMuted[currentPost._id]}
                         playsInline
-                        onClick={(e) => e.stopPropagation()}
                       />
                       {/* Play/Pause Overlay */}
                       {!isVideoPlaying[currentPost._id] && (
@@ -1089,20 +1151,6 @@ export default function FeedPage() {
                           </div>
                         </div>
                       )}
-                      {/* Mute/Unmute Button */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleMute(currentPost._id);
-                        }}
-                        className="absolute top-4 right-4 p-2 bg-black/50 backdrop-blur-sm text-white rounded-full z-10 hover:bg-black/70 transition-colors"
-                      >
-                        {isVideoMuted[currentPost._id] ? (
-                          <Volume2 size={24} />
-                        ) : (
-                          <VolumeX size={24} />
-                        )}
-                      </button>
                     </>
                   ) : (
                     <Image
@@ -1113,7 +1161,7 @@ export default function FeedPage() {
                       priority
                     />
                   )}
-                  
+
                   {/* Double Tap Heart Animation */}
                   <AnimatePresence>
                     {doubleTapLike === currentPost._id && (
@@ -1124,35 +1172,43 @@ export default function FeedPage() {
                         transition={{ duration: 0.5 }}
                         className="absolute inset-0 flex items-center justify-center pointer-events-none"
                       >
-                        <Heart size={100} className="text-white fill-red-500" />
+                        {/* FIX: Changed className to text-transparent (removes border) and fill-red-500 */}
+                        <Heart
+                          size={100}
+                          className="text-transparent fill-red-600 drop-shadow-lg"
+                        />
                       </motion.div>
                     )}
                   </AnimatePresence>
                 </div>
               )}
 
-              {/* POST OVERLAY */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30 pointer-events-none" />
-
               {/* POST CONTENT OVERLAY */}
-              <div className="absolute bottom-0 left-0 right-0 p-6 pointer-events-none">
+              <div className="absolute bottom-2 left-0 right-0 px-4 pb-12 pointer-events-none">
                 <div className="pointer-events-auto">
                   {/* USER INFO */}
                   <div className="flex items-center gap-3 mb-4">
                     <button
-                      onClick={() => handleUserAvatarClick(currentPost.userId?._id)}
-                      className="w-12 h-12 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 flex items-center justify-center overflow-hidden cursor-pointer hover:opacity-90 transition-opacity pointer-events-auto"
+                      onClick={() =>
+                        handleUserAvatarClick(currentPost.userId?._id)
+                      }
+                      className="w-9 h-9 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 flex items-center justify-center overflow-hidden cursor-pointer hover:opacity-90 transition-opacity pointer-events-auto"
                     >
-                      {currentPost.userId?.image || currentPost.userId?.avatar ? (
+                      {currentPost.userId?.image ||
+                      currentPost.userId?.avatar ? (
                         <Image
-                          src={currentPost.userId.image || currentPost.userId.avatar || ''}
+                          src={
+                            currentPost.userId.image ||
+                            currentPost.userId.avatar ||
+                            ""
+                          }
                           alt={currentPost.userId.name}
-                          width={48}
-                          height={48}
+                          width={40}
+                          height={40}
                           className="rounded-full w-full h-full object-cover"
                         />
                       ) : (
-                        <span className="text-white font-bold text-xl">
+                        <span className="text-white font-bold text-base">
                           {currentPost.userId?.name?.[0]?.toUpperCase() || "U"}
                         </span>
                       )}
@@ -1160,25 +1216,21 @@ export default function FeedPage() {
                     <div className="flex-1">
                       <div className="flex items-center justify-between">
                         <div>
-                          <h3 className="font-bold text-white text-lg">{currentPost.userId?.name}</h3>
-                          <p className="text-sm text-gray-300">
-                            {new Date(currentPost.createdAt).toLocaleDateString("en-US", {
-                              month: "short",
-                              day: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
+                          <h3 className="font-bold text-white text-sm">
+                            {currentPost.userId?.name}
+                          </h3>
+                          <p className="text-xs text-gray-300">
+                            {new Date(currentPost.createdAt).toLocaleDateString(
+                              "en-US",
+                              {
+                                month: "short",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              }
+                            )}
                           </p>
                         </div>
-                        {currentPost.userId?._id === session?.user?.id && (
-                          <button
-                            onClick={() => deletePost(currentPost._id)}
-                            className="p-2 text-gray-300 hover:text-red-400 transition-colors pointer-events-auto"
-                            title="Delete post"
-                          >
-                            <Trash2 size={18} />
-                          </button>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -1186,83 +1238,61 @@ export default function FeedPage() {
                   {/* POST TEXT */}
                   {currentPost.content && (
                     <div className="mb-4">
-                      <p className="text-white text-lg leading-relaxed">
+                      <p className="text-white text-sm leading-relaxed">
                         {currentPost.content}
                       </p>
                     </div>
                   )}
-
-                  {/* ACTION BUTTONS WITH COUNTS */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-6">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => toggleLike(currentPost._id)}
-                          className="flex items-center gap-2 group pointer-events-auto"
-                        >
-                          {/* <Heart
-                            size={28}
-                            className={`transition-all duration-300 ${currentPost.likes.includes(session?.user?.id || "")
-                                ? "fill-red-500 text-red-500"
-                                : "text-white"
-                              }`}
-                          /> */}
-                        </button>
-                        {/* <button
-                          onClick={() => openLikeModal(currentPost._id, currentPost.likes.length)}
-                          className="text-white font-medium hover:underline pointer-events-auto"
-                        >
-                          {currentPost.likes.length} likes
-                        </button> */}
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        {/* <button
-                          onClick={() => openCommentsModal(currentPost._id, currentPost.userId?._id, currentPost.comments || [])}
-                          className="flex items-center gap-2 group pointer-events-auto"
-                        > */}
-                          {/* <MessageCircle
-                            size={28}
-                            className="text-white"
-                          /> */}
-                        {/* </button> */}
-                        <button
-                          onClick={() => openCommentsModal(currentPost._id, currentPost.userId?._id, currentPost.comments || [])}
-                          className="text-white font-medium hover:underline pointer-events-auto"
-                        >
-                          {/* {currentPost.comments?.length || 0} comments */}
-                        </button>
-                      </div>
-
-                      {/* <button className="p-2 text-white hover:opacity-80 transition-opacity pointer-events-auto">
-                        <Share2 size={24} />
-                      </button> */}
-                    </div>
-{/* 
-                    <button className="p-2 text-white hover:opacity-80 transition-opacity pointer-events-auto">
-                      <Bookmark size={24} />
-                    </button> */}
-                  </div>
                 </div>
               </div>
 
-              {/* RIGHT SIDE ACTION BAR (Instagram Style) */}
-              <div className="absolute right-4 bottom-1/3 flex flex-col gap-6">
+              {/* TOP NAVBAR CONTROLS */}
+              <AnimatePresence>
+                {isNavbarVisible && (
+                  <motion.div
+                    initial={{ y: -100, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    exit={{ y: -100, opacity: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className="absolute top-0 left-0 right-0 z-30 pointer-events-none"
+                  >
+                    {/* TOP RIGHT CONTROLS CONTAINER */}
+                    <div className="absolute top-4 right-4 flex flex-col items-end gap-4 pointer-events-auto">
+                      {/* DELETED: Create Button is removed here */}
+                    </div>
+
+                    {/* TOP LEFT HOME BUTTON */}
+                    {/* DELETED: Home button is removed */}
+
+                    {/* TOP CENTER TITLE */}
+                    <div className="absolute top-4 left-1/2 transform -translate-x-1/2 text-center pointer-events-auto">
+                      {/* DELETED: Title text is removed */}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+              {/* RIGHT SIDE ACTION BAR */}
+              <div className="absolute right-4 bottom-32 flex flex-col gap-5 z-50 pointer-events-none">
+                {/* Note: Your existing buttons inside here already correctly have pointer-events-auto */}
+
                 <div className="flex flex-col items-center">
                   <button
                     onClick={() => toggleLike(currentPost._id)}
                     className="flex flex-col items-center gap-1 pointer-events-auto"
                   >
                     <Heart
-                      size={32}
-                      className={`transition-all duration-300 ${currentPost.likes.includes(session?.user?.id || "")
+                      size={24}
+                      className={`transition-all duration-300 ${
+                        currentPost.likes.includes(session?.user?.id || "")
                           ? "fill-red-500 text-red-500"
                           : "text-white"
-                        }`}
+                      }`}
                     />
                   </button>
                   <button
-                    onClick={() => openLikeModal(currentPost._id, currentPost.likes.length)}
+                    onClick={() =>
+                      openLikeModal(currentPost._id, currentPost.likes.length)
+                    }
                     className="text-white text-xs font-medium hover:underline pointer-events-auto"
                   >
                     {currentPost.likes.length}
@@ -1271,13 +1301,25 @@ export default function FeedPage() {
 
                 <div className="flex flex-col items-center">
                   <button
-                    onClick={() => openCommentsModal(currentPost._id, currentPost.userId?._id, currentPost.comments || [])}
+                    onClick={() =>
+                      openCommentsModal(
+                        currentPost._id,
+                        currentPost.userId?._id,
+                        currentPost.comments || []
+                      )
+                    }
                     className="flex flex-col items-center gap-1 pointer-events-auto"
                   >
-                    <MessageCircle size={32} className="text-white" />
+                    <MessageCircle size={24} className="text-white" />
                   </button>
                   <button
-                    onClick={() => openCommentsModal(currentPost._id, currentPost.userId?._id, currentPost.comments || [])}
+                    onClick={() =>
+                      openCommentsModal(
+                        currentPost._id,
+                        currentPost.userId?._id,
+                        currentPost.comments || []
+                      )
+                    }
                     className="text-white text-xs font-medium hover:underline pointer-events-auto"
                   >
                     {currentPost.comments?.length || 0}
@@ -1285,18 +1327,84 @@ export default function FeedPage() {
                 </div>
 
                 <button className="flex flex-col items-center gap-1 pointer-events-auto">
-                  <Share2 size={32} className="text-white" />
+                  <Share2 size={24} className="text-white" />
                   <span className="text-white text-xs font-medium">Share</span>
                 </button>
 
                 <button className="flex flex-col items-center gap-1 pointer-events-auto">
-                  <Bookmark size={32} className="text-white" />
+                  <Bookmark size={24} className="text-white" />
                   <span className="text-white text-xs font-medium">Save</span>
                 </button>
+
+                {/* 3-DOTS MENU */}
+                <div className="relative pointer-events-auto">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowOptions(!showOptions);
+                    }}
+                    className="flex flex-col items-center gap-1"
+                  >
+                    <MoreVertical size={24} className="text-white" />
+                  </button>
+
+                  <AnimatePresence>
+                    {showOptions && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.9, x: 10 }}
+                        animate={{ opacity: 1, scale: 1, x: 0 }}
+                        exit={{ opacity: 0, scale: 0.9, x: 10 }}
+                        className="absolute right-12 bottom-0 w-40 bg-white dark:bg-gray-800 rounded-xl shadow-xl overflow-hidden z-[60] origin-bottom-right"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="flex flex-col py-1">
+                          {currentPost.userId?._id === session?.user?.id ? (
+                            <button
+                              onClick={() => deletePost(currentPost._id)}
+                              className="flex items-center gap-2 w-full px-4 py-3 text-left text-red-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-sm font-medium"
+                            >
+                              <Trash2 size={16} />
+                              Delete Post
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                alert("Report feature coming soon");
+                                setShowOptions(false);
+                              }}
+                              className="flex items-center gap-2 w-full px-4 py-3 text-left text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-sm font-medium"
+                            >
+                              <Flag size={16} />
+                              Report
+                            </button>
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* MUTE BUTTON */}
+                {isCurrentVideo && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleMute(currentPost._id);
+                    }}
+                    className="flex flex-col items-center gap-1 pointer-events-auto"
+                  >
+                    <div className="p-2 bg-black/50 backdrop-blur-sm rounded-full">
+                      {isVideoMuted[currentPost._id] ? (
+                        <VolumeX size={20} className="text-white" />
+                      ) : (
+                        <Volume2 size={20} className="text-white" />
+                      )}
+                    </div>
+                  </button>
+                )}
               </div>
             </motion.div>
           ) : (
-            /* LOADING OR NO POSTS */
             <div className="absolute inset-0 flex items-center justify-center">
               {loadingPosts ? (
                 <div className="text-center">
@@ -1306,16 +1414,12 @@ export default function FeedPage() {
               ) : posts.length === 0 ? (
                 <div className="text-center p-8">
                   <Sparkles className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-                  <h3 className="text-xl font-bold text-gray-300 mb-2">No posts yet</h3>
+                  <h3 className="text-xl font-bold text-gray-300 mb-2">
+                    No posts yet
+                  </h3>
                   <p className="text-gray-400 mb-6">
                     Be the first to share your imagination!
                   </p>
-                  <button
-                    onClick={() => setShowCreatePost(true)}
-                    className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-500 text-white rounded-full hover:opacity-90 transition-opacity"
-                  >
-                    Create Post
-                  </button>
                 </div>
               ) : null}
             </div>
@@ -1323,11 +1427,14 @@ export default function FeedPage() {
         </AnimatePresence>
 
         {/* LOAD MORE TRIGGER */}
-        {hasMore && !loadingMore && posts.length > 0 && currentPostIndex > posts.length - 3 && (
-          <div ref={loadMoreRef} className="h-1" />
-        )}
+        {hasMore &&
+          !loadingMore &&
+          posts.length > 0 &&
+          currentPostIndex > posts.length - 3 && (
+            <div ref={loadMoreRef} className="h-1" />
+          )}
 
-        {/* PROGRESS INDICATOR */}
+        {/* BOTTOM PROGRESS INDICATOR */}
         {posts.length > 0 && (
           <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-20">
             <div className="flex gap-2">
@@ -1335,10 +1442,11 @@ export default function FeedPage() {
                 <button
                   key={index}
                   onClick={() => setCurrentPostIndex(index)}
-                  className={`w-2 h-2 rounded-full transition-all ${index === currentPostIndex
+                  className={`w-2 h-2 rounded-full transition-all ${
+                    index === currentPostIndex
                       ? "bg-white w-6"
                       : "bg-gray-500 hover:bg-gray-300"
-                    }`}
+                  }`}
                 />
               ))}
             </div>
@@ -1346,7 +1454,6 @@ export default function FeedPage() {
         )}
       </div>
 
-      {/* LIKE USERS MODAL */}
       <LikeUserModal
         isOpen={likeModal.isOpen}
         onClose={closeLikeModal}
@@ -1354,15 +1461,18 @@ export default function FeedPage() {
         likeCount={likeModal.likeCount}
       />
 
-      {/* COMMENTS MODAL */}
       <CommentsModal
         isOpen={commentsModal.isOpen}
         onClose={closeCommentsModal}
         postId={commentsModal.postId}
         postUserId={commentsModal.postUserId}
         comments={commentsModal.comments}
-        onCommentAdded={(newComment) => handleCommentAdded(commentsModal.postId, newComment)}
-        onCommentDeleted={(commentId) => handleCommentDeleted(commentsModal.postId, commentId)}
+        onCommentAdded={(newComment) =>
+          handleCommentAdded(commentsModal.postId, newComment)
+        }
+        onCommentDeleted={(commentId) =>
+          handleCommentDeleted(commentsModal.postId, commentId)
+        }
       />
     </>
   );

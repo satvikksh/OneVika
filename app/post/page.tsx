@@ -13,11 +13,11 @@ interface FileWithPreview {
   type: 'image' | 'video';
 }
 
-export default function CreatePost({
-  onPostCreated,
-}: {
-  onPostCreated: (post: any) => void;
-}) {
+interface CreatePostProps {
+  onPostCreated?: (post: any) => void;
+}
+
+export default function CreatePost({ onPostCreated }: CreatePostProps) {
   const router = useRouter();
   const { data: session } = useSession();
 
@@ -68,7 +68,6 @@ export default function CreatePost({
     const formData = new FormData();
     formData.append("file", file);
     
-    // Check constraints locally first
     if (file.size > 50 * 1024 * 1024) throw new Error("File too large (>50MB)");
 
     const res = await fetch("/api/upload", { method: "POST", body: formData });
@@ -87,7 +86,6 @@ export default function CreatePost({
     try {
       const mediaUrls: string[] = [];
       
-      // Upload files sequentially
       for (const f of files) {
         try {
           const url = await uploadMedia(f.file);
@@ -106,14 +104,20 @@ export default function CreatePost({
       if (!res.ok) throw new Error("Failed to create post");
 
       const newPost = await res.json();
-      onPostCreated(newPost);
+
+      if (onPostCreated) {
+        onPostCreated(newPost);
+      }
       
-      // Reset
       setContent("");
       setFiles([]);
       setCurrentPreviewIndex(0);
       setSuccess("Posted successfully!");
-      setTimeout(() => setSuccess(null), 3000);
+      
+      router.refresh();
+      setTimeout(() => {
+        router.push("/feed");
+      }, 500);
 
     } catch (err: any) {
       setError(err.message);
@@ -174,10 +178,12 @@ export default function CreatePost({
   }, []);
 
   return (
-    <div className="flex flex-col h-full max-h-[80vh] w-full bg-white dark:bg-gray-900 rounded-2xl overflow-hidden">
+    // FIX: Using 'fixed' positioning on mobile to snap exactly to Top Navbar (top-16) and Bottom Navbar (bottom-16)
+    // This removes any gaps caused by flow layout or spacers.
+    <div className="flex flex-col fixed inset-x-0 top-0 bottom-16 z-40 bg-white dark:bg-gray-900 sm:static sm:z-auto sm:h-auto sm:max-h-[80vh] w-full sm:rounded-2xl overflow-hidden relative">
       
       {/* 1. SCROLLABLE CONTENT AREA */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 custom-scrollbar pb-32">
         
         {/* User Info */}
         <div className="flex items-center gap-3 mb-4">
@@ -197,12 +203,12 @@ export default function CreatePost({
           value={content}
           onChange={(e) => setContent(e.target.value)}
           disabled={loading}
-          className="w-full min-h-[100px] p-0 bg-transparent outline-none resize-none text-lg text-gray-900 dark:text-gray-100 placeholder:text-gray-400 border-none focus:ring-0"
+          className="w-full min-h-[150px] p-0 bg-transparent outline-none resize-none text-lg text-gray-900 dark:text-gray-100 placeholder:text-gray-400 border-none focus:ring-0"
         />
 
-        {/* Preview Carousel (Only shows if files exist) */}
+        {/* Preview Carousel */}
         {files.length > 0 && (
-          <div className="relative mt-4 aspect-video bg-black rounded-xl overflow-hidden group">
+          <div className="relative mt-4 aspect-video bg-black rounded-xl overflow-hidden group shadow-lg">
             {files.map((file, idx) => (
               <div 
                 key={file.id} 
@@ -214,7 +220,6 @@ export default function CreatePost({
                   <Image src={file.preview} alt="Preview" fill className="object-contain" />
                 )}
                 
-                {/* Remove Button */}
                 <button 
                   onClick={() => removeFile(file.id)}
                   className="absolute top-2 right-2 p-1.5 bg-black/60 text-white rounded-full hover:bg-red-600 transition-colors z-20"
@@ -240,7 +245,6 @@ export default function CreatePost({
                   <ChevronRight size={20} />
                 </button>
                 
-                {/* Dots Indicator */}
                 <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5 z-20">
                   {files.map((_, idx) => (
                     <div 
@@ -254,7 +258,7 @@ export default function CreatePost({
           </div>
         )}
 
-        {/* Compact Drag & Drop Zone */}
+        {/* Drag & Drop Zone */}
         <div
           ref={dragDropRef}
           onDragEnter={handleDrag} onDragOver={handleDrag} onDragLeave={handleDrag} onDrop={handleDrop}
@@ -269,18 +273,18 @@ export default function CreatePost({
               <Upload size={20} className="text-gray-500" />
             </div>
             <p className="text-sm text-gray-500">
-              Drag & drop media here, or use the buttons below
+              Drag & drop media here
             </p>
           </div>
         </div>
 
-        {/* Error/Success Messages */}
         {error && <p className="mt-3 text-sm text-red-500 text-center">{error}</p>}
         {success && <p className="mt-3 text-sm text-green-500 text-center">{success}</p>}
       </div>
 
-      {/* 2. STICKY FOOTER (Always Visible) */}
-      <div className="p-4 border-t dark:border-gray-800 bg-white dark:bg-gray-900 z-20">
+      {/* 2. STICKY FOOTER */}
+      {/* On mobile, this sticks to the bottom of our 'fixed' container (above bottom nav) */}
+      <div className="absolute bottom-0 left-0 right-0 p-4 pb-6 sm:pb-4 border-t dark:border-gray-800 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm z-30">
         <div className="flex items-center justify-between">
           <div className="flex gap-2">
             <button 
@@ -304,14 +308,13 @@ export default function CreatePost({
           <button
             onClick={handleCreatePost}
             disabled={loading || (!content.trim() && files.length === 0)}
-            className="px-6 py-2 bg-gradient-to-r from-purple-600 to-blue-500 text-white rounded-full font-semibold flex items-center gap-2 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md"
+            className="px-6 py-2 bg-gradient-to-r from-purple-600 to-blue-500 text-white rounded-full font-semibold flex items-center gap-2 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md transform active:scale-95"
           >
             {loading ? <Loader2 size={18} className="animate-spin" /> : <PlusCircle size={18} />}
             {loading ? "Posting..." : "Post"}
           </button>
         </div>
         
-        {/* Character Count */}
         <div className="text-right mt-1">
           <span className={`text-xs ${content.length > 1800 ? 'text-red-500' : 'text-gray-400'}`}>
             {content.length}/2000
