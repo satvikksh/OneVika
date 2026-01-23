@@ -733,7 +733,7 @@ export default function FeedPage() {
       // Unlock scroll VERY QUICKLY for "Instant" feel
       setTimeout(() => {
         scrollingRef.current = false;
-      }, 200); // Reduced from 500 to 200
+      }, 200); 
     },
     [currentPostIndex, posts]
   );
@@ -752,7 +752,6 @@ export default function FeedPage() {
       if (Math.abs(delta) < 20) return;
 
       const currentTime = Date.now();
-      // Reduced Debounce for instant feel
       if (currentTime - lastScrollY.current < 50) return; 
 
       if (delta > 0) {
@@ -793,7 +792,7 @@ export default function FeedPage() {
       const touchEndY = e.changedTouches[0].clientY;
       const diff = touchStartY - touchEndY;
 
-      if (Math.abs(diff) < 50) return; // Lowered threshold
+      if (Math.abs(diff) < 50) return; 
 
       if (diff > 0) {
         navigateFeed(1);
@@ -1065,12 +1064,13 @@ export default function FeedPage() {
     <>
       <div
         ref={feedContainerRef}
-        className={`fixed inset-0 w-screen h-screen overflow-hidden ${
+        // FIX: Added 'touch-none' and 'overscroll-none' to disable pull-to-refresh
+        // FIX: Changed 'h-screen' to 'h-[100dvh]' for better mobile address bar handling
+        className={`fixed inset-0 w-screen h-[100dvh] overflow-hidden touch-none overscroll-none ${
           isDark ? "dark bg-black" : "bg-black"
         }`}
       >
         {/* CURRENT POST - FULL SCREEN */}
-        {/* REMOVED mode="wait" to allow simultaneous enter/exit for instant feel */}
         <AnimatePresence custom={direction}>
           {currentPost ? (
             <motion.div
@@ -1081,7 +1081,7 @@ export default function FeedPage() {
               animate="center"
               exit="exit"
               transition={{
-                y: { type: "tween", ease: "easeOut", duration: 0.3 }, // Faster, non-bouncy transition
+                y: { type: "tween", ease: "easeOut", duration: 0.3 }, 
                 opacity: { duration: 0.2 },
               }}
               className="absolute inset-0 flex flex-col"
