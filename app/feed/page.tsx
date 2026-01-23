@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { motion, AnimatePresence, Variants } from "framer-motion"; // Added Variants
+import { motion, AnimatePresence, Variants } from "framer-motion";
 import Image from "next/image";
 import {
   Heart,
@@ -441,11 +441,11 @@ function CommentsModal({
   );
 }
 
-// --- ANIMATION VARIANTS (IMPROVED DIRECTIONAL SCROLL) ---
+// --- ANIMATION VARIANTS (INSTANT SCROLL) ---
 const variants: Variants = {
   enter: (direction: number) => ({
     y: direction > 0 ? "100%" : "-100%", // From bottom if Down, from top if Up
-    opacity: 0,
+    opacity: 1, // Start fully opaque for instant feel
   }),
   center: {
     zIndex: 1,
@@ -455,7 +455,7 @@ const variants: Variants = {
   exit: (direction: number) => ({
     zIndex: 0,
     y: direction < 0 ? "100%" : "-100%", // Exit to bottom if Up, to top if Down
-    opacity: 0,
+    opacity: 1, // Stay opaque while sliding out
   }),
 };
 
@@ -701,23 +701,18 @@ export default function FeedPage() {
   /* ============================
        CORE NAVIGATION LOGIC
   ============================ */
-  // New helper to handle logic for both wheel and touch
   const navigateFeed = useCallback(
     (navDirection: number) => {
       // 1 = Next (Scroll Down), -1 = Prev (Scroll Up)
       const nextIndex = currentPostIndex + navDirection;
 
-      // Boundary check
       if (nextIndex < 0 || nextIndex >= posts.length) return;
 
-      // Lock to prevent multi-skips
       scrollingRef.current = true;
-      
-      // Update Animation Direction
       setDirection(navDirection);
 
       // Hide Overlay controls
-      setIsNavbarVisible(navDirection === -1 && nextIndex === 0); // Show only if going to top
+      setIsNavbarVisible(navDirection === -1 && nextIndex === 0);
       setShowOptions(false);
 
       // Handle Video Logic (Pause current)
@@ -733,13 +728,12 @@ export default function FeedPage() {
         }
       }
 
-      // Update Index
       setCurrentPostIndex(nextIndex);
 
-      // Unlock scroll after animation duration
+      // Unlock scroll VERY QUICKLY for "Instant" feel
       setTimeout(() => {
         scrollingRef.current = false;
-      }, 500); 
+      }, 200); // Reduced from 500 to 200
     },
     [currentPostIndex, posts]
   );
@@ -749,24 +743,21 @@ export default function FeedPage() {
   ============================ */
   const handleWheel = useCallback(
     (e: WheelEvent) => {
-      e.preventDefault(); // Stop native scroll
+      e.preventDefault();
 
       if (scrollingRef.current || posts.length === 0) return;
 
       const delta = e.deltaY;
       
-      // Filter out tiny trackpad vibrations
       if (Math.abs(delta) < 20) return;
 
-      // Debounce logic based on time
       const currentTime = Date.now();
-      if (currentTime - lastScrollY.current < 400) return; // 400ms debounce for wheel
+      // Reduced Debounce for instant feel
+      if (currentTime - lastScrollY.current < 50) return; 
 
       if (delta > 0) {
-        // Scroll DOWN -> Next Post
         navigateFeed(1);
       } else {
-        // Scroll UP -> Prev Post
         navigateFeed(-1);
       }
       
@@ -780,12 +771,11 @@ export default function FeedPage() {
   ============================ */
   const handleTouchStart = useCallback((e: TouchEvent) => {
     const touchY = e.touches[0].clientY;
-    lastScrollY.current = touchY; // Reuse ref for start position
+    lastScrollY.current = touchY;
   }, []);
 
   const handleTouchEnd = useCallback(
     (e: TouchEvent) => {
-      // Check for interactive elements (Buttons/Inputs)
       const target = e.target as HTMLElement;
       const isInteractive =
         target.closest("button") ||
@@ -801,16 +791,13 @@ export default function FeedPage() {
 
       const touchStartY = lastScrollY.current;
       const touchEndY = e.changedTouches[0].clientY;
-      const diff = touchStartY - touchEndY; // Positive = Swipe Up (Go Next), Negative = Swipe Down (Go Prev)
+      const diff = touchStartY - touchEndY;
 
-      // Threshold for swipe detection
-      if (Math.abs(diff) < 80) return;
+      if (Math.abs(diff) < 50) return; // Lowered threshold
 
       if (diff > 0) {
-        // Swipe Up -> Go to Next Post
         navigateFeed(1);
       } else {
-        // Swipe Down -> Go to Prev Post
         navigateFeed(-1);
       }
     },
@@ -866,7 +853,7 @@ export default function FeedPage() {
   );
 
   /* ============================
-       HANDLE SINGLE TAP (Play/Pause)
+       HANDLE SINGLE TAP
   ============================ */
   const handleSingleTap = useCallback((postId: string, isVideo: boolean) => {
     if (!isVideo) return;
@@ -887,7 +874,7 @@ export default function FeedPage() {
   }, []);
 
   /* ============================
-       HANDLE DOUBLE TAP (Like)
+       HANDLE DOUBLE TAP
   ============================ */
   const handleDoubleTap = useCallback(
     (postId: string) => {
@@ -900,7 +887,7 @@ export default function FeedPage() {
   );
 
   /* ============================
-       HANDLE MEDIA CLICK (Desktop)
+       HANDLE MEDIA CLICK
   ============================ */
   const handleMediaClick = useCallback(
     (e: React.MouseEvent, postId: string, isVideo: boolean) => {
@@ -925,7 +912,7 @@ export default function FeedPage() {
   );
 
   /* ============================
-       HANDLE TOUCH TAP (Mobile)
+       HANDLE TOUCH TAP
   ============================ */
   const handleMediaTap = useCallback(
     (e: React.TouchEvent, postId: string, isVideo: boolean) => {
@@ -1083,6 +1070,7 @@ export default function FeedPage() {
         }`}
       >
         {/* CURRENT POST - FULL SCREEN */}
+        {/* REMOVED mode="wait" to allow simultaneous enter/exit for instant feel */}
         <AnimatePresence custom={direction}>
           {currentPost ? (
             <motion.div
@@ -1093,7 +1081,7 @@ export default function FeedPage() {
               animate="center"
               exit="exit"
               transition={{
-                y: { type: "spring", stiffness: 300, damping: 30 },
+                y: { type: "tween", ease: "easeOut", duration: 0.3 }, // Faster, non-bouncy transition
                 opacity: { duration: 0.2 },
               }}
               className="absolute inset-0 flex flex-col"
@@ -1411,6 +1399,7 @@ export default function FeedPage() {
                     // Manual Navigation via dots
                     const direction = index > currentPostIndex ? 1 : -1;
                     if(index !== currentPostIndex) {
+                       // Reset direction for animation
                        setDirection(direction);
                        setCurrentPostIndex(index);
                     }
