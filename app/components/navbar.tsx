@@ -20,6 +20,7 @@ import {
   BookOpen,
   Zap,
   Users,
+  PlaySquare,
   Image as ImageIcon,
   User,
   HelpCircle,
@@ -287,14 +288,14 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
       badge: "New",
     },
     { path: "/gallery", label: "Gallery", icon: <ImageIcon size={18} /> },
-    { path: "/feed", label: "Feed", icon: <Users size={18} /> },
+    { path: "/feed", label: "Feed", icon: <PlaySquare size={18} /> },
     { path: "/analytics", label: "Analytics", icon: <BarChart size={18} /> },
   ];
 
   // Bottom navigation items for mobile - Fixed set of items
   const bottomNavItems: NavItem[] = [
     { path: "/", label: "Home", icon: <Home size={24} /> },
-    { path: "/feed", label: "Feed", icon: <Users size={24} /> },
+    { path: "/feed", label: "Feed", icon: <PlaySquare size={24} /> },
     { path: "/chat", label: "Chat", icon: <MessageSquare size={24} /> },
     { path: "/analytics", label: "Analytics", icon: <BarChart size={24} /> },
     {

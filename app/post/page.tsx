@@ -60,71 +60,95 @@ export default function CreatePost({ onPostCreated }: CreatePostProps) {
       scrollIntervalRef.current = null;
     }
   };
+console.log("Cloud name:", process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME);
+console.log("Preset:", process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET);
 
   /* ============================
-      UPLOAD & POST LOGIC
-  ============================ */
-  async function uploadMedia(file: File): Promise<string> {
-    const formData = new FormData();
-    formData.append("file", file);
-    
-    if (file.size > 50 * 1024 * 1024) throw new Error("File too large (>50MB)");
-
-    const res = await fetch("/api/upload", { method: "POST", body: formData });
-    if (!res.ok) throw new Error("Upload failed");
-    const data = await res.json();
-    return data.url;
+   CLOUDINARY UPLOAD & POST
+============================ */
+async function uploadMedia(file: File): Promise<string> {
+  if (file.size > 50 * 1024 * 1024) {
+    throw new Error("File too large (>50MB)");
   }
 
-  async function handleCreatePost() {
-    if (!session) return router.push("/login");
-    if (!content.trim() && files.length === 0) return setError("Post cannot be empty");
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append(
+    "upload_preset",
+    process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET!
+  );
 
-    setLoading(true);
-    setError(null);
+  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
 
-    try {
-      const mediaUrls: string[] = [];
-      
-      for (const f of files) {
-        try {
-          const url = await uploadMedia(f.file);
-          mediaUrls.push(url);
-        } catch (e) {
-          throw new Error(`Failed to upload ${f.file.name}`);
-        }
-      }
-
-      const res = await fetch("/api/posts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content, images: mediaUrls }),
-      });
-
-      if (!res.ok) throw new Error("Failed to create post");
-
-      const newPost = await res.json();
-
-      if (onPostCreated) {
-        onPostCreated(newPost);
-      }
-      
-      setContent("");
-      setFiles([]);
-      setCurrentPreviewIndex(0);
-      setSuccess("Posted successfully!");
-      
-      router.refresh();
-      setTimeout(() => {
-        router.push("/feed");
-      }, 500);
-
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+  const res = await fetch(
+    `https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`,
+    {
+      method: "POST",
+      body: formData,
     }
+  );
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    console.error("Cloudinary error:", data);
+    throw new Error(data.error?.message || "Failed to upload media");
   }
+
+  return data.secure_url;
+}
+
+
+async function handleCreatePost() {
+  if (!session) return router.push("/login");
+
+  if (!content.trim() && files.length === 0) {
+    return setError("Post cannot be empty");
+  }
+
+  setLoading(true);
+  setError(null);
+
+  try {
+    // ✅ upload all media in parallel (FAST)
+    const mediaUrls = await Promise.all(
+      files.map(async (f) => {
+        return uploadMedia(f.file);
+      })
+    );
+
+    // ✅ now create post with URLs only
+    const res = await fetch("/api/posts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        content,
+        images: mediaUrls,
+      }),
+    });
+
+    if (!res.ok) throw new Error("Failed to create post");
+
+    const newPost = await res.json();
+
+    onPostCreated?.(newPost);
+
+    // reset UI
+    setContent("");
+    setFiles([]);
+    setCurrentPreviewIndex(0);
+    setSuccess("Posted successfully!");
+
+    router.refresh();
+    setTimeout(() => router.push("/feed"), 500);
+
+  } catch (err: any) {
+    setError(err.message || "Something went wrong");
+  } finally {
+    setLoading(false);
+  }
+}
+
 
   /* ============================
       FILE HANDLING

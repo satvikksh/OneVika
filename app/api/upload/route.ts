@@ -1,56 +1,73 @@
 export const runtime = "nodejs";
 
+// Optional: Increase timeout on Vercel (Pro plan required for >10s, max 60s for Hobby)
+export const maxDuration = 60; 
+
 import { NextResponse } from "next/server";
 import cloudinary from "@/app/lib/cloudinary";
 
 export async function POST(req: Request) {
   try {
-    // ✅ Ensure correct content-type
+    // 1. Check Content-Type
     const contentType = req.headers.get("content-type") || "";
     if (!contentType.includes("multipart/form-data")) {
       return NextResponse.json(
-        { error: "Invalid Content-Type" },
+        { error: "Invalid Content-Type. Must be multipart/form-data" },
         { status: 400 }
       );
     }
 
-    // ✅ Parse form data
+    // 2. Parse Form Data
     const formData = await req.formData();
-    const file = formData.get("file");
+    const file = formData.get("file") as File;
 
-    if (!file || !(file instanceof File)) {
+    if (!file) {
       return NextResponse.json(
-        { error: "No valid file uploaded" },
+        { error: "No file found in request" },
         { status: 400 }
       );
     }
 
-    // ✅ Convert file → buffer
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
+    // 3. File Validation (Optional: Check Size/Type before processing)
+    // Note: Vercel/AWS limits might block the request before it even reaches this line.
+    if (file.size > 50 * 1024 * 1024) {
+       return NextResponse.json({ error: "File too large (>50MB)" }, { status: 400 });
+    }
 
-    // ✅ Upload to Cloudinary (stream-safe)
-    const uploadResult = await new Promise<any>((resolve, reject) => {
+    // 4. Convert File to Buffer
+    // Note: We convert to ArrayBuffer then Buffer. This holds the whole file in RAM.
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    // 5. Upload to Cloudinary
+    const uploadResult = await new Promise((resolve, reject) => {
       cloudinary.uploader.upload_stream(
         {
           folder: "posts",
-          resource_type: "auto", // image + video
+          resource_type: "auto", // Automatically detect image/video
         },
         (error, result) => {
-          if (error) reject(error);
-          else resolve(result);
+          if (error) {
+            console.error("Cloudinary Upload Error:", error);
+            reject(error);
+          } else {
+            resolve(result);
+          }
         }
       ).end(buffer);
     });
 
     return NextResponse.json({
-      url: uploadResult.secure_url,
-      type: uploadResult.resource_type,
+      url: (uploadResult as any).secure_url,
+      type: (uploadResult as any).resource_type,
     });
-  } catch (error) {
-    console.error("UPLOAD ERROR:", error);
+
+  } catch (error: any) {
+    console.error("SERVER UPLOAD ERROR:", error);
+    
+    // Check if it's a specific Cloudinary error
     return NextResponse.json(
-      { error: "Upload failed" },
+      { error: error.message || "Internal Server Error during upload" },
       { status: 500 }
     );
   }
