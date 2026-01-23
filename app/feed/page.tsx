@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, Variants } from "framer-motion"; // Added Variants
 import Image from "next/image";
 import {
   Heart,
@@ -13,11 +13,9 @@ import {
   Send,
   Bookmark,
   Share2,
-  Home,
   Volume2,
   VolumeX,
   Play,
-  Pause,
   MoreVertical,
   Flag,
 } from "lucide-react";
@@ -443,6 +441,24 @@ function CommentsModal({
   );
 }
 
+// --- ANIMATION VARIANTS (IMPROVED DIRECTIONAL SCROLL) ---
+const variants: Variants = {
+  enter: (direction: number) => ({
+    y: direction > 0 ? "100%" : "-100%", // From bottom if Down, from top if Up
+    opacity: 0,
+  }),
+  center: {
+    zIndex: 1,
+    y: 0,
+    opacity: 1,
+  },
+  exit: (direction: number) => ({
+    zIndex: 0,
+    y: direction < 0 ? "100%" : "-100%", // Exit to bottom if Up, to top if Down
+    opacity: 0,
+  }),
+};
+
 // --- MAIN FEED PAGE ---
 export default function FeedPage() {
   const { theme } = useTheme();
@@ -456,16 +472,17 @@ export default function FeedPage() {
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(1);
   const [initialLoad, setInitialLoad] = useState(true);
+  
+  // Navigation State
   const [currentPostIndex, setCurrentPostIndex] = useState(0);
+  const [direction, setDirection] = useState(0); // 1 = down/next, -1 = up/prev
 
   // NAVBAR & OPTIONS VISIBILITY STATE
   const [isNavbarVisible, setIsNavbarVisible] = useState(true);
   const [showOptions, setShowOptions] = useState(false);
 
   // Video controls
-  const [isVideoPlaying, setIsVideoPlaying] = useState<Record<string, boolean>>(
-    {}
-  );
+  const [isVideoPlaying, setIsVideoPlaying] = useState<Record<string, boolean>>({});
   const [isVideoMuted, setIsVideoMuted] = useState<Record<string, boolean>>({});
   const [doubleTapLike, setDoubleTapLike] = useState<string | null>(null);
 
@@ -585,12 +602,12 @@ export default function FeedPage() {
           setPosts(shuffledPosts);
           setInitialLoad(false);
 
-          // Initialize video states for all posts
+          // Initialize video states
           const playingStates: Record<string, boolean> = {};
           const muteStates: Record<string, boolean> = {};
           shuffledPosts.forEach((post) => {
             playingStates[post._id] = true;
-            muteStates[post._id] = false; // Default UNMUTED
+            muteStates[post._id] = false;
           });
           setIsVideoPlaying(playingStates);
           setIsVideoMuted(muteStates);
@@ -605,7 +622,7 @@ export default function FeedPage() {
             const newMuteStates: Record<string, boolean> = {};
             newPosts.forEach((post) => {
               newPlayingStates[post._id] = true;
-              newMuteStates[post._id] = false; // Default UNMUTED
+              newMuteStates[post._id] = false;
             });
 
             setIsVideoPlaying((prevStates) => ({
@@ -645,7 +662,7 @@ export default function FeedPage() {
   }, [status, initialLoad, fetchPosts]);
 
   /* ============================
-       FORCE NAVBAR SHOW ON TOP (INDEX 0)
+       FORCE NAVBAR SHOW ON TOP
   ============================ */
   useEffect(() => {
     if (currentPostIndex === 0) {
@@ -682,163 +699,124 @@ export default function FeedPage() {
   }, [hasMore, loadingMore, page, fetchPosts, posts.length]);
 
   /* ============================
+       CORE NAVIGATION LOGIC
+  ============================ */
+  // New helper to handle logic for both wheel and touch
+  const navigateFeed = useCallback(
+    (navDirection: number) => {
+      // 1 = Next (Scroll Down), -1 = Prev (Scroll Up)
+      const nextIndex = currentPostIndex + navDirection;
+
+      // Boundary check
+      if (nextIndex < 0 || nextIndex >= posts.length) return;
+
+      // Lock to prevent multi-skips
+      scrollingRef.current = true;
+      
+      // Update Animation Direction
+      setDirection(navDirection);
+
+      // Hide Overlay controls
+      setIsNavbarVisible(navDirection === -1 && nextIndex === 0); // Show only if going to top
+      setShowOptions(false);
+
+      // Handle Video Logic (Pause current)
+      const currentPost = posts[currentPostIndex];
+      if (currentPost && isVideo(currentPost.images?.[0])) {
+        const video = videoRefs.current[currentPost._id];
+        if (video) {
+          video.pause();
+          setIsVideoPlaying((prev) => ({
+            ...prev,
+            [currentPost._id]: false,
+          }));
+        }
+      }
+
+      // Update Index
+      setCurrentPostIndex(nextIndex);
+
+      // Unlock scroll after animation duration
+      setTimeout(() => {
+        scrollingRef.current = false;
+      }, 500); 
+    },
+    [currentPostIndex, posts]
+  );
+
+  /* ============================
        HANDLE WHEEL SCROLL
   ============================ */
   const handleWheel = useCallback(
     (e: WheelEvent) => {
-      e.preventDefault();
+      e.preventDefault(); // Stop native scroll
 
       if (scrollingRef.current || posts.length === 0) return;
 
       const delta = e.deltaY;
+      
+      // Filter out tiny trackpad vibrations
+      if (Math.abs(delta) < 20) return;
+
+      // Debounce logic based on time
       const currentTime = Date.now();
+      if (currentTime - lastScrollY.current < 400) return; // 400ms debounce for wheel
 
-      const isTouchpadScroll = Math.abs(delta) < 5;
-      if (isTouchpadScroll) return;
-
-      if (currentTime - lastScrollY.current < 500) return;
-
-      if (delta > 50 && currentPostIndex < posts.length - 1) {
-        // SCROLL DOWN -> HIDE NAVBAR & CLOSE MENU
-        scrollingRef.current = true;
-        setIsNavbarVisible(false);
-        setShowOptions(false);
-
-        const currentPost = posts[currentPostIndex];
-        if (currentPost && isVideo(currentPost.images?.[0])) {
-          const video = videoRefs.current[currentPost._id];
-          if (video) {
-            video.pause();
-            setIsVideoPlaying((prev) => ({
-              ...prev,
-              [currentPost._id]: false,
-            }));
-          }
-        }
-
-        setCurrentPostIndex((prev) => prev + 1);
-        lastScrollY.current = currentTime;
-
-        setTimeout(() => {
-          scrollingRef.current = false;
-        }, 300);
-      } else if (delta < -50 && currentPostIndex > 0) {
-        // SCROLL UP -> SHOW NAVBAR & CLOSE MENU
-        scrollingRef.current = true;
-        setIsNavbarVisible(true);
-        setShowOptions(false);
-
-        const currentPost = posts[currentPostIndex];
-        if (currentPost && isVideo(currentPost.images?.[0])) {
-          const video = videoRefs.current[currentPost._id];
-          if (video) {
-            video.pause();
-            setIsVideoPlaying((prev) => ({
-              ...prev,
-              [currentPost._id]: false,
-            }));
-          }
-        }
-
-        setCurrentPostIndex((prev) => prev - 1);
-        lastScrollY.current = currentTime;
-
-        setTimeout(() => {
-          scrollingRef.current = false;
-        }, 300);
+      if (delta > 0) {
+        // Scroll DOWN -> Next Post
+        navigateFeed(1);
+      } else {
+        // Scroll UP -> Prev Post
+        navigateFeed(-1);
       }
+      
+      lastScrollY.current = currentTime;
     },
-    [currentPostIndex, posts.length]
+    [posts.length, navigateFeed]
   );
 
   /* ============================
-       HANDLE TOUCH SCROLL (Mobile)
+       HANDLE TOUCH SCROLL
   ============================ */
   const handleTouchStart = useCallback((e: TouchEvent) => {
     const touchY = e.touches[0].clientY;
-    lastScrollY.current = touchY;
+    lastScrollY.current = touchY; // Reuse ref for start position
   }, []);
 
   const handleTouchEnd = useCallback(
     (e: TouchEvent) => {
-      // --- FIX START: Check for interactive elements ---
+      // Check for interactive elements (Buttons/Inputs)
       const target = e.target as HTMLElement;
-      // If the user touched a button, link, or input, do NOT prevent default behavior.
-      // This allows the "click" event to fire.
       const isInteractive =
         target.closest("button") ||
         target.closest("a") ||
         target.closest("textarea") ||
         target.closest("input");
 
-      if (isInteractive) {
-        return;
-      }
-      // --- FIX END ---
+      if (isInteractive) return;
 
       e.preventDefault();
 
       if (scrollingRef.current || posts.length === 0) return;
 
-      const touchY = e.changedTouches[0].clientY;
-      const diff = lastScrollY.current - touchY;
-      const currentTime = Date.now();
+      const touchStartY = lastScrollY.current;
+      const touchEndY = e.changedTouches[0].clientY;
+      const diff = touchStartY - touchEndY; // Positive = Swipe Up (Go Next), Negative = Swipe Down (Go Prev)
 
-      if (currentTime - lastScrollY.current < 500) return;
+      // Threshold for swipe detection
+      if (Math.abs(diff) < 80) return;
 
-      if (diff > 100 && currentPostIndex < posts.length - 1) {
-        // SWIPE DOWN (Next Post)
-        scrollingRef.current = true;
-        setIsNavbarVisible(false);
-        setShowOptions(false);
-
-        const currentPost = posts[currentPostIndex];
-        if (currentPost && isVideo(currentPost.images?.[0])) {
-          const video = videoRefs.current[currentPost._id];
-          if (video) {
-            video.pause();
-            setIsVideoPlaying((prev) => ({
-              ...prev,
-              [currentPost._id]: false,
-            }));
-          }
-        }
-
-        setCurrentPostIndex((prev) => prev + 1);
-        lastScrollY.current = currentTime;
-
-        setTimeout(() => {
-          scrollingRef.current = false;
-        }, 300);
-      } else if (diff < -100 && currentPostIndex > 0) {
-        // SWIPE UP (Prev Post)
-        scrollingRef.current = true;
-        setIsNavbarVisible(true);
-        setShowOptions(false);
-
-        const currentPost = posts[currentPostIndex];
-        if (currentPost && isVideo(currentPost.images?.[0])) {
-          const video = videoRefs.current[currentPost._id];
-          if (video) {
-            video.pause();
-            setIsVideoPlaying((prev) => ({
-              ...prev,
-              [currentPost._id]: false,
-            }));
-          }
-        }
-
-        setCurrentPostIndex((prev) => prev - 1);
-        lastScrollY.current = currentTime;
-
-        setTimeout(() => {
-          scrollingRef.current = false;
-        }, 300);
+      if (diff > 0) {
+        // Swipe Up -> Go to Next Post
+        navigateFeed(1);
+      } else {
+        // Swipe Down -> Go to Prev Post
+        navigateFeed(-1);
       }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     },
-    [currentPostIndex, posts.length]
+    [posts.length, navigateFeed]
   );
+
   /* ============================
        ADD EVENT LISTENERS
   ============================ */
@@ -847,9 +825,7 @@ export default function FeedPage() {
     if (!container) return;
 
     container.addEventListener("wheel", handleWheel, { passive: false });
-    container.addEventListener("touchstart", handleTouchStart, {
-      passive: true,
-    });
+    container.addEventListener("touchstart", handleTouchStart, { passive: true });
     container.addEventListener("touchend", handleTouchEnd, { passive: false });
 
     return () => {
@@ -859,7 +835,6 @@ export default function FeedPage() {
     };
   }, [handleWheel, handleTouchStart, handleTouchEnd]);
 
-  // --- FIX: toggleLike MOVED UP HERE (Before it is used in callbacks) ---
   /* ============================
        LIKE FUNCTIONALITY
   ============================ */
@@ -914,7 +889,6 @@ export default function FeedPage() {
   /* ============================
        HANDLE DOUBLE TAP (Like)
   ============================ */
-  // --- FIX: Added toggleLike to dependency array ---
   const handleDoubleTap = useCallback(
     (postId: string) => {
       toggleLike(postId);
@@ -1109,14 +1083,19 @@ export default function FeedPage() {
         }`}
       >
         {/* CURRENT POST - FULL SCREEN */}
-        <AnimatePresence mode="wait">
+        <AnimatePresence custom={direction}>
           {currentPost ? (
             <motion.div
               key={currentPost._id}
-              initial={{ opacity: 0, y: 50 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -50 }}
-              transition={{ duration: 0.3 }}
+              custom={direction}
+              variants={variants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{
+                y: { type: "spring", stiffness: 300, damping: 30 },
+                opacity: { duration: 0.2 },
+              }}
               className="absolute inset-0 flex flex-col"
             >
               {/* POST MEDIA - FULL SCREEN */}
@@ -1143,7 +1122,6 @@ export default function FeedPage() {
                         muted={isVideoMuted[currentPost._id]}
                         playsInline
                       />
-                      {/* Play/Pause Overlay */}
                       {!isVideoPlaying[currentPost._id] && (
                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                           <div className="w-20 h-20 bg-black/50 rounded-full flex items-center justify-center">
@@ -1172,7 +1150,6 @@ export default function FeedPage() {
                         transition={{ duration: 0.5 }}
                         className="absolute inset-0 flex items-center justify-center pointer-events-none"
                       >
-                        {/* FIX: Changed className to text-transparent (removes border) and fill-red-500 */}
                         <Heart
                           size={100}
                           className="text-transparent fill-red-600 drop-shadow-lg"
@@ -1256,25 +1233,16 @@ export default function FeedPage() {
                     transition={{ duration: 0.3 }}
                     className="absolute top-0 left-0 right-0 z-30 pointer-events-none"
                   >
-                    {/* TOP RIGHT CONTROLS CONTAINER */}
                     <div className="absolute top-4 right-4 flex flex-col items-end gap-4 pointer-events-auto">
-                      {/* DELETED: Create Button is removed here */}
                     </div>
-
-                    {/* TOP LEFT HOME BUTTON */}
-                    {/* DELETED: Home button is removed */}
-
-                    {/* TOP CENTER TITLE */}
                     <div className="absolute top-4 left-1/2 transform -translate-x-1/2 text-center pointer-events-auto">
-                      {/* DELETED: Title text is removed */}
                     </div>
                   </motion.div>
                 )}
               </AnimatePresence>
+              
               {/* RIGHT SIDE ACTION BAR */}
               <div className="absolute right-4 bottom-32 flex flex-col gap-5 z-50 pointer-events-none">
-                {/* Note: Your existing buttons inside here already correctly have pointer-events-auto */}
-
                 <div className="flex flex-col items-center">
                   <button
                     onClick={() => toggleLike(currentPost._id)}
@@ -1336,7 +1304,6 @@ export default function FeedPage() {
                   <span className="text-white text-xs font-medium">Save</span>
                 </button>
 
-                {/* 3-DOTS MENU */}
                 <div className="relative pointer-events-auto">
                   <button
                     onClick={(e) => {
@@ -1384,7 +1351,6 @@ export default function FeedPage() {
                   </AnimatePresence>
                 </div>
 
-                {/* MUTE BUTTON */}
                 {isCurrentVideo && (
                   <button
                     onClick={(e) => {
@@ -1441,7 +1407,14 @@ export default function FeedPage() {
               {posts.map((_, index) => (
                 <button
                   key={index}
-                  onClick={() => setCurrentPostIndex(index)}
+                  onClick={() => {
+                    // Manual Navigation via dots
+                    const direction = index > currentPostIndex ? 1 : -1;
+                    if(index !== currentPostIndex) {
+                       setDirection(direction);
+                       setCurrentPostIndex(index);
+                    }
+                  }}
                   className={`w-2 h-2 rounded-full transition-all ${
                     index === currentPostIndex
                       ? "bg-white w-6"
