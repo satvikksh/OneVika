@@ -64,7 +64,7 @@ interface SimpleNavbarProps {
 }
 
 const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
-  title = "OneVika",
+  title = "OrbitByte",
   toggleMode,
   showSearch = true,
   showNotifications = true,
@@ -431,8 +431,8 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
             <Link href="/" className="flex items-center gap-3 group">
               <div className="relative w-10 h-10 transition-transform group-hover:scale-105">
                 <Image
-                  src="/img/logo2.png"
-                  alt="OneVika"
+                  src="/img/orbitbyte1.png"
+                  alt="OrbitByte"
                   width={40}
                   height={40}
                   className="object-contain"
@@ -442,7 +442,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
 
               {/* Title + Subtitle */}
               <div className="flex flex-col leading-tight">
-                <span className="font-bold text-lg sm:text-xl bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                <span className="font-bold text-lg sm:text-xl bg-gradient-to-r from-blue-400 to-teal-400 bg-clip-text text-transparent">
                   {title}
                 </span>
                 <span className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 font-medium">
@@ -460,14 +460,14 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                 href={item.path}
                 className={`relative flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-300 group ${
                   pathname === item.path
-                    ? "bg-white dark:bg-gray-800 text-purple-600 dark:text-purple-400 shadow-sm"
+                    ? "bg-white dark:bg-gray-800 text-blue-500 dark:text-gray-400 shadow-sm"
                     : "text-gray-600 dark:text-gray-400 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-white"
                 }`}
               >
                 <span
                   className={`transition-transform duration-300 group-hover:scale-110 ${
                     pathname === item.path
-                      ? "text-purple-600 dark:text-purple-400"
+                      ? "text-blue-500 dark:text-gray-400"
                       : ""
                   }`}
                 >
@@ -492,7 +492,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
               <form onSubmit={handleSearch} className="relative w-full group">
                 <div className="relative">
                   <Search
-                    className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-purple-500 transition-colors"
+                    className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors"
                     size={18}
                   />
                   <input
@@ -537,7 +537,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                             }}
                             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 text-left transition-colors group/item"
                           >
-                            <div className="text-gray-400 group-hover/item:text-purple-500 transition-colors">
+                            <div className="text-gray-400 group-hover/item:text-blue-500 transition-colors">
                               {suggestion.icon}
                             </div>
                             <div className="flex-1">
@@ -621,7 +621,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                         <h3 className="font-bold text-lg">Notifications</h3>
                         <button
                           onClick={markAllAsRead}
-                          className="text-xs font-medium text-purple-600 dark:text-purple-400 hover:text-purple-700 transition-colors"
+                          className="text-xs font-medium text-blue-500 dark:text-blue-400 hover:text-blue-700 transition-colors"
                         >
                           Mark all as read
                         </button>
@@ -641,7 +641,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                             <div
                               className={`p-2 h-fit rounded-xl ${
                                 !notification.read
-                                  ? "bg-purple-100 text-purple-600 dark:bg-purple-900/50 dark:text-purple-300"
+                                  ? "bg-purple-100 text-blue-500 dark:bg-blue-900/50 dark:text-blue-300"
                                   : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
                               }`}
                             >
@@ -666,7 +666,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                     </div>
                     <Link
                       href="/notifications"
-                      className="block p-3 text-center text-xs font-medium text-gray-500 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-t border-gray-100 dark:border-gray-800"
+                      className="block p-3 text-center text-xs font-medium text-gray-500 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-t border-gray-100 dark:border-gray-800"
                     >
                       View all notifications
                     </Link>
@@ -709,7 +709,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                   <div className="absolute right-0 mt-3 w-72 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-800 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
                     <div className="p-5 border-b border-gray-100 dark:border-gray-800 bg-gradient-to-br from-purple-500/5 to-pink-500/5">
                       <div className="flex items-center gap-4">
-                        <div className="relative w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-purple-500 to-blue-500 shadow-md">
+                        <div className="relative w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-teal-500 shadow-md">
                           {!loading && avatar ? (
                             <Image
                               src={avatar}
@@ -774,7 +774,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                 </button>
                 <button
                   onClick={() => router.push("/register")}
-                  className="px-5 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-full hover:from-purple-700 hover:to-pink-700 transition-all shadow-md hover:shadow-lg text-sm font-medium transform hover:-translate-y-0.5"
+                  className="px-5 py-2 bg-gradient-to-r from-blue-600 to-pink-600 text-white rounded-full hover:from-blue-700 hover:to-pink-700 transition-all shadow-md hover:shadow-lg text-sm font-medium transform hover:-translate-y-0.5"
                 >
                   Sign Up
                 </button>
@@ -848,7 +848,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                       onClick={() => setIsMobileMenuOpen(false)}
                       className={`flex items-center justify-between px-4 py-3.5 rounded-2xl transition-all ${
                         pathname === item.path
-                          ? "bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400"
+                          ? "bg-purple-50 dark:bg-purple-900/20 text-blue-600 dark:text-blue-400"
                           : "hover:bg-gray-50 dark:hover:bg-gray-900 text-gray-700 dark:text-gray-300"
                       }`}
                     >
@@ -878,7 +878,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                     {theme === "dark" ? (
                       <Sun size={24} className="mb-3 text-amber-400" />
                     ) : (
-                      <Moon size={24} className="mb-3 text-purple-600" />
+                      <Moon size={24} className="mb-3 text-blue-600" />
                     )}
                     <span className="text-sm font-medium">
                       {theme === "dark" ? "Light Mode" : "Dark Mode"}
@@ -922,7 +922,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                       setIsMobileMenuOpen(false);
                       router.push("/register");
                     }}
-                    className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold shadow-lg shadow-purple-500/30"
+                    className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 to-pink-600 text-white font-semibold shadow-lg shadow-purple-500/30"
                   >
                     Sign Up
                   </button>

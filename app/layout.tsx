@@ -10,7 +10,7 @@ const inter = Inter({
 });
 
 export const metadata = {
-  title: "OneVika",
+  title: "OrbitByte",
 };
 
 export default function RootLayout({
