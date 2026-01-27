@@ -442,7 +442,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
 
               {/* Title + Subtitle */}
               <div className="flex flex-col leading-tight">
-                <span className="font-bold text-lg sm:text-xl bg-gradient-to-r from-blue-400 to-teal-400 bg-clip-text text-transparent">
+                <span className="font-bold text-lg sm:text-xl bg-gradient-to-r from-blue-500 to-teal-400 bg-clip-text text-transparent">
                   {title}
                 </span>
                 <span className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 font-medium">

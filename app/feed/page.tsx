@@ -66,6 +66,60 @@ interface CommentsModalProps {
   onCommentDeleted: (commentId: string) => void;
 }
 
+// --- SKELETON LOADER COMPONENT (UPDATED) ---
+function FeedSkeleton() {
+  return (
+    <div className="fixed inset-0 w-screen h-[100dvh] overflow-hidden bg-black z-50">
+      {/* Main content area */}
+      <div className="absolute inset-0 flex flex-col">
+        {/* Media skeleton */}
+        <div className="flex-1 relative bg-gradient-to-b from-gray-900 to-black">
+          {/* Shimmer effect for media area */}
+          <div className="absolute inset-0 overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-gray-800/20 to-transparent animate-shimmer" />
+          </div>
+        </div>
+
+        {/* Content overlay skeleton */}
+        <div className="absolute bottom-2 left-0 right-0 px-4 pb-12">
+          {/* User info skeleton */}
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-9 h-9 rounded-full bg-gray-800 animate-pulse" />
+            <div className="flex-1 space-y-2">
+              <div className="h-3 w-24 bg-gray-800 rounded animate-pulse" />
+              <div className="h-2 w-16 bg-gray-800 rounded animate-pulse" />
+            </div>
+          </div>
+
+          {/* Text content skeleton */}
+          <div className="space-y-2 w-3/4">
+            <div className="h-3 w-full bg-gray-800 rounded animate-pulse" />
+            <div className="h-3 w-2/3 bg-gray-800 rounded animate-pulse" />
+          </div>
+        </div>
+
+        {/* Right side action bar skeleton */}
+        <div className="absolute right-4 bottom-32 flex flex-col gap-5">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="flex flex-col items-center gap-1">
+              <div className="w-8 h-8 bg-gray-800 rounded-full animate-pulse" />
+              <div className="h-2 w-4 bg-gray-800 rounded animate-pulse" />
+            </div>
+          ))}
+        </div>
+
+        {/* Top navigation skeleton */}
+        <div className="absolute top-0 left-0 right-0 p-4">
+          <div className="flex justify-between">
+            <div className="h-6 w-20 bg-gray-800 rounded animate-pulse" />
+            <div className="h-6 w-6 bg-gray-800 rounded-full animate-pulse" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // --- LIKE USER MODAL COMPONENT ---
 function LikeUserModal({
   isOpen,
@@ -138,9 +192,16 @@ function LikeUserModal({
 
         <div className="flex-1 overflow-y-auto p-4">
           {loading ? (
-            <div className="flex justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-purple-600"></div>
-              <p className="ml-3 text-gray-500">Loading users...</p>
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="flex items-center gap-3 p-3 rounded-lg">
+                  <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-800 animate-pulse" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3 w-32 bg-gray-200 dark:bg-gray-800 rounded animate-pulse" />
+                    <div className="h-2 w-24 bg-gray-200 dark:bg-gray-800 rounded animate-pulse" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : error ? (
             <div className="text-center py-8">
@@ -472,7 +533,7 @@ export default function FeedPage() {
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(1);
   const [initialLoad, setInitialLoad] = useState(true);
-  
+   
   // Navigation State
   const [currentPostIndex, setCurrentPostIndex] = useState(0);
   const [direction, setDirection] = useState(0); // 1 = down/next, -1 = up/prev
@@ -551,7 +612,7 @@ export default function FeedPage() {
        FETCH POSTS WITH PAGINATION
   ============================ */
   const fetchPosts = useCallback(
-    async (pageNum: number, isInitialLoad = false) => {
+    async (pageNum: number, isInitialLoad = false, customLimit = 10) => {
       if (
         !session?.user?.id ||
         (loadingPosts && isInitialLoad) ||
@@ -566,7 +627,7 @@ export default function FeedPage() {
       }
 
       try {
-        const response = await fetch(`/api/posts?page=${pageNum}&limit=10`);
+        const response = await fetch(`/api/posts?page=${pageNum}&limit=${customLimit}`);
         if (!response.ok) throw new Error("Failed to fetch posts");
 
         const data = await response.json();
@@ -598,6 +659,7 @@ export default function FeedPage() {
         );
 
         if (isInitialLoad) {
+          // If customLimit is 1, shuffling doesn't do much, but keeps logic consistent
           const shuffledPosts = shuffleArray(postsWithComments);
           setPosts(shuffledPosts);
           setInitialLoad(false);
@@ -638,7 +700,7 @@ export default function FeedPage() {
           });
         }
 
-        if (data.length < 10) {
+        if (data.length < customLimit) {
           setHasMore(false);
         }
       } catch (error) {
@@ -653,11 +715,12 @@ export default function FeedPage() {
   );
 
   /* ============================
-       INITIAL LOAD
+       INITIAL LOAD (LIMIT 1)
   ============================ */
   useEffect(() => {
     if (status === "authenticated" && initialLoad) {
-      fetchPosts(1, true);
+      // FETCH ONLY 1 POST INITIALLY FOR INSTANT LOAD
+      fetchPosts(1, true, 1);
     }
   }, [status, initialLoad, fetchPosts]);
 
@@ -681,7 +744,8 @@ export default function FeedPage() {
         if (entries[0].isIntersecting && hasMore && !loadingMore) {
           const nextPage = page + 1;
           setPage(nextPage);
-          fetchPosts(nextPage, false);
+          // FETCH 5 POSTS ON SUBSEQUENT LOADS
+          fetchPosts(nextPage, false, 5);
         }
       },
       { threshold: 0.1 }
@@ -748,7 +812,7 @@ export default function FeedPage() {
       if (scrollingRef.current || posts.length === 0) return;
 
       const delta = e.deltaY;
-      
+       
       if (Math.abs(delta) < 20) return;
 
       const currentTime = Date.now();
@@ -759,7 +823,7 @@ export default function FeedPage() {
       } else {
         navigateFeed(-1);
       }
-      
+       
       lastScrollY.current = currentTime;
     },
     [posts.length, navigateFeed]
@@ -1048,12 +1112,14 @@ export default function FeedPage() {
     router.push(`/profile/${userId}`);
   };
 
+  // Show skeleton loader during initial load
+  // If loadingPosts AND initialLoad is true, show Skeleton
+  if (loadingPosts && initialLoad) {
+    return <FeedSkeleton />;
+  }
+
   if (status === "loading") {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-600"></div>
-      </div>
-    );
+    return <FeedSkeleton />;
   }
 
   const currentPost = posts[currentPostIndex];
@@ -1228,7 +1294,7 @@ export default function FeedPage() {
                   </motion.div>
                 )}
               </AnimatePresence>
-              
+               
               {/* RIGHT SIDE ACTION BAR */}
               <div className="absolute right-4 bottom-32 flex flex-col gap-5 z-50 pointer-events-none">
                 <div className="flex flex-col items-center">
@@ -1360,12 +1426,7 @@ export default function FeedPage() {
             </motion.div>
           ) : (
             <div className="absolute inset-0 flex items-center justify-center">
-              {loadingPosts ? (
-                <div className="text-center">
-                  <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-600"></div>
-                  <p className="mt-4 text-gray-300">Loading posts...</p>
-                </div>
-              ) : posts.length === 0 ? (
+              {posts.length === 0 && !loadingPosts ? (
                 <div className="text-center p-8">
                   <Sparkles className="w-16 h-16 text-gray-600 mx-auto mb-4" />
                   <h3 className="text-xl font-bold text-gray-300 mb-2">
@@ -1388,32 +1449,7 @@ export default function FeedPage() {
             <div ref={loadMoreRef} className="h-1" />
           )}
 
-        {/* BOTTOM PROGRESS INDICATOR */}
-        {posts.length > 0 && (
-          <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-20">
-            <div className="flex gap-2">
-              {posts.map((_, index) => (
-                <button
-                  key={index}
-                  onClick={() => {
-                    // Manual Navigation via dots
-                    const direction = index > currentPostIndex ? 1 : -1;
-                    if(index !== currentPostIndex) {
-                       // Reset direction for animation
-                       setDirection(direction);
-                       setCurrentPostIndex(index);
-                    }
-                  }}
-                  className={`w-2 h-2 rounded-full transition-all ${
-                    index === currentPostIndex
-                      ? "bg-white w-6"
-                      : "bg-gray-500 hover:bg-gray-300"
-                  }`}
-                />
-              ))}
-            </div>
-          </div>
-        )}
+        {/* BOTTOM PROGRESS INDICATOR REMOVED HERE AS REQUESTED */}
       </div>
 
       <LikeUserModal
