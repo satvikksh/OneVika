@@ -11,7 +11,7 @@ export default function BrainRoomCard() {
   };
 
   return (
-    <div className="p-6 rounded-2xl bg-gradient-to-br from-indigo-900/50 to-purple-900/40 border border-white/10">
+    <div className="p-6 rounded-2xl bg-gradient-to-br from-indigo-900/50 to-blue-900/40 border border-white/10">
       <h3 className="text-xl font-semibold mb-2">
         Future of Tourist Safety
       </h3>
@@ -24,7 +24,7 @@ export default function BrainRoomCard() {
         <span className="text-green-400">🟢 Active</span>
         <button
           onClick={joinRoom}
-          className="px-4 py-2 bg-purple-600 rounded-xl"
+          className="px-4 py-2 bg-blue-600 rounded-xl"
         >
           Join Room
         </button>

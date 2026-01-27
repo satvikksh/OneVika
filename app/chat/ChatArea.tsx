@@ -154,7 +154,7 @@ export default function ChatArea({
   }, [messages, messagesEndRef]);
 
   return (
-    <div className="flex flex-col h-full w-full">
+    <div className="flex flex-col h-full w-full bg-white dark:bg-black">
       {/* Connection Status Indicator (optional) */}
       {/* {isConnected !== undefined && (
         <div className={`px-4 py-2 text-xs text-center ${isConnected ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
@@ -167,7 +167,7 @@ export default function ChatArea({
         {selectedUser ? (
           loadingMessages ? (
             <div className="flex items-center justify-center h-full">
-              <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
+              <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
             </div>
           ) : (
             <div className="space-y-3 p-4">
@@ -194,14 +194,14 @@ export default function ChatArea({
                         <div
                           className={`rounded-2xl px-4 py-3 ${
                             isCurrentUser
-                              ? 'bg-purple-600 text-white rounded-br-none'
+                              ? 'bg-blue-600 text-white rounded-br-none'
                               : 'bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-white rounded-bl-none'
                           } ${msg.status === 'sending' ? 'opacity-80' : ''}`}
                           onContextMenu={(e) => handleMessageContextMenu(e, msg)}
                         >
                           {/* Reply indicator */}
                           {msg.replyToId && (
-                            <div className="mb-2 p-2 bg-black/10 dark:bg-white/10 rounded-lg border-l-4 border-purple-400">
+                            <div className="mb-2 p-2 bg-black/10 dark:bg-white/10 rounded-lg border-l-4 border-blue-400">
                               <p className="text-xs italic opacity-75">Replying to a message</p>
                             </div>
                           )}
@@ -272,18 +272,18 @@ export default function ChatArea({
 
       {/* Input Area - Fixed at bottom within chat area */}
       {selectedUser && (
-        <div className="fixed bottom-0 left-0 lg:left-80 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
+        <div className="fixed bottom-0 left-0 lg:left-80 right-0 bg-white dark:bg-black border-t border-gray-200 dark:border-gray-800">
           {/* Reply Preview */}
           {replyTo && (
-            <div className="px-4 pt-3 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border-b border-purple-200 dark:border-purple-800">
+            <div className="px-4 pt-3 bg-gradient-to-r from-blue-50 to-pink-50 dark:from-blue-900/20 dark:to-pink-900/20 border-b border-blue-200 dark:border-blue-800">
               <div className="flex justify-between items-center">
                 <div className="flex-1">
-                  <p className="text-xs font-medium text-purple-600 dark:text-purple-400 mb-1">Replying to</p>
+                  <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mb-1">Replying to</p>
                   <p className="text-sm text-gray-800 dark:text-gray-200 truncate">{replyTo.text || replyTo.content}</p>
                 </div>
                 <button
                   onClick={() => setReplyTo(null)}
-                  className="ml-3 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                  className="ml-3 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-black rounded-lg transition-colors"
                 >
                   ✕
                 </button>
@@ -313,7 +313,7 @@ export default function ChatArea({
                 <button
                   type="button"
                   onClick={handleFileSelect}
-                  className="p-2 text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                  className="p-2 text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-black rounded-lg transition-colors"
                   aria-label="Attach file"
                 >
                   <Paperclip size={20} />
@@ -324,7 +324,7 @@ export default function ChatArea({
                   <button
                     type="button"
                     onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                    className="p-2 text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                    className="p-2 text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-black rounded-lg transition-colors"
                     aria-label="Emoji"
                   >
                     <Smile size={20} />
@@ -333,7 +333,7 @@ export default function ChatArea({
                   {showEmojiPicker && (
                     <div
                       ref={emojiPickerRef}
-                      className="absolute bottom-full left-0 mb-6 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 p-8 w-105 z-50 animate-fadeIn"
+                      className="absolute bottom-full left-0 mb-6 bg-white dark:bg-black rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 p-8 w-105 z-50 animate-fadeIn"
                     >
                       <div className="grid grid-cols-5 gap-4">
                         {commonEmojis.map((emoji, idx) => (
@@ -366,7 +366,7 @@ export default function ChatArea({
                     onFocus={handleInputFocus}
                     onBlur={handleInputBlur}
                     placeholder="Type a message..."
-                    className="w-full resize-none rounded-xl border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    className="w-full resize-none rounded-xl border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     style={{ minHeight: '30px', maxHeight: '50px' }}
                   />
                 </div>
@@ -376,7 +376,7 @@ export default function ChatArea({
                   type="button"
                   onClick={handleSendClick}
                   disabled={sendingMessage || !newMessage.trim() || (isConnected !== undefined && !isConnected)}
-                  className="p-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg flex items-center justify-center"
+                  className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg flex items-center justify-center"
                   style={{ minHeight: '44px', minWidth: '44px' }}
                 >
                   {sendingMessage ? (

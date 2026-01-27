@@ -75,7 +75,7 @@ const {
     return (
       <>
         <header
-          className={`fixed top-16 ${positionClasses} z-40 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 h-16 transition-all duration-300`}
+          className={`fixed top-16 ${positionClasses} z-40 bg-white dark:bg-black border-b border-gray-200 dark:border-gray-800 h-16 transition-all duration-300`}
         >
           <div className="h-full flex items-center justify-between px-4">
             <div className="flex items-center gap-3">
@@ -88,7 +88,7 @@ const {
                   <Menu size={20} />
                 </button>
               )}
-              <Users className="h-8 w-8 text-purple-600 dark:text-purple-400" />
+              <Users className="h-8 w-8 text-blue-600 dark:text-blue-400" />
               <span className="text-lg font-semibold text-gray-900 dark:text-white">
                 Select a conversation
               </span>
@@ -122,14 +122,14 @@ const {
   return (
     <>
       <header
-        className={`fixed top-16 ${positionClasses} z-40 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 h-16 transition-all duration-300 translate-y-0`}
+        className={`fixed top-16 ${positionClasses} z-40 bg-white dark:bg-black border-b border-gray-200 dark:border-gray-800 h-16 transition-all duration-300 translate-y-0`}
       >
         <div className="h-full px-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             {isMobile ? (
               <button
                 onClick={onBack}
-                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors active:scale-95 flex-shrink-0"
+                className="p-2 hover:bg-gray-100 dark:hover:bg-black rounded-xl transition-colors active:scale-95 flex-shrink-0"
                 aria-label="Back to chats"
               >
                 <ArrowLeft size={20} />
@@ -138,7 +138,7 @@ const {
               onToggleSidebar && (
                 <button
                   onClick={onToggleSidebar}
-                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors active:scale-95 flex-shrink-0"
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-black rounded-xl transition-colors active:scale-95 flex-shrink-0"
                   aria-label="Toggle sidebar"
                 >
                   <Menu size={20} />
@@ -150,7 +150,7 @@ const {
               <div className="relative flex-shrink-0">
                 <button
                   onClick={handleUserProfileClick}
-                  className="relative w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-purple-500 to-blue-500 ring-2 ring-white dark:ring-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500 active:scale-95 transition-transform"
+                  className="relative w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-blue-700 ring-2 ring-white dark:ring-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 active:scale-95 transition-transform"
                   aria-label="View user profile"
                 >
                   {selectedUser.avatar ? (
@@ -178,12 +178,12 @@ const {
                 className="text-left focus:outline-none hover:opacity-80 transition-opacity"
                 aria-label="View user profile"
               >
-                <h3 className="font-bold text-gray-900 dark:text-white text-sm sm:text-base hover:text-purple-600 dark:hover:text-purple-400 transition-colors">
+                <h3 className="font-bold text-gray-900 dark:text-white text-sm sm:text-base hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
                   {selectedUser.name}
                 </h3>
                 <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
                   {typingUsers.has(selectedUser.id) ? (
-                    <span className="text-purple-600 dark:text-purple-400 italic">
+                    <span className="text-blue-600 dark:text-blue-400 italic">
                       typing...
                     </span>
                   ) : isUserOnline ? (

@@ -96,7 +96,7 @@ const archives: Archive[] = [
     users: 2456,
     lastAccessed: "Now",
     tags: ["conceptual", "interactive", "archetypal"],
-    color: "from-purple-600 to-pink-600"
+    color: "from-blue-600 to-pink-600"
   },
   {
     id: "echoes-ancients",
@@ -252,13 +252,13 @@ export default function CosmicArchivesPage() {
 
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-black via-indigo-950/50 to-purple-950/30 text-white overflow-hidden" ref={containerRef}>
+    <div className="min-h-screen bg-linear-to-br from-black via-indigo-950/50 to-blue-950/30 text-white overflow-hidden" ref={containerRef}>
       {/* Animated Background */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         {particles.map(particle => (
           <div
             key={particle.id}
-            className="absolute rounded-full bg-linear-to-r from-indigo-500/20 to-purple-500/20"
+            className="absolute rounded-full bg-linear-to-r from-indigo-500/20 to-blue-500/20"
             style={{
               left: `${particle.x}%`,
               top: `${particle.y}%`,
@@ -270,13 +270,13 @@ export default function CosmicArchivesPage() {
             }}
           />
         ))}
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl" />
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl" />
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl" />
       </div>
 
       {/* Hero Section */}
       <div className="relative pt-16 pb-24 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/5 via-transparent to-purple-500/5" />
+        <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/5 via-transparent to-blue-500/5" />
         <div className="container mx-auto px-6 relative">
           <div className="max-w-3xl mx-auto text-center">
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 backdrop-blur-sm mb-6 animate-pulse">
@@ -288,7 +288,7 @@ export default function CosmicArchivesPage() {
             </div>
 
             <h1 className="text-5xl sm:text-6xl lg:text-7xl font-extrabold mb-6">
-              <span className="bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-indigo-400 via-blue-400 to-pink-400 bg-clip-text text-transparent">
                 Cosmic Archives
               </span>
               <div className="text-2xl sm:text-3xl mt-4 font-light text-white/70">
@@ -308,7 +308,7 @@ export default function CosmicArchivesPage() {
                 <div className="text-sm text-white/60">Archives</div>
               </div>
               <div className="text-center">
-                <div className="text-3xl font-bold text-purple-400">42.7k</div>
+                <div className="text-3xl font-bold text-blue-400">42.7k</div>
                 <div className="text-sm text-white/60">Active Researchers</div>
               </div>
               <div className="text-center">
@@ -330,7 +330,7 @@ export default function CosmicArchivesPage() {
           {/* Main Search */}
           <div className="max-w-2xl mx-auto mb-8">
             <div className="relative group">
-              <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/20 to-purple-500/20 rounded-2xl blur-xl group-hover:blur-2xl transition-all duration-500" />
+              <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/20 to-blue-500/20 rounded-2xl blur-xl group-hover:blur-2xl transition-all duration-500" />
               <div className="relative flex items-center bg-black/60 border border-white/15 rounded-2xl px-6 py-4 backdrop-blur-xl">
                 <Search className="w-6 h-6 text-indigo-400 flex-shrink-0" />
                 <input
@@ -339,7 +339,7 @@ export default function CosmicArchivesPage() {
                   placeholder="Search across realities... (Try 'quantum', 'dream', or 'simulation')"
                   className="w-full bg-transparent outline-none text-white placeholder:text-white/40 px-4 text-lg"
                 />
-                <button className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 rounded-lg transition-all font-medium">
+                <button className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 rounded-lg transition-all font-medium">
                   Neural Search
                   <Brain className="w-4 h-4" />
                 </button>
@@ -427,7 +427,7 @@ export default function CosmicArchivesPage() {
                     <button
                       key={era}
                       onClick={() => setSelectedEra(era)}
-                      className={`px-3 py-1.5 text-sm rounded-lg transition-all ${selectedEra === era ? 'bg-purple-600' : 'bg-white/5 hover:bg-white/10'}`}
+                      className={`px-3 py-1.5 text-sm rounded-lg transition-all ${selectedEra === era ? 'bg-blue-600' : 'bg-white/5 hover:bg-white/10'}`}
                     >
                       {era}
                     </button>
@@ -467,7 +467,7 @@ export default function CosmicArchivesPage() {
                 key={archive.id}
                 className="group relative"
               >
-                <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/20 to-purple-500/20 rounded-2xl blur-xl group-hover:blur-2xl transition-all duration-500 opacity-0 group-hover:opacity-100" />
+                <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/20 to-blue-500/20 rounded-2xl blur-xl group-hover:blur-2xl transition-all duration-500 opacity-0 group-hover:opacity-100" />
                 <div className="relative h-full p-6 rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-transparent backdrop-blur-xl hover:scale-[1.02] hover:shadow-2xl hover:shadow-indigo-500/30 transition-all duration-500 hover:border-indigo-500/30">
                   {/* Access Badge */}
                   <div className="absolute top-4 right-4 flex items-center gap-2">
@@ -598,7 +598,7 @@ export default function CosmicArchivesPage() {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => handleAccessArchive(archive)}
-                      className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 rounded-lg transition-all font-medium"
+                      className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 rounded-lg transition-all font-medium"
                     >
                       Access
                     </button>
@@ -612,7 +612,7 @@ export default function CosmicArchivesPage() {
         {/* Empty State */}
         {filteredArchives.length === 0 && (
           <div className="text-center py-24">
-            <div className="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-indigo-500/20 to-purple-500/20 rounded-full flex items-center justify-center">
+            <div className="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-indigo-500/20 to-blue-500/20 rounded-full flex items-center justify-center">
               <ShieldAlert className="w-12 h-12 text-indigo-400" />
             </div>
             <h3 className="text-2xl font-bold mb-3">No Archives Found</h3>
@@ -621,7 +621,7 @@ export default function CosmicArchivesPage() {
             </p>
             <button
               onClick={clearFilters}
-              className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 rounded-lg transition-all font-medium"
+              className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 rounded-lg transition-all font-medium"
             >
               Reset All Filters
             </button>
@@ -710,11 +710,11 @@ export default function CosmicArchivesPage() {
                         <p className="text-sm text-amber-400/80">Excessive exposure may cause temporal disorientation</p>
                       </div>
                     </div>
-                    <div className="flex items-start gap-3 p-4 bg-purple-500/10 border border-purple-500/30 rounded-xl">
-                      <Brain className="w-5 h-5 text-purple-400 mt-0.5" />
+                    <div className="flex items-start gap-3 p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl">
+                      <Brain className="w-5 h-5 text-blue-400 mt-0.5" />
                       <div>
-                        <div className="font-medium text-purple-300">Cognitive Load</div>
-                        <p className="text-sm text-purple-400/80">Contains information that exceeds normal processing capacity</p>
+                        <div className="font-medium text-blue-300">Cognitive Load</div>
+                        <p className="text-sm text-blue-400/80">Contains information that exceeds normal processing capacity</p>
                       </div>
                     </div>
                   </div>
@@ -725,7 +725,7 @@ export default function CosmicArchivesPage() {
               <div className="flex gap-4 mt-8 pt-8 border-t border-white/10">
                 <button
                   onClick={() => handleAccessArchive(selectedArchive)}
-                  className="flex-1 flex items-center justify-center gap-3 px-8 py-4 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 transition-all font-bold text-lg"
+                  className="flex-1 flex items-center justify-center gap-3 px-8 py-4 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 transition-all font-bold text-lg"
                 >
                   <Database className="w-5 h-5" />
                   Initialize Neural Interface
@@ -745,7 +745,7 @@ export default function CosmicArchivesPage() {
       {/* Notification Toast */}
       {notification && (
         <div className="fixed bottom-4 right-4 z-50 animate-slideInUp">
-          <div className="px-6 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl shadow-2xl border border-white/20 backdrop-blur-sm">
+          <div className="px-6 py-4 bg-gradient-to-r from-indigo-600 to-blue-600 rounded-xl shadow-2xl border border-white/20 backdrop-blur-sm">
             <div className="flex items-center gap-3">
               <Sparkles className="w-5 h-5" />
               <span>{notification}</span>
@@ -760,7 +760,7 @@ export default function CosmicArchivesPage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             <div>
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-blue-600 flex items-center justify-center">
                   <Brain className="w-6 h-6" />
                 </div>
                 <div>

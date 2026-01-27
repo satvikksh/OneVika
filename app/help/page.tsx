@@ -128,7 +128,7 @@ export default function HelpSupportPage() {
   // Help categories
   const helpCategories = [
     { icon: BookOpen, title: "Documentation", count: 142, color: "from-blue-500 to-cyan-500" },
-    { icon: Video, title: "Video Tutorials", count: 36, color: "from-purple-500 to-pink-500" },
+    { icon: Video, title: "Video Tutorials", count: 36, color: "from-blue-500 to-pink-500" },
     { icon: FileText, title: "API Reference", count: 89, color: "from-green-500 to-emerald-500" },
     { icon: Users, title: "Community", count: 2456, color: "from-amber-500 to-orange-500" },
     { icon: Code, title: "Developer Tools", count: 24, color: "from-red-500 to-rose-500" },
@@ -531,13 +531,13 @@ export default function HelpSupportPage() {
                 </button>
               </div>
               
-              <div className="p-6 rounded-2xl border border-white/10 bg-gradient-to-br from-purple-500/10 to-pink-500/10">
-                <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center mb-4">
-                  <Phone className="w-6 h-6 text-purple-400" />
+              <div className="p-6 rounded-2xl border border-white/10 bg-gradient-to-br from-blue-500/10 to-pink-500/10">
+                <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center mb-4">
+                  <Phone className="w-6 h-6 text-blue-400" />
                 </div>
                 <h4 className="text-xl font-bold mb-2">Phone Support</h4>
                 <p className="text-white/60 mb-4">24/7 emergency support line</p>
-                <div className="text-purple-400 font-medium">+91 7580915543</div>
+                <div className="text-blue-400 font-medium">+91 7580915543</div>
               </div>
             </div>
             
@@ -669,7 +669,7 @@ export default function HelpSupportPage() {
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="px-8 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 rounded-xl transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-8 py-3 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 rounded-xl transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isSubmitting ? (
                       <div className="flex items-center gap-2">
@@ -706,7 +706,7 @@ export default function HelpSupportPage() {
           <div className="space-y-8">
             {/* FAQ Search */}
             <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/20 to-purple-500/20 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/20 to-blue-500/20 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
               <div className="relative flex items-center bg-white/5 border border-white/10 rounded-2xl px-6 py-4">
                 <Search className="w-6 h-6 text-indigo-400 flex-shrink-0" />
                 <input
@@ -720,7 +720,7 @@ export default function HelpSupportPage() {
                 <button
                   onClick={handleSearch}
                   disabled={isSearching}
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 rounded-lg transition-all font-medium disabled:opacity-50"
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 rounded-lg transition-all font-medium disabled:opacity-50"
                 >
                   {isSearching ? (
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -807,7 +807,7 @@ export default function HelpSupportPage() {
                 <div className="text-3xl font-bold mb-2">1,892</div>
                 <div className="text-sm text-white/60">Forum Posts</div>
               </div>
-              <div className="p-6 bg-gradient-to-br from-purple-500/10 to-pink-500/10 rounded-2xl border border-white/10">
+              <div className="p-6 bg-gradient-to-br from-blue-500/10 to-pink-500/10 rounded-2xl border border-white/10">
                 <div className="text-3xl font-bold mb-2">342</div>
                 <div className="text-sm text-white/60">Code Samples</div>
               </div>
@@ -827,7 +827,7 @@ export default function HelpSupportPage() {
                     description: "Real-time chat with developers",
                     members: "1,200+ online",
                     icon: "💬",
-                    color: "from-indigo-500 to-purple-500",
+                    color: "from-indigo-500 to-blue-500",
                     link: "https://discord.gg/neuralnexus"
                   },
                   {
@@ -903,7 +903,7 @@ export default function HelpSupportPage() {
                 ].map((activity, index) => (
                   <div key={index} className="p-4 bg-white/5 rounded-xl border border-white/10 hover:bg-white/10 transition-colors">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 flex items-center justify-center">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-r from-indigo-500 to-blue-500 flex items-center justify-center">
                         <Users className="w-5 h-5" />
                       </div>
                       <div className="flex-1">
@@ -925,7 +925,7 @@ export default function HelpSupportPage() {
             <div className="flex flex-wrap gap-4">
               <button
                 onClick={() => setActiveTab("contact")}
-                className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 rounded-xl transition-all font-medium"
+                className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 rounded-xl transition-all font-medium"
               >
                 + Create New Ticket
               </button>
@@ -1097,7 +1097,7 @@ export default function HelpSupportPage() {
   return (
     <div className="fixed bottom-24 right-6 z-50 w-96 h-[600px] bg-gradient-to-b from-slate-900 to-black rounded-2xl border border-white/20 shadow-2xl overflow-hidden flex flex-col">
       {/* Chat Header */}
-      <div className="p-4 border-b border-white/10 bg-gradient-to-r from-indigo-600 to-purple-600 flex-shrink-0">
+      <div className="p-4 border-b border-white/10 bg-gradient-to-r from-indigo-600 to-blue-600 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="relative">
@@ -1164,7 +1164,7 @@ export default function HelpSupportPage() {
             <div
               className={`max-w-[80%] p-3 rounded-2xl ${
                 msg.sender === 'user'
-                  ? 'bg-gradient-to-r from-indigo-500 to-purple-500'
+                  ? 'bg-gradient-to-r from-indigo-500 to-blue-500'
                   : 'bg-white/10'
               }`}
             >
@@ -1236,7 +1236,7 @@ export default function HelpSupportPage() {
           <button
             type="submit"
             disabled={!newMessage.trim() || isTyping}
-            className="px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 rounded-xl transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="px-4 py-3 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 rounded-xl transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {isTyping ? (
               <>
@@ -1256,7 +1256,7 @@ export default function HelpSupportPage() {
 };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-black via-indigo-950/40 to-purple-950/30 text-white p-4 md:p-8">
+    <div className="min-h-screen bg-gradient-to-br from-black via-indigo-950/40 to-blue-950/30 text-white p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -1290,7 +1290,7 @@ export default function HelpSupportPage() {
                       onClick={() => setActiveTab(item.id)}
                       className={`w-full text-left flex items-center gap-3 p-3 rounded-xl transition-all ${
                         activeTab === item.id
-                          ? "bg-gradient-to-r from-indigo-500/20 to-purple-500/20 text-indigo-300 border border-indigo-500/30"
+                          ? "bg-gradient-to-r from-indigo-500/20 to-blue-500/20 text-indigo-300 border border-indigo-500/30"
                           : "hover:bg-white/10 text-white/80"
                       }`}
                     >
@@ -1349,7 +1349,7 @@ export default function HelpSupportPage() {
         {/* Chat Toggle Button */}
         <button
           onClick={() => setIsChatOpen(!isChatOpen)}
-          className="fixed bottom-6 right-6 z-40 p-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 rounded-full shadow-2xl transition-all"
+          className="fixed bottom-6 right-6 z-40 p-4 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 rounded-full shadow-2xl transition-all"
         >
           <MessageSquare className="w-6 h-6" />
         </button>

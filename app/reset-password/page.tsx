@@ -51,7 +51,7 @@ export default function ResetPassword() {
 
           <button
             onClick={reset}
-            className="w-full py-3 bg-purple-600 text-white rounded-xl"
+            className="w-full py-3 bg-blue-600 text-white rounded-xl"
           >
             Reset Password
           </button>

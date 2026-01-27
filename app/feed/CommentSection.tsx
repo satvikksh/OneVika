@@ -40,7 +40,7 @@ export default function CommentSection({
       {/* COMMENTS */}
       {comments.map((c: any) => (
         <div key={c._id} className="flex gap-2 text-sm">
-          <div className="w-8 h-8 rounded-full bg-purple-500 text-white flex items-center justify-center font-bold">
+          <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold">
             {c.user?.name?.[0] ?? "U"}
           </div>
           <div className="bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded-xl">
@@ -62,7 +62,7 @@ export default function CommentSection({
           <button
             onClick={submitComment}
             disabled={loading}
-            className="px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-blue-500 text-white"
+            className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 text-white"
           >
             <Send size={18} />
           </button>

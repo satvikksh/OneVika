@@ -64,7 +64,7 @@ export default function LoginPage() {
     >
       {/* Background Glow */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl" />
+        <div className="absolute -top-40 -right-40 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl" />
         <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl" />
       </div>
 
@@ -83,7 +83,7 @@ export default function LoginPage() {
           </div>
 
           <h2
-            className="text-3xl font-bold mt-4 bg-linear-to-r from-purple-400 to-blue-400 
+            className="text-3xl font-bold mt-4 bg-linear-to-r from-blue-400 to-blue-400 
             bg-clip-text text-transparent"
           >
             Login to Continue
@@ -146,7 +146,7 @@ export default function LoginPage() {
             type="submit"
             disabled={loading}
             className="w-full flex items-center justify-center gap-2 py-3 
-            bg-linear-to-r from-purple-600 to-blue-500 text-white 
+            bg-linear-to-r from-blue-600 to-blue-500 text-white 
             rounded-xl font-semibold text-lg hover:scale-105 transition
             disabled:opacity-60 disabled:cursor-not-allowed"
           >
@@ -176,7 +176,7 @@ export default function LoginPage() {
 
         <p className="mt-6 text-center text-gray-600 dark:text-gray-400">
           Don&apos;t have an account?{" "}
-          <a href="/register" className="text-purple-600 dark:text-purple-400 font-semibold hover:underline">
+          <a href="/register" className="text-blue-600 dark:text-blue-400 font-semibold hover:underline">
             Create one
           </a>
         </p>

@@ -38,7 +38,7 @@ export default function ProfileError({
           </button>
           <button
             onClick={() => router.push('/chat')}
-            className="px-6 py-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-colors font-medium"
+            className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium"
           >
             Go to Chats
           </button>

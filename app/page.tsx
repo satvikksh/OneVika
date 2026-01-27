@@ -69,7 +69,7 @@ export default function Home() {
         text: "Explore interdimensional knowledge from across the multiverse",
         image: "/img/cosmic.png",
         link: "/cosmic-archives",
-        variant: "purple",
+        variant: "blue",
         category: "Interdimensional",
         tag: "✨ Exclusive",
       },
@@ -217,8 +217,8 @@ export default function Home() {
   // Get variant color classes
   const getVariantClasses = (variant: string) => {
     const variants: Record<string, string> = {
-      purple:
-        "bg-purple-500/10 border-purple-500/20 text-purple-600 dark:text-purple-400",
+      blue:
+        "bg-blue-500/10 border-blue-500/20 text-blue-600 dark:text-blue-400",
       emerald:
         "bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400",
       amber:
@@ -227,19 +227,19 @@ export default function Home() {
       sky: "bg-sky-500/10 border-sky-500/20 text-sky-600 dark:text-sky-400",
       gray: "bg-gray-500/10 border-gray-500/20 text-gray-600 dark:text-gray-400",
     };
-    return variants[variant] || variants.purple;
+    return variants[variant] || variants.blue;
   };
 
   const getVariantgradient = (variant: string) => {
     const gradients: Record<string, string> = {
-      purple: "from-purple-600 to-blue-500",
+      blue: "from-blue-600 to-blue-500",
       emerald: "from-emerald-600 to-green-500",
       amber: "from-amber-600 to-yellow-500",
       rose: "from-rose-600 to-pink-500",
       sky: "from-sky-600 to-cyan-500",
       gray: "from-gray-600 to-gray-500",
     };
-    return gradients[variant] || gradients.purple;
+    return gradients[variant] || gradients.blue;
   };
 
   // Don't render theme-dependent content until mounted
@@ -293,7 +293,7 @@ export default function Home() {
                   <div className="max-w-5xl mx-auto space-y-6 md:space-y-8 animate-in slide-in-from-bottom-10 fade-in duration-700">
                     {/* Badge */}
                     <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/20 shadow-lg">
-                      <Sparkles className="w-3.5 h-3.5 text-purple-300" />
+                      <Sparkles className="w-3.5 h-3.5 text-blue-300" />
                       <span className="text-xs md:text-sm font-bold tracking-widest text-white uppercase">
                         Imaginary Initiative
                       </span>
@@ -301,7 +301,7 @@ export default function Home() {
 
                     {/* Title */}
                     <h1 className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-black text-white mb-4 leading-[1.1] tracking-tight drop-shadow-sm">
-                      <span className="bg-gradient-to-r from-purple-300 via-pink-300 to-blue-300 bg-clip-text text-transparent">
+                      <span className="bg-gradient-to-r from-blue-300 via-pink-300 to-blue-300 bg-clip-text text-transparent">
                         {slide.title}
                       </span>
                     </h1>
@@ -376,7 +376,7 @@ export default function Home() {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-24">
           {/* Header */}
           <div className="text-center max-w-3xl mx-auto mb-16">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 mb-6 shadow-lg shadow-purple-500/25">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-blue-500 to-blue-500 mb-6 shadow-lg shadow-blue-500/25">
               <Rocket className="w-4 h-4 text-white" />
               <span className="text-sm font-bold text-white tracking-wide">
                 IMAGINARY INITIATIVE
@@ -385,14 +385,14 @@ export default function Home() {
 
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black mb-6 tracking-tight text-gray-900 dark:text-white">
               Satvik&#39;s{" "}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600">
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-pink-600 to-blue-600">
                 Imaginary Collective
               </span>
             </h1>
 
             <p className="text-lg sm:text-xl text-gray-600 dark:text-gray-400 mb-8 leading-relaxed">
               Building{" "}
-              <span className="font-bold text-gray-900 dark:text-white underline decoration-purple-500 decoration-2 underline-offset-4">
+              <span className="font-bold text-gray-900 dark:text-white underline decoration-blue-500 decoration-2 underline-offset-4">
                 impossible things
               </span>{" "}
               in a world that doesn&#39;t exist.
@@ -402,7 +402,7 @@ export default function Home() {
             <div className="flex flex-wrap gap-4 justify-center mb-8">
               <Link
                 href="/manifesto"
-                className="px-6 py-3 rounded-xl border border-purple-500/30 bg-purple-50/50 dark:bg-purple-900/10 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-all duration-300 font-medium flex items-center gap-2"
+                className="px-6 py-3 rounded-xl border border-blue-500/30 bg-blue-50/50 dark:bg-blue-900/10 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-all duration-300 font-medium flex items-center gap-2"
               >
                 <BookOpen className="w-4 h-4" />
                 Read Manifesto
@@ -424,7 +424,7 @@ export default function Home() {
                 icon: <Globe className="w-6 h-6" />,
                 title: "No Limits",
                 description: "Physics, logic, and reality are optional here.",
-                color: "purple",
+                color: "blue",
               },
               {
                 icon: <Sparkles className="w-6 h-6" />,
@@ -441,12 +441,12 @@ export default function Home() {
             ].map((feature, index) => (
               <div
                 key={index}
-                className="group p-8 rounded-3xl bg-white dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800 hover:border-purple-500/30 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-purple-500/5"
+                className="group p-8 rounded-3xl bg-white dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800 hover:border-blue-500/30 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-500/5"
               >
                 <div
                   className={`w-12 h-12 rounded-2xl ${
-                    feature.color === "purple"
-                      ? "bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400"
+                    feature.color === "blue"
+                      ? "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
                       : feature.color === "pink"
                       ? "bg-pink-100 text-pink-600 dark:bg-pink-900/30 dark:text-pink-400"
                       : "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
@@ -478,7 +478,7 @@ export default function Home() {
               </div>
               <Link
                 href="/projects"
-                className="inline-flex items-center gap-2 font-semibold text-purple-600 dark:text-purple-400 hover:gap-3 transition-all"
+                className="inline-flex items-center gap-2 font-semibold text-blue-600 dark:text-blue-400 hover:gap-3 transition-all"
               >
                 View all projects <ArrowRight className="w-4 h-4" />
               </Link>
@@ -488,7 +488,7 @@ export default function Home() {
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
               {cardsData.map((card, index) => (
                 <div key={index} className="group relative">
-                  <div className="h-full rounded-3xl overflow-hidden bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:border-purple-500/30 transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl hover:shadow-purple-500/10">
+                  <div className="h-full rounded-3xl overflow-hidden bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:border-blue-500/30 transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl hover:shadow-blue-500/10">
                     {/* Card Header with Image */}
                     <div className="relative h-56 overflow-hidden">
                       <div className="absolute top-4 left-4 z-10 flex gap-2">
@@ -511,7 +511,7 @@ export default function Home() {
 
                     {/* Card Body */}
                     <div className="p-6 md:p-8">
-                      <div className="text-xs font-semibold text-purple-600 dark:text-purple-400 mb-2 uppercase tracking-wider">
+                      <div className="text-xs font-semibold text-blue-600 dark:text-blue-400 mb-2 uppercase tracking-wider">
                         {card.category}
                       </div>
                       <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3 leading-tight">
@@ -554,11 +554,11 @@ export default function Home() {
         {/* Call to Action Section */}
         <div className="relative py-24 md:py-32 overflow-hidden">
           {/* Background Gradient */}
-          <div className="absolute inset-0 bg-gradient-to-br from-indigo-900 via-purple-900 to-black" />
+          <div className="absolute inset-0 bg-gradient-to-br from-indigo-900 via-blue-900 to-black" />
 
           {/* Animated Background Elements */}
           <div className="absolute inset-0 overflow-hidden">
-            <div className="absolute -top-40 -right-40 w-[500px] h-[500px] bg-purple-500/20 rounded-full blur-[100px] animate-pulse" />
+            <div className="absolute -top-40 -right-40 w-[500px] h-[500px] bg-blue-500/20 rounded-full blur-[100px] animate-pulse" />
             <div className="absolute -bottom-40 -left-40 w-[500px] h-[500px] bg-blue-500/20 rounded-full blur-[100px] animate-pulse delay-700" />
           </div>
 
@@ -596,7 +596,7 @@ export default function Home() {
 
                     <Link
                       href="/join"
-                      className="inline-flex items-center gap-3 px-8 py-4 rounded-xl bg-white text-black font-bold text-lg hover:bg-purple-50 transition-all duration-300 hover:scale-105 hover:shadow-[0_0_30px_rgba(255,255,255,0.3)]"
+                      className="inline-flex items-center gap-3 px-8 py-4 rounded-xl bg-white text-black font-bold text-lg hover:bg-blue-50 transition-all duration-300 hover:scale-105 hover:shadow-[0_0_30px_rgba(255,255,255,0.3)]"
                     >
                       <Rocket className="w-5 h-5" />
                       Launch Concept
@@ -606,7 +606,7 @@ export default function Home() {
                   {/* Right Column */}
                   <div className="text-center lg:text-right">
                     <div className="inline-block relative">
-                      <div className="absolute -inset-4 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full blur-xl opacity-50 animate-pulse" />
+                      <div className="absolute -inset-4 bg-gradient-to-r from-blue-500 to-blue-500 rounded-full blur-xl opacity-50 animate-pulse" />
                       <div className="relative w-40 h-40 rounded-full bg-black/50 border-2 border-white/20 flex items-center justify-center backdrop-blur-md">
                         <span className="text-6xl">🌌</span>
                       </div>
@@ -631,7 +631,7 @@ export default function Home() {
               {/* Brand */}
               <div className="lg:col-span-1">
                 <div className="flex items-center gap-3 mb-6">
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-blue-600 flex items-center justify-center">
                     <span className="text-white font-bold text-lg">S</span>
                   </div>
                   <h3 className="text-xl font-bold tracking-tight">
@@ -673,7 +673,7 @@ export default function Home() {
                       <li key={item}>
                         <Link
                           href="#"
-                          className={`hover:text-purple-500 transition-colors ${
+                          className={`hover:text-blue-500 transition-colors ${
                             isDarkMode ? "text-gray-400" : "text-gray-600"
                           }`}
                         >
@@ -698,7 +698,7 @@ export default function Home() {
                     <li key={item}>
                       <Link
                         href="#"
-                        className={`hover:text-purple-500 transition-colors ${
+                        className={`hover:text-blue-500 transition-colors ${
                           isDarkMode ? "text-gray-400" : "text-gray-600"
                         }`}
                       >
@@ -721,7 +721,7 @@ export default function Home() {
                   <p>New Delhi, India</p>
                   <Link
                     href="/contact"
-                    className="inline-block px-4 py-2 rounded-lg border border-purple-500/30 text-purple-500 hover:bg-purple-500 hover:text-white transition-all text-xs font-bold"
+                    className="inline-block px-4 py-2 rounded-lg border border-blue-500/30 text-blue-500 hover:bg-blue-500 hover:text-white transition-all text-xs font-bold"
                   >
                     Send Signal
                   </Link>
@@ -743,7 +743,7 @@ export default function Home() {
                 reserved.
               </p>
               <div className="flex gap-2">
-                <span className="px-2 py-1 rounded text-[10px] font-bold bg-purple-500/10 text-purple-500">
+                <span className="px-2 py-1 rounded text-[10px] font-bold bg-blue-500/10 text-blue-500">
                   CONCEPTUAL
                 </span>
                 <span className="px-2 py-1 rounded text-[10px] font-bold bg-blue-500/10 text-blue-500">

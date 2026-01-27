@@ -65,7 +65,7 @@ const constructs: QuantumConstruct[] = [
     energy: "Quantum Flux",
     description: "A lattice capable of bending local reality rules.",
     details: "Reality Weaver alters spacetime constants at a micro scale, enabling localized law rewrites without collapsing adjacent dimensions. Capable of creating temporary pockets of customized physics for experimental purposes.",
-    color: "from-purple-600 to-indigo-600",
+    color: "from-blue-600 to-indigo-600",
     icon: <Globe className="w-6 h-6" />,
     users: 42,
     online: true,
@@ -231,14 +231,14 @@ export default function QuantumConstructsPage() {
   return (
     <div 
       ref={containerRef}
-      className="min-h-screen bg-gradient-to-br from-black via-indigo-950/40 to-purple-950/30 text-white px-4 sm:px-6 py-8 sm:py-16 relative overflow-hidden"
+      className="min-h-screen bg-gradient-to-br from-black via-indigo-950/40 to-blue-950/30 text-white px-4 sm:px-6 py-8 sm:py-16 relative overflow-hidden"
     >
       {/* Animated Background */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         {particles.map(particle => (
           <div
             key={particle.id}
-            className="absolute rounded-full bg-gradient-to-r from-indigo-500/10 to-purple-500/10"
+            className="absolute rounded-full bg-gradient-to-r from-indigo-500/10 to-blue-500/10"
             style={{
               left: `${particle.x}%`,
               top: `${particle.y}%`,
@@ -250,7 +250,7 @@ export default function QuantumConstructsPage() {
             }}
           />
         ))}
-        <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-purple-500/5 rounded-full blur-3xl" />
+        <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl" />
         <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl" />
       </div>
 
@@ -261,11 +261,11 @@ export default function QuantumConstructsPage() {
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 backdrop-blur-sm mb-6 animate-pulse">
             <Atom className="w-4 h-4 text-indigo-400" />
             <span className="text-sm font-semibold tracking-wider">QUANTUM REALITY ENGINEERING LAB</span>
-            <CloudLightning className="w-4 h-4 text-purple-400" />
+            <CloudLightning className="w-4 h-4 text-blue-400" />
           </div>
 
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold mb-6">
-            <span className="bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-indigo-400 via-blue-400 to-pink-400 bg-clip-text text-transparent">
               Quantum Constructs
             </span>
           </h1>
@@ -314,7 +314,7 @@ export default function QuantumConstructsPage() {
             {/* Search */}
             <div className="flex-1">
               <div className="relative group">
-                <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/20 to-purple-500/20 rounded-2xl blur-xl group-hover:blur-2xl transition-all duration-500" />
+                <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/20 to-blue-500/20 rounded-2xl blur-xl group-hover:blur-2xl transition-all duration-500" />
                 <div className="relative flex items-center bg-black/60 border border-white/15 rounded-2xl px-4 py-3 backdrop-blur-xl">
                   <SearchIcon className="w-5 h-5 text-indigo-400 ml-2" />
                   <input
@@ -370,7 +370,7 @@ export default function QuantumConstructsPage() {
               max="100"
               value={filterStability || 50}
               onChange={(e) => setFilterStability(parseInt(e.target.value))}
-              className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-gradient-to-r [&::-webkit-slider-thumb]:from-indigo-500 [&::-webkit-slider-thumb]:to-purple-500"
+              className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-gradient-to-r [&::-webkit-slider-thumb]:from-indigo-500 [&::-webkit-slider-thumb]:to-blue-500"
             />
             <div className="flex justify-between text-xs text-white/50 mt-1">
               <span>50%</span>
@@ -512,7 +512,7 @@ export default function QuantumConstructsPage() {
         {/* Empty State */}
         {filteredConstructs.length === 0 && (
           <div className="text-center py-16">
-            <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-indigo-500/20 to-purple-500/20 rounded-full flex items-center justify-center">
+            <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-indigo-500/20 to-blue-500/20 rounded-full flex items-center justify-center">
               <CircuitBoard className="w-10 h-10 text-indigo-400" />
             </div>
             <h3 className="text-2xl font-bold mb-3">No Constructs Found</h3>
@@ -521,7 +521,7 @@ export default function QuantumConstructsPage() {
             </p>
             <button
               onClick={clearFilters}
-              className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 rounded-xl transition-all font-medium"
+              className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 rounded-xl transition-all font-medium"
             >
               Reset All Filters
             </button>

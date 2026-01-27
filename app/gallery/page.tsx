@@ -213,11 +213,11 @@ export default function GalleryPage() {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-gray-900 to-slate-800 text-white">
       {/* Hero Section */}
       <div className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-purple-600/20 via-transparent to-pink-600/20" />
+        <div className="absolute inset-0 bg-gradient-to-r from-blue-600/20 via-transparent to-pink-600/20" />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 relative">
           <div className="text-center max-w-3xl mx-auto">
             <h1 className="text-5xl md:text-6xl font-extrabold mb-6">
-              <span className="bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-blue-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
                 Gallery
               </span>
             </h1>
@@ -233,7 +233,7 @@ export default function GalleryPage() {
                 placeholder="Search images by title, description, or tags..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-12 pr-4 py-4 bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                className="w-full pl-12 pr-4 py-4 bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
           </div>
@@ -260,7 +260,7 @@ export default function GalleryPage() {
                 <button
                   onClick={() => setViewMode("grid")}
                   className={`p-2 rounded-md transition-colors ${
-                    viewMode === "grid" ? "bg-purple-500" : "hover:bg-white/10"
+                    viewMode === "grid" ? "bg-blue-500" : "hover:bg-white/10"
                   }`}
                 >
                   <Grid className="w-5 h-5" />
@@ -268,7 +268,7 @@ export default function GalleryPage() {
                 <button
                   onClick={() => setViewMode("list")}
                   className={`p-2 rounded-md transition-colors ${
-                    viewMode === "list" ? "bg-purple-500" : "hover:bg-white/10"
+                    viewMode === "list" ? "bg-blue-500" : "hover:bg-white/10"
                   }`}
                 >
                   <List className="w-5 h-5" />
@@ -287,7 +287,7 @@ export default function GalleryPage() {
                   onClick={() => setFilter(category)}
                   className={`px-4 py-2 rounded-full text-sm transition-all ${
                     filter === category
-                      ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white"
+                      ? "bg-gradient-to-r from-blue-500 to-pink-500 text-white"
                       : "bg-white/5 hover:bg-white/10 text-gray-300"
                   }`}
                 >
@@ -332,7 +332,7 @@ export default function GalleryPage() {
                 {/* Featured Badge */}
                 {/* {image.featured && (
                   <div className="absolute top-4 left-4 z-10">
-                    <span className="px-3 py-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-bold rounded-full">
+                    <span className="px-3 py-1 bg-gradient-to-r from-blue-500 to-pink-500 text-white text-xs font-bold rounded-full">
                       Featured
                     </span>
                   </div>
@@ -411,7 +411,7 @@ export default function GalleryPage() {
                     />
                     {image.featured && (
                       <div className="absolute top-4 left-4">
-                        <span className="px-3 py-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-bold rounded-full">
+                        <span className="px-3 py-1 bg-gradient-to-r from-blue-500 to-pink-500 text-white text-xs font-bold rounded-full">
                           Featured
                         </span>
                       </div>
@@ -423,7 +423,7 @@ export default function GalleryPage() {
                         <h3 className="text-2xl font-bold mb-2">{image.title}</h3>
                         <p className="text-gray-300 mb-4">{image.description}</p>
                         <div className="flex flex-wrap gap-2 mb-4">
-                          <span className="px-3 py-1 bg-purple-500/20 text-purple-300 rounded-full text-sm">
+                          <span className="px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full text-sm">
                             {image.category}
                           </span>
                           {image.tags.map(tag => (
@@ -483,7 +483,7 @@ export default function GalleryPage() {
                   setSearch("");
                   setSelectedTags([]);
                 }}
-                className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:opacity-90 transition-opacity"
+                className="px-6 py-3 bg-gradient-to-r from-blue-500 to-pink-500 text-white rounded-lg hover:opacity-90 transition-opacity"
               >
                 Clear all filters
               </button>
@@ -541,7 +541,7 @@ export default function GalleryPage() {
                   <p className="text-gray-300 mb-4">{selectedImage.description}</p>
                 </div>
                 {selectedImage.featured && (
-                  <span className="px-3 py-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-bold rounded-full">
+                  <span className="px-3 py-1 bg-gradient-to-r from-blue-500 to-pink-500 text-white text-xs font-bold rounded-full">
                     Featured
                   </span>
                 )}
@@ -551,7 +551,7 @@ export default function GalleryPage() {
               <div className="mb-6">
                 <div className="flex items-center gap-2 mb-3">
                   <span className="text-sm text-gray-400">Category:</span>
-                  <span className="px-3 py-1 bg-purple-500/20 text-purple-300 rounded-full text-sm">
+                  <span className="px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full text-sm">
                     {selectedImage.category}
                   </span>
                 </div>

@@ -116,7 +116,7 @@ export default function AnalyticsPage() {
       value: "4m 32s",
       change: "+2.1%",
       icon: <Clock className="w-6 h-6" />,
-      color: "from-purple-500 to-pink-500",
+      color: "from-blue-500 to-pink-500",
       subtext: "Time spent",
     },
     {
@@ -478,7 +478,7 @@ export default function AnalyticsPage() {
                   <span>2.1k/s</span>
                 </div>
                 <div className="w-full bg-slate-700 rounded-full h-2">
-                  <div className="bg-purple-500 h-2 rounded-full" style={{ width: '82%' }} />
+                  <div className="bg-blue-500 h-2 rounded-full" style={{ width: '82%' }} />
                 </div>
               </div>
               <div>

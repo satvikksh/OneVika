@@ -14,7 +14,7 @@ const ReplyPreview: React.FC<ReplyPreviewProps> = ({ replyTo, onCancel, senderNa
   if (!replyTo) return null;
 
   return (
-    <div className="px-3 sm:px-4 pt-2 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border-t border-gray-200 dark:border-gray-700">
+    <div className="px-3 sm:px-4 pt-2 bg-gradient-to-r from-blue-50 to-blue-50 dark:from-blue-900/20 dark:to-blue-900/20 border-t border-gray-200 dark:border-gray-700">
       <div className="flex items-start gap-2 p-2.5 sm:p-3 rounded-lg bg-white dark:bg-gray-800 border-l-4 border-blue-500 shadow-sm">
         <Reply size={16} className="text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
         <div className="flex-1 min-w-0">

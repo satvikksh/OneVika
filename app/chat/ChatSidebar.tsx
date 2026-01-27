@@ -132,12 +132,12 @@ export default function ChatSidebar({
         {/* Mobile Sidebar */}
         <aside
           ref={sidebarRef}
-          className={`lg:hidden fixed inset-y-16 left-0 z-50 w-[100%] max-w-sm bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col h-full transition-transform duration-300 ease-in-out ${
+          className={`lg:hidden fixed inset-y-16 left-0 z-50 w-[100%] max-w-sm bg-white dark:bg-black border-r border-gray-200 dark:border-gray-800 flex flex-col h-full transition-transform duration-300 ease-in-out ${
             showMobileSidebar ? 'translate-x-0' : '-translate-x-full'
           }`}
         >
           {/* Mobile Sidebar Header */}
-          <div className="flex-shrink-0 p-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+          <div className="flex-shrink-0 p-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-black">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
                 <button
@@ -175,7 +175,7 @@ export default function ChatSidebar({
                 <input
                   type="text"
                   placeholder="Search users..."
-                  className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500 text-gray-900 dark:text-white transition-all"
+                  className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white transition-all"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   autoFocus
@@ -201,7 +201,7 @@ export default function ChatSidebar({
                 <input
                   type="text"
                   placeholder="Search users..."
-                  className="w-full pl-10 pr-3 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500 text-gray-900 dark:text-white transition-all"
+                  className="w-full pl-10 pr-3 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white transition-all"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onClick={() => setIsSearching(true)}
@@ -243,12 +243,12 @@ export default function ChatSidebar({
                     onClick={() => handleUserSelect(user)}
                     className={`w-full flex items-center gap-3 p-4 transition-all duration-200 active:scale-98 ${
                       isSelected
-                        ? "bg-purple-100 dark:bg-purple-900/30"
+                        ? "bg-blue-100 dark:bg-blue-900/30"
                         : "hover:bg-gray-100 dark:hover:bg-gray-800"
                     }`}
                   >
                     <div className="relative flex-shrink-0">
-                      <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-purple-500 to-blue-500 ring-2 ring-white dark:ring-gray-900">
+                      <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-blue-500 ring-2 ring-white dark:ring-gray-900">
                         {user.avatar ? (
                           <Image
                             src={user.avatar}
@@ -283,7 +283,7 @@ export default function ChatSidebar({
                       </div>
                       <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
                         {typingUsers.has(user.id) ? (
-                          <span className="text-purple-600 dark:text-purple-400 italic">
+                          <span className="text-blue-600 dark:text-blue-400 italic">
                             typing...
                           </span>
                         ) : (
@@ -293,7 +293,7 @@ export default function ChatSidebar({
                     </div>
 
                     {unreadCount > 0 && (
-                      <span className="px-2 py-1 text-xs bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-full flex-shrink-0 min-w-[24px] text-center font-bold shadow-lg">
+                      <span className="px-2 py-1 text-xs bg-gradient-to-r from-blue-600 to-pink-600 text-white rounded-full flex-shrink-0 min-w-[24px] text-center font-bold shadow-lg">
                         {unreadCount > 99 ? '99+' : unreadCount}
                       </span>
                     )}
@@ -312,13 +312,13 @@ export default function ChatSidebar({
 
   // Desktop sidebar
   return (
-    <aside className="fixed top-16 ${positionClasses} hidden lg:flex w-80 shrink-0 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex-col h-full">
+    <aside className="fixed top-16 ${positionClasses} hidden lg:flex w-80 shrink-0 bg-white dark:bg-black border-r border-gray-200 dark:border-gray-800 flex-col h-full">
       {/* Desktop Sidebar Header */}
-      <div className="shrink-0 p-4 border-b border-gray-200 dark:border-gray-800">
+      <div className="shrink-0 p-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-black">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/30">
-              <MessageSquare size={20} className="text-purple-600 dark:text-purple-400" />
+            <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
+              <MessageSquare size={20} className="text-blue-600 dark:text-blue-400" />
             </div>
             <h2 className="text-xl font-bold text-gray-900 dark:text-white">
               Messages
@@ -350,7 +350,7 @@ export default function ChatSidebar({
           <input
             type="text"
             placeholder="Search users..."
-            className="w-full pl-10 pr-3 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-purple-500 focus:outline-none text-gray-900 dark:text-white transition-all"
+            className="w-full pl-10 pr-3 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-900 dark:text-white transition-all"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -389,12 +389,12 @@ export default function ChatSidebar({
                 onClick={() => handleUserSelect(user)}
                 className={`w-full flex items-center gap-3 p-4 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800 ${
                   isSelected
-                    ? "bg-purple-100 dark:bg-purple-900/30 border-r-4 border-purple-500"
+                    ? "bg-blue-100 dark:bg-blue-900/30 border-r-4 border-blue-500"
                     : ""
                 }`}
               >
                 <div className="relative flex-shrink-0">
-                  <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-purple-500 to-blue-500 ring-2 ring-white dark:ring-gray-900">
+                  <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-blue-500 ring-2 ring-white dark:ring-gray-900">
                     {user.avatar ? (
                       <Image
                         src={user.avatar}
@@ -429,7 +429,7 @@ export default function ChatSidebar({
                   </div>
                   <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
                     {typingUsers.has(user.id) ? (
-                      <span className="text-purple-600 dark:text-purple-400 italic">
+                      <span className="text-blue-600 dark:text-blue-400 italic">
                         typing...
                       </span>
                     ) : (
@@ -439,7 +439,7 @@ export default function ChatSidebar({
                 </div>
 
                 {unreadCount > 0 && (
-                  <span className="px-2 py-1 text-xs bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-full flex-shrink-0 min-w-[24px] text-center font-bold shadow-lg">
+                  <span className="px-2 py-1 text-xs bg-gradient-to-r from-blue-600 to-pink-600 text-white rounded-full flex-shrink-0 min-w-[24px] text-center font-bold shadow-lg">
                     {unreadCount > 99 ? '99+' : unreadCount}
                   </span>
                 )}

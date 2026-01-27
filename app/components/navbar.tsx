@@ -312,7 +312,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
               className="rounded-full object-cover"
             />
           ) : (
-            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
+            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-blue-500 flex items-center justify-center">
               <User size={12} className="text-white" />
             </div>
           )}
@@ -498,7 +498,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                   <input
                     type="text"
                     placeholder="Search..."
-                    className="w-full pl-10 pr-4 py-2 bg-gray-100/50 dark:bg-gray-800/50 border border-transparent dark:border-gray-700 rounded-full focus:outline-none focus:bg-white dark:focus:bg-gray-900 focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500/50 transition-all shadow-inner"
+                    className="w-full pl-10 pr-4 py-2 bg-gray-100/50 dark:bg-gray-800/50 border border-transparent dark:border-gray-700 rounded-full focus:outline-none focus:bg-white dark:focus:bg-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/50 transition-all shadow-inner"
                     value={searchQuery}
                     onChange={(e) => {
                       setSearchQuery(e.target.value);
@@ -633,7 +633,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                           key={notification.id}
                           className={`p-4 border-b border-gray-50 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${
                             !notification.read
-                              ? "bg-purple-50/40 dark:bg-purple-900/10"
+                              ? "bg-blue-50/40 dark:bg-blue-900/10"
                               : ""
                           }`}
                         >
@@ -641,7 +641,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                             <div
                               className={`p-2 h-fit rounded-xl ${
                                 !notification.read
-                                  ? "bg-purple-100 text-blue-500 dark:bg-blue-900/50 dark:text-blue-300"
+                                  ? "bg-blue-100 text-blue-500 dark:bg-blue-900/50 dark:text-blue-300"
                                   : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
                               }`}
                             >
@@ -683,7 +683,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                   className="flex items-center gap-2 p-1 pl-1 pr-3 rounded-full border border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all hover:shadow-sm group"
                   aria-label="User menu"
                 >
-                  <div className="relative w-8 h-8 rounded-full overflow-hidden bg-gradient-to-br from-purple-500 to-blue-500 ring-2 ring-white dark:ring-gray-900">
+                  <div className="relative w-8 h-8 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-blue-500 ring-2 ring-white dark:ring-gray-900">
                     {!loading && avatar ? (
                       <Image
                         src={avatar}
@@ -707,7 +707,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
 
                 {isUserDropdownOpen && (
                   <div className="absolute right-0 mt-3 w-72 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-800 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
-                    <div className="p-5 border-b border-gray-100 dark:border-gray-800 bg-gradient-to-br from-purple-500/5 to-pink-500/5">
+                    <div className="p-5 border-b border-gray-100 dark:border-gray-800 bg-gradient-to-br from-blue-500/5 to-pink-500/5">
                       <div className="flex items-center gap-4">
                         <div className="relative w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-teal-500 shadow-md">
                           {!loading && avatar ? (
@@ -810,7 +810,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                     <input
                       type="text"
                       placeholder="Search..."
-                      className="w-full pl-10 pr-4 py-3 bg-gray-100 dark:bg-gray-900 rounded-2xl focus:outline-none focus:ring-2 focus:ring-purple-500 text-gray-900 dark:text-white border border-transparent dark:border-gray-800"
+                      className="w-full pl-10 pr-4 py-3 bg-gray-100 dark:bg-gray-900 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white border border-transparent dark:border-gray-800"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                     />
@@ -848,7 +848,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                       onClick={() => setIsMobileMenuOpen(false)}
                       className={`flex items-center justify-between px-4 py-3.5 rounded-2xl transition-all ${
                         pathname === item.path
-                          ? "bg-purple-50 dark:bg-purple-900/20 text-blue-600 dark:text-blue-400"
+                          ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400"
                           : "hover:bg-gray-50 dark:hover:bg-gray-900 text-gray-700 dark:text-gray-300"
                       }`}
                     >
@@ -922,7 +922,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                       setIsMobileMenuOpen(false);
                       router.push("/register");
                     }}
-                    className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 to-pink-600 text-white font-semibold shadow-lg shadow-purple-500/30"
+                    className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 to-pink-600 text-white font-semibold shadow-lg shadow-blue-500/30"
                   >
                     Sign Up
                   </button>
@@ -974,7 +974,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                       
                       {/* Active Indicator */}
                       {isActive && (
-                        <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 bg-purple-600 dark:bg-purple-400 rounded-full"></div>
+                        <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 bg-blue-600 dark:bg-blue-400 rounded-full"></div>
                       )}
                     </div>
                   </div>

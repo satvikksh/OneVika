@@ -211,7 +211,7 @@ async function handleCreatePost() {
         
         {/* User Info */}
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 flex items-center justify-center overflow-hidden flex-shrink-0">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-blue-500 flex items-center justify-center overflow-hidden flex-shrink-0">
             {session?.user?.image ? (
               <Image src={session.user.image} alt="User" width={40} height={40} className="object-cover" />
             ) : (
@@ -288,8 +288,8 @@ async function handleCreatePost() {
           onDragEnter={handleDrag} onDragOver={handleDrag} onDragLeave={handleDrag} onDrop={handleDrop}
           className={`mt-4 border-2 border-dashed rounded-xl p-6 text-center transition-all ${
             isDragging 
-              ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20' 
-              : 'border-gray-200 dark:border-gray-700 hover:border-purple-400'
+              ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
+              : 'border-gray-200 dark:border-gray-700 hover:border-blue-400'
           }`}
         >
           <div className="flex flex-col items-center gap-2 pointer-events-none">
@@ -313,7 +313,7 @@ async function handleCreatePost() {
           <div className="flex gap-2">
             <button 
               onClick={() => fileInputRef.current?.click()}
-              className="p-2 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-full transition-colors"
+              className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-colors"
               title="Add Image"
             >
               <ImageIcon size={24} />
@@ -332,7 +332,7 @@ async function handleCreatePost() {
           <button
             onClick={handleCreatePost}
             disabled={loading || (!content.trim() && files.length === 0)}
-            className="px-6 py-2 bg-gradient-to-r from-purple-600 to-blue-500 text-white rounded-full font-semibold flex items-center gap-2 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md transform active:scale-95"
+            className="px-6 py-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-full font-semibold flex items-center gap-2 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md transform active:scale-95"
           >
             {loading ? <Loader2 size={18} className="animate-spin" /> : <PlusCircle size={18} />}
             {loading ? "Posting..." : "Post"}

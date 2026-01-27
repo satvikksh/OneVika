@@ -381,7 +381,7 @@ export default function ProfilePage() {
   if (loading)
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     );
 
@@ -394,7 +394,7 @@ export default function ProfilePage() {
           </h2>
           <button
             onClick={() => router.back()}
-            className="px-6 py-2 bg-purple-600 text-white rounded-lg"
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg"
           >
             Go Back
           </button>
@@ -431,7 +431,7 @@ export default function ProfilePage() {
             {isCurrentUser ? (
               <button
                 onClick={handleEditProfile}
-                className="px-4 py-2 text-sm font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded-xl transition-colors"
+                className="px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-xl transition-colors"
               >
                 {/* Edit Profile */}
               </button>
@@ -453,7 +453,7 @@ export default function ProfilePage() {
               <div className="flex flex-col items-center">
                 {/* Avatar */}
                 <div className="relative mb-6">
-                  <div className="w-40 h-40 rounded-full overflow-hidden bg-gradient-to-br from-purple-500 to-blue-500 ring-4 ring-white dark:ring-gray-900 shadow-xl">
+                  <div className="w-40 h-40 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-blue-500 ring-4 ring-white dark:ring-gray-900 shadow-xl">
                     {user.avatar ? (
                       <Image
                         src={user.avatar}
@@ -529,14 +529,14 @@ export default function ProfilePage() {
                   {isCurrentUser ? (
                     <button
                       onClick={handleEditProfile}
-                      className="w-full py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl hover:from-purple-700 hover:to-blue-700 transition-all duration-200 font-medium flex items-center justify-center gap-2 active:scale-[0.98]"
+                      className="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-600 text-white rounded-xl hover:from-blue-700 hover:to-blue-700 transition-all duration-200 font-medium flex items-center justify-center gap-2 active:scale-[0.98]"
                     >
                       <Edit size={18} />
                       Edit Profile
                     </button>
                   ) : (
                     <div className="flex flex-col gap-3">
-                      <button className="w-full py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl font-medium">
+                      <button className="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-600 text-white rounded-xl font-medium">
                         Follow
                       </button>
                       <button
@@ -558,10 +558,10 @@ export default function ProfilePage() {
                 className="w-full flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl transition-colors group"
               >
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                  <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
                     <Users
                       size={18}
-                      className="text-purple-600 dark:text-purple-400"
+                      className="text-blue-600 dark:text-blue-400"
                     />
                   </div>
                   <div className="text-left">
@@ -614,10 +614,10 @@ export default function ProfilePage() {
               <div className="space-y-4">
                 {user.email && (
                   <div className="flex items-start gap-3">
-                    <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex-shrink-0">
+                    <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex-shrink-0">
                       <Mail
                         size={18}
-                        className="text-purple-600 dark:text-purple-400"
+                        className="text-blue-600 dark:text-blue-400"
                       />
                     </div>
                     <div>
@@ -735,7 +735,7 @@ export default function ProfilePage() {
                 {isCurrentUser && (
                   <button
                     onClick={handleEditProfile}
-                    className="px-4 py-2 text-sm font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded-xl transition-colors"
+                    className="px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-xl transition-colors"
                   >
                     Edit Bio
                   </button>
@@ -877,7 +877,7 @@ export default function ProfilePage() {
             {/* Posts */}
             <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg p-6">
               <div className="flex justify-center mb-6 border-b border-gray-200 dark:border-gray-800">
-                <button className="px-6 py-3 flex items-center gap-2 font-medium text-purple-600 dark:text-purple-400 border-b-2 border-purple-600 dark:border-purple-400">
+                <button className="px-6 py-3 flex items-center gap-2 font-medium text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400">
                   <Grid3x3 className="w-5 h-5" /> <span>Posts</span>
                 </button>
               </div>

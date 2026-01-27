@@ -130,7 +130,7 @@ const projects: Project[] = [
     forks: 32,
     contributors: 6,
     highlights: ["100% Uptime", "10K+ Users", "Featured on Product Hunt"],
-    color: "from-purple-500 to-pink-500"
+    color: "from-blue-500 to-pink-500"
   },
   {
     id: 3,
@@ -245,7 +245,7 @@ const projects: Project[] = [
     forks: 23,
     contributors: 9,
     highlights: ["Microservices Architecture", "High Availability", "Load Tested"],
-    color: "from-indigo-500 to-purple-500"
+    color: "from-indigo-500 to-blue-500"
   }
 ];
 
@@ -290,11 +290,11 @@ export default function ProjectsPage() {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-gray-900 to-slate-800 text-slate-100">
       {/* Hero Section */}
       <div className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-purple-600/20 via-transparent to-pink-600/20" />
+        <div className="absolute inset-0 bg-gradient-to-r from-blue-600/20 via-transparent to-pink-600/20" />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 relative">
           <div className="text-center max-w-3xl mx-auto">
             <h1 className="text-5xl md:text-6xl font-extrabold mb-6">
-              <span className="bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-blue-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
                 Our Projects
               </span>
             </h1>
@@ -352,7 +352,7 @@ export default function ProjectsPage() {
                 <button
                   onClick={() => setViewMode("grid")}
                   className={`p-2 rounded-md transition-colors ${
-                    viewMode === "grid" ? "bg-purple-500" : "hover:bg-white/10"
+                    viewMode === "grid" ? "bg-blue-500" : "hover:bg-white/10"
                   }`}
                 >
                   <div className="w-5 h-5 grid grid-cols-2 gap-0.5">
@@ -364,7 +364,7 @@ export default function ProjectsPage() {
                 <button
                   onClick={() => setViewMode("list")}
                   className={`p-2 rounded-md transition-colors ${
-                    viewMode === "list" ? "bg-purple-500" : "hover:bg-white/10"
+                    viewMode === "list" ? "bg-blue-500" : "hover:bg-white/10"
                   }`}
                 >
                   <div className="w-5 h-5 flex flex-col gap-0.5">
@@ -387,7 +387,7 @@ export default function ProjectsPage() {
                   onClick={() => setSelectedCategory(category)}
                   className={`px-4 py-2 rounded-full text-sm transition-all ${
                     selectedCategory === category
-                      ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white"
+                      ? "bg-gradient-to-r from-blue-500 to-pink-500 text-white"
                       : "bg-white/5 hover:bg-white/10 text-gray-300"
                   }`}
                 >
@@ -516,7 +516,7 @@ export default function ProjectsPage() {
 
                 {/* Hover Overlay */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-center p-6">
-                  <button className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:opacity-90 transition-opacity">
+                  <button className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-pink-500 text-white rounded-lg hover:opacity-90 transition-opacity">
                     View Details
                     <ChevronRight className="w-4 h-4" />
                   </button>
@@ -628,7 +628,7 @@ export default function ProjectsPage() {
                   setSelectedCategory("All");
                   setSelectedStatus("All");
                 }}
-                className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:opacity-90 transition-opacity"
+                className="px-6 py-3 bg-gradient-to-r from-blue-500 to-pink-500 text-white rounded-lg hover:opacity-90 transition-opacity"
               >
                 Clear all filters
               </button>
@@ -684,7 +684,7 @@ export default function ProjectsPage() {
                       <ul className="space-y-3">
                         {selectedProject.features.map((feature, index) => (
                           <li key={index} className="flex items-start gap-3 text-gray-300">
-                            <div className="w-6 h-6 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center flex-shrink-0">
+                            <div className="w-6 h-6 rounded-full bg-gradient-to-r from-blue-500 to-pink-500 flex items-center justify-center flex-shrink-0">
                               <CheckCircle className="w-4 h-4 text-white" />
                             </div>
                             <span>{feature}</span>

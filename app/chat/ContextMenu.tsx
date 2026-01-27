@@ -135,8 +135,8 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
       icon: Forward,
       label: "Forward",
       description: "Forward to other chats",
-      color: "text-purple-500",
-      bgColor: "bg-purple-50 dark:bg-purple-900/20",
+      color: "text-blue-500",
+      bgColor: "bg-blue-50 dark:bg-blue-900/20",
       action: "forward",
       hasSubMenu: true
     },
@@ -307,7 +307,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
       id: "forward_channel",
       icon: MessageSquare,
       label: "To Channel",
-      color: "text-purple-500"
+      color: "text-blue-500"
     }
   ];
 
@@ -756,7 +756,7 @@ export const QuickContextMenu: React.FC<Omit<ContextMenuProps, 'isMobile'>> = ({
   const quickActions = [
     { icon: Reply, label: "Reply", action: "reply", color: "text-blue-500" },
     { icon: Copy, label: "Copy", action: "copy", color: "text-green-500" },
-    { icon: Forward, label: "Forward", action: "forward", color: "text-purple-500" },
+    { icon: Forward, label: "Forward", action: "forward", color: "text-blue-500" },
     { icon: Trash2, label: "Delete", action: "delete", color: "text-red-500", danger: true },
   ];
 

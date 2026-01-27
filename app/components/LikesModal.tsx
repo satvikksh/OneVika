@@ -25,7 +25,7 @@ export default function LikesModal({
         <div className="space-y-2 max-h-60 overflow-y-auto">
           {users.map(u => (
             <div key={u._id} className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-purple-500 text-white flex items-center justify-center">
+              <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center">
                 {u.name[0]}
               </div>
               <span>{u.name}</span>

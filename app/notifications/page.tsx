@@ -72,7 +72,7 @@ const typeIcon = {
   info: <Brain className="w-5 h-5 text-indigo-400" />,
   success: <CheckCircle className="w-5 h-5 text-emerald-400" />,
   warning: <AlertTriangle className="w-5 h-5 text-amber-400" />,
-  system: <Zap className="w-5 h-5 text-purple-400" />,
+  system: <Zap className="w-5 h-5 text-blue-400" />,
 };
 
 export default function NotificationsPage() {
@@ -94,7 +94,7 @@ export default function NotificationsPage() {
   const clearAll = () => setNotifications([]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-black via-indigo-950/40 to-purple-950/30 text-white px-6 py-16">
+    <div className="min-h-screen bg-gradient-to-br from-black via-indigo-950/40 to-blue-950/30 text-white px-6 py-16">
       {/* HEADER */}
       <div className="max-w-4xl mx-auto mb-12">
         <div className="flex items-center justify-between mb-6">
@@ -140,7 +140,7 @@ export default function NotificationsPage() {
             className={`group relative rounded-2xl border border-white/10 backdrop-blur-xl p-6 transition ${
               n.read
                 ? "bg-white/5"
-                : "bg-gradient-to-r from-indigo-600/10 to-purple-600/10"
+                : "bg-gradient-to-r from-indigo-600/10 to-blue-600/10"
             }`}
           >
             <div className="flex gap-4 items-start">
@@ -187,7 +187,7 @@ export default function NotificationsPage() {
 
             {/* UNREAD GLOW */}
             {!n.read && (
-              <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-indigo-500/10 to-purple-500/10 blur-xl pointer-events-none" />
+              <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-indigo-500/10 to-blue-500/10 blur-xl pointer-events-none" />
             )}
           </div>
         ))}

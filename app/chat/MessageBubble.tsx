@@ -106,7 +106,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   const quickActions = [
     { action: "reply", icon: Reply, label: "Reply", color: "text-blue-500" },
     { action: "copy", icon: Copy, label: "Copy", color: "text-green-500" },
-    { action: "forward", icon: Forward, label: "Forward", color: "text-purple-500" },
+    { action: "forward", icon: Forward, label: "Forward", color: "text-blue-500" },
   // { action: "pin", icon: Pin, label: message.isPinned ? "Unpin" : "Pin", color: "text-amber-500" },
   ];
 
@@ -124,7 +124,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
           ref={bubbleRef}
           className={`px-3 sm:px-4 py-2 rounded-2xl transition-all duration-200 relative ${
             isCurrentUser
-              ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-br-sm"
+              ? "bg-gradient-to-r from-blue-600 to-blue-600 text-white rounded-br-sm"
               : "bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-bl-sm shadow-sm border border-gray-100 dark:border-gray-700"
           }
         //    {message.failed ? "opacity-70" : ""} $
@@ -141,7 +141,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         >
           {/* Sender name for group chats */}
           {!isCurrentUser && senderName && !isGrouped && (
-            <div className="text-xs font-semibold mb-1 text-purple-600 dark:text-purple-400">
+            <div className="text-xs font-semibold mb-1 text-blue-600 dark:text-blue-400">
               {senderName}
             </div>
           )}
@@ -151,7 +151,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
             <div className={`mb-2 pl-2 border-l-2 ${
               isCurrentUser 
                 ? "border-blue-300" 
-                : "border-purple-500"
+                : "border-blue-500"
             }`}>
               <div className="text-xs opacity-75 mb-0.5">
                 {/* Replying to {message.replyTo.senderId === message.senderId ? "yourself" : senderName} */}
@@ -190,7 +190,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
           {/* Pinned indicator */}
           {/* {message.isPinned && (
             <div className={`absolute -top-1 -left-1 p-1 rounded-full ${
-              isCurrentUser ? "bg-blue-500" : "bg-purple-500"
+              isCurrentUser ? "bg-blue-500" : "bg-blue-500"
             }`}>
               <Pin size={10} className="text-white" />
             </div>
@@ -199,7 +199,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
           {/* Starred indicator */}
           {/* {message.isStarred && (
             <div className={`absolute -top-1 -right-1 p-1 rounded-full ${
-              isCurrentUser ? "bg-blue-500" : "bg-purple-500"
+              isCurrentUser ? "bg-blue-500" : "bg-blue-500"
             }`}>
               <Star size={10} className="text-white" />
             </div>
@@ -381,12 +381,12 @@ export const MessageReaction: React.FC<MessageReactionProps> = ({
       onClick={() => onReactionClick(emoji)}
       className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs transition-colors ${
         userReacted
-          ? "bg-purple-100 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700"
+          ? "bg-blue-100 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700"
           : "bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700"
       }`}
     >
       <span>{emoji}</span>
-      <span className={userReacted ? "text-purple-600 dark:text-purple-400 font-medium" : "text-gray-500 dark:text-gray-400"}>
+      <span className={userReacted ? "text-blue-600 dark:text-blue-400 font-medium" : "text-gray-500 dark:text-gray-400"}>
         {count}
       </span>
     </button>

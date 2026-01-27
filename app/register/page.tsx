@@ -44,8 +44,8 @@ export default function SignupPage() {
         
         {/* Header */}
         <div className="text-center mb-6">
-          <Sparkles className="mx-auto w-8 h-8 text-purple-400" />
-          <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-linear-to-r from-purple-400 to-blue-400">
+          <Sparkles className="mx-auto w-8 h-8 text-blue-400" />
+          <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-linear-to-r from-blue-400 to-blue-400">
             Create an Account
           </h2>
         </div>
@@ -92,7 +92,7 @@ export default function SignupPage() {
 
           <button
             type="submit"
-            className="w-full py-3 rounded-xl bg-linear-to-r from-purple-600 to-blue-500 text-white font-semibold"
+            className="w-full py-3 rounded-xl bg-linear-to-r from-blue-600 to-blue-500 text-white font-semibold"
           >
             Sign Up
           </button>
@@ -119,7 +119,7 @@ export default function SignupPage() {
 
         <p className="text-center mt-4 text-gray-600 dark:text-gray-400">
           Already have an account?
-          <a href="/login" className="text-purple-400 hover:underline ml-1">
+          <a href="/login" className="text-blue-400 hover:underline ml-1">
             Login
           </a>
         </p>

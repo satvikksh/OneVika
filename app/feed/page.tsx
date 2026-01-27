@@ -66,10 +66,11 @@ interface CommentsModalProps {
   onCommentDeleted: (commentId: string) => void;
 }
 
-// --- SKELETON LOADER COMPONENT (UPDATED) ---
+// --- SKELETON LOADER COMPONENT (FIXED) ---
 function FeedSkeleton() {
   return (
-    <div className="fixed inset-0 w-screen h-[100dvh] overflow-hidden bg-black z-50">
+    // FIX: Changed z-50 to z-0 so it doesn't overlap the main Navbar
+    <div className="fixed inset-0 w-screen h-[100dvh] overflow-hidden bg-black z-0">
       {/* Main content area */}
       <div className="absolute inset-0 flex flex-col">
         {/* Media skeleton */}
@@ -109,10 +110,11 @@ function FeedSkeleton() {
         </div>
 
         {/* Top navigation skeleton */}
-        <div className="absolute top-0 left-0 right-0 p-4">
+        {/* Adjusted top padding to likely sit below a global navbar if present */}
+        <div className="absolute top-16 left-0 right-0 p-4">
           <div className="flex justify-between">
             <div className="h-6 w-20 bg-gray-800 rounded animate-pulse" />
-            <div className="h-6 w-6 bg-gray-800 rounded-full animate-pulse" />
+            {/* Removed the right circle if it conflicts with nav elements */}
           </div>
         </div>
       </div>
@@ -208,7 +210,7 @@ function LikeUserModal({
               <p className="text-red-500 mb-3">{error}</p>
               <button
                 onClick={fetchLikeUsers}
-                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
               >
                 Retry
               </button>
@@ -230,7 +232,7 @@ function LikeUserModal({
                 >
                   <button
                     onClick={() => handleUserAvatarClick(user._id)}
-                    className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 flex items-center justify-center overflow-hidden cursor-pointer hover:opacity-90 transition-opacity"
+                    className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-blue-500 flex items-center justify-center overflow-hidden cursor-pointer hover:opacity-90 transition-opacity"
                   >
                     {user.image || user.avatar ? (
                       <Image
@@ -395,7 +397,7 @@ function CommentsModal({
                 <div key={comment._id} className="flex gap-3">
                   <button
                     onClick={() => handleUserAvatarClick(comment.userId?._id)}
-                    className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 flex items-center justify-center overflow-hidden flex-shrink-0 cursor-pointer hover:opacity-90 transition-opacity"
+                    className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-blue-500 flex items-center justify-center overflow-hidden flex-shrink-0 cursor-pointer hover:opacity-90 transition-opacity"
                   >
                     {comment.userId?.image || comment.userId?.avatar ? (
                       <Image
@@ -459,7 +461,7 @@ function CommentsModal({
               onClick={() =>
                 session?.user?.id && handleUserAvatarClick(session.user.id)
               }
-              className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 flex items-center justify-center overflow-hidden flex-shrink-0 cursor-pointer hover:opacity-90 transition-opacity"
+              className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-blue-500 flex items-center justify-center overflow-hidden flex-shrink-0 cursor-pointer hover:opacity-90 transition-opacity"
             >
               {session?.user?.image || session?.user?.avatar ? (
                 <Image
@@ -483,13 +485,13 @@ function CommentsModal({
                   onChange={handleInputChange}
                   onKeyDown={handleKeyDown}
                   placeholder="Write a comment..."
-                  className="w-full p-3 pr-12 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none min-h-[60px] max-h-[120px]"
+                  className="w-full p-3 pr-12 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none min-h-[60px] max-h-[120px]"
                   rows={1}
                 />
                 <button
                   onClick={handleSubmitComment}
                   disabled={isSubmitting || !newComment.trim()}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-gradient-to-r from-purple-600 to-blue-500 text-white rounded-full hover:scale-105 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-full hover:scale-105 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Send size={16} />
                 </button>
@@ -1223,7 +1225,7 @@ export default function FeedPage() {
                       onClick={() =>
                         handleUserAvatarClick(currentPost.userId?._id)
                       }
-                      className="w-9 h-9 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 flex items-center justify-center overflow-hidden cursor-pointer hover:opacity-90 transition-opacity pointer-events-auto"
+                      className="w-9 h-9 rounded-full bg-gradient-to-r from-blue-500 to-blue-500 flex items-center justify-center overflow-hidden cursor-pointer hover:opacity-90 transition-opacity pointer-events-auto"
                     >
                       {currentPost.userId?.image ||
                       currentPost.userId?.avatar ? (

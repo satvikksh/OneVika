@@ -91,7 +91,7 @@ const GradientTitle = ({ children }: { children: React.ReactNode }) => (
     initial="hidden"
     whileInView="visible"
     viewport={{ once: true }}
-    className="text-3xl sm:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-purple-600 via-pink-500 to-blue-500 bg-clip-text text-transparent mb-8 text-center"
+    className="text-3xl sm:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-blue-600 via-pink-500 to-blue-500 bg-clip-text text-transparent mb-8 text-center"
   >
     {children}
   </motion.h2>
@@ -172,7 +172,7 @@ export default function AboutPage() {
       icon: <Infinity className="w-10 h-10" />, 
       title: "Boundless Imagination", 
       desc: "We believe the only limit is what we can conceive. No idea is too wild, no concept too impossible to explore and develop.", 
-      color: "from-purple-500 to-pink-500" 
+      color: "from-blue-500 to-pink-500" 
     },
     { 
       icon: <Brain className="w-10 h-10" />, 
@@ -261,7 +261,7 @@ export default function AboutPage() {
         className="relative overflow-hidden py-20 md:py-32"
       >
         {/* Background Effects */}
-        <div className="absolute inset-0 bg-gradient-to-br from-purple-900/20 via-blue-900/20 to-pink-900/20" />
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-900/20 via-blue-900/20 to-pink-900/20" />
         <motion.div 
           animate={{ 
             x: [0, 100, 0],
@@ -273,7 +273,7 @@ export default function AboutPage() {
 ,
             repeatType: "reverse"
           }}
-          className="absolute -top-40 -right-40 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl"
+          className="absolute -top-40 -right-40 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl"
         />
         <motion.div 
           animate={{ 
@@ -311,7 +311,7 @@ export default function AboutPage() {
             transition={{ delay: 0.3, duration: 0.8 }}
             className="text-4xl sm:text-5xl lg:text-7xl font-bold mb-6"
           >
-            <span className="bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-blue-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
               About Satvik&apos;s Group
             </span>
           </motion.h1>
@@ -334,7 +334,7 @@ export default function AboutPage() {
           >
             <Link 
               href="/join"
-              className="group px-8 py-4 rounded-xl bg-gradient-to-r from-purple-600 to-blue-500 text-white font-semibold hover:from-purple-700 hover:to-blue-600 transition-all duration-300 hover:scale-105 flex items-center gap-3"
+              className="group px-8 py-4 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 text-white font-semibold hover:from-blue-700 hover:to-blue-600 transition-all duration-300 hover:scale-105 flex items-center gap-3"
             >
               <span>Join Our Collective</span>
               <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -360,14 +360,14 @@ export default function AboutPage() {
           className={`max-w-6xl mx-auto rounded-3xl p-8 md:p-12 ${isDark ? 'bg-gray-800/50' : 'bg-white'} backdrop-blur-sm border ${isDark ? 'border-gray-700' : 'border-gray-200'}`}
         >
           <motion.div variants={itemVariants} className="flex items-center gap-4 mb-8">
-            <div className="p-3 rounded-xl bg-gradient-to-br from-purple-500 to-blue-500">
+            <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-blue-500">
               <Target className="w-8 h-8 text-white" />
             </div>
             <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Our Mission</h2>
           </motion.div>
           
           <motion.p variants={itemVariants} className="text-lg text-gray-700 dark:text-gray-300 mb-4 leading-relaxed">
-            At Satvik&apos;s Group, we operate on a radical premise: <span className="font-bold text-purple-600 dark:text-purple-400">reality is optional</span>. 
+            At Satvik&apos;s Group, we operate on a radical premise: <span className="font-bold text-blue-600 dark:text-blue-400">reality is optional</span>. 
             We are not constrained by physics as we know it, by economics as they exist, or by technology as it has been built.
           </motion.p>
           
@@ -411,7 +411,7 @@ export default function AboutPage() {
         
         <div className="relative max-w-5xl mx-auto">
           {/* Timeline line */}
-          <div className="absolute left-1/2 transform -translate-x-1/2 h-full w-1 bg-gradient-to-b from-purple-500 to-blue-500" />
+          <div className="absolute left-1/2 transform -translate-x-1/2 h-full w-1 bg-gradient-to-b from-blue-500 to-blue-500" />
           
           <div className="space-y-12 relative">
             {timeline.map((item, index) => (
@@ -427,14 +427,14 @@ export default function AboutPage() {
               >
                 <div className={`w-1/2 ${index % 2 === 0 ? "pr-12 text-right" : "pl-12"}`}>
                   <Card 
-                    className={`${isDark ? 'bg-gray-800/80 border-gray-700' : 'bg-white border-gray-200'} ${activeTimeline === index ? 'ring-2 ring-purple-500/50' : ''}`}
+                    className={`${isDark ? 'bg-gray-800/80 border-gray-700' : 'bg-white border-gray-200'} ${activeTimeline === index ? 'ring-2 ring-blue-500/50' : ''}`}
                   >
                     <div className="flex items-center gap-4 mb-4">
-                      <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500 to-blue-500">
+                      <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-blue-500">
                         {item.icon}
                       </div>
                       <div>
-                        <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{item.year}</div>
+                        <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{item.year}</div>
                         <h3 className="text-xl font-bold">{item.title}</h3>
                       </div>
                     </div>
@@ -450,7 +450,7 @@ export default function AboutPage() {
                       boxShadow: activeTimeline === index ? '0 0 20px rgba(168, 85, 247, 0.5)' : 'none'
                     }}
                     transition={{ type: "spring", stiffness: 300 }}
-                    className={`w-6 h-6 rounded-full border-4 ${isDark ? 'bg-gray-900 border-purple-400' : 'bg-white border-purple-500'}`}
+                    className={`w-6 h-6 rounded-full border-4 ${isDark ? 'bg-gray-900 border-blue-400' : 'bg-white border-blue-500'}`}
                   />
                 </div>
                 
@@ -480,16 +480,16 @@ export default function AboutPage() {
             >
               <div className="flex items-center gap-4 mb-6">
                 <div className="relative">
-                  <div className="w-20 h-20 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-2xl text-white font-bold">
+                  <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-blue-500 flex items-center justify-center text-2xl text-white font-bold">
                     {member.avatar}
                   </div>
-                  <div className="absolute -bottom-2 -right-2 px-3 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-purple-600 to-blue-500 text-white">
+                  <div className="absolute -bottom-2 -right-2 px-3 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-blue-600 to-blue-500 text-white">
                     {member.specialty}
                   </div>
                 </div>
                 <div>
                   <h3 className="text-xl font-bold text-gray-900 dark:text-white">{member.name}</h3>
-                  <p className="text-purple-600 dark:text-purple-400 font-medium">{member.role}</p>
+                  <p className="text-blue-600 dark:text-blue-400 font-medium">{member.role}</p>
                 </div>
               </div>
               
@@ -501,7 +501,7 @@ export default function AboutPage() {
                   {member.projects.map((project, idx) => (
                     <span
                       key={idx}
-                      className="px-3 py-1 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300"
+                      className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
                     >
                       {project}
                     </span>
@@ -529,8 +529,8 @@ export default function AboutPage() {
                 transition={{ delay: index * 0.1 }}
                 className="text-center"
               >
-                <div className="inline-flex items-center justify-center w-16 h-16 rounded-xl bg-gradient-to-br from-purple-500/10 to-blue-500/10 mb-4">
-                  <div className="text-purple-600 dark:text-purple-400">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-xl bg-gradient-to-br from-blue-500/10 to-blue-500/10 mb-4">
+                  <div className="text-blue-600 dark:text-blue-400">
                     {stat.icon}
                   </div>
                 </div>
@@ -560,8 +560,8 @@ export default function AboutPage() {
               delay={index * 0.05}
             >
               <div className="flex items-center gap-4 mb-4">
-                <div className="p-3 rounded-lg bg-gradient-to-br from-purple-500/10 to-blue-500/10">
-                  <div className="text-purple-600 dark:text-purple-400">
+                <div className="p-3 rounded-lg bg-gradient-to-br from-blue-500/10 to-blue-500/10">
+                  <div className="text-blue-600 dark:text-blue-400">
                     {tech.icon}
                   </div>
                 </div>
@@ -581,7 +581,7 @@ export default function AboutPage() {
         className="relative py-20 md:py-32 overflow-hidden"
       >
         {/* Background Effects */}
-        <div className="absolute inset-0 bg-gradient-to-br from-purple-900/30 via-blue-900/30 to-pink-900/30" />
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-900/30 via-blue-900/30 to-pink-900/30" />
         <motion.div 
           animate={{ 
             x: [0, 50, 0],
@@ -593,7 +593,7 @@ export default function AboutPage() {
 ,
             repeatType: "reverse"
           }}
-          className="absolute -top-40 -right-40 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl"
+          className="absolute -top-40 -right-40 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl"
         />
         <motion.div 
           animate={{ 

@@ -105,7 +105,7 @@ export default function EditProfilePage() {
     <div className="max-w-xl mx-auto p-6 pb-25">
       <button
         onClick={() => router.back()}
-        className="mb-4 text-sm text-purple-600 flex items-center gap-1"
+        className="mb-4 text-sm text-blue-600 flex items-center gap-1"
       >
         <ArrowLeft size={16} /> Back
       </button>
@@ -123,13 +123,13 @@ export default function EditProfilePage() {
             alt="avatar"
           />
         ) : (
-          <div className="w-24 h-24 bg-purple-500 text-white rounded-full flex items-center justify-center text-3xl font-bold">
+          <div className="w-24 h-24 bg-blue-500 text-white rounded-full flex items-center justify-center text-3xl font-bold">
             {(form.name?.[0] || "U").toUpperCase()}
           </div>
         )}
 
         <div className="flex flex-col gap-2">
-          <label className="cursor-pointer text-purple-600 flex gap-2 items-center">
+          <label className="cursor-pointer text-blue-600 flex gap-2 items-center">
             <Upload size={18} />
             <span>Upload New Avatar</span>
             <input
@@ -199,7 +199,7 @@ export default function EditProfilePage() {
       <button
         disabled={saving}
         onClick={save}
-        className="mt-6 flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-xl disabled:opacity-60"
+        className="mt-6 flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl disabled:opacity-60"
       >
         <Save size={20} /> {saving ? "Saving..." : "Save Changes"}
       </button>

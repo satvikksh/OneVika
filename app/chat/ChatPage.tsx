@@ -10,6 +10,101 @@ import ChatArea from "./ChatArea";
 import ContextMenu from "./ContextMenu";
 import { Users, Loader2, Menu } from "lucide-react";
 
+/* -------------------------------- SKELETON LOADER -------------------------------- */
+const ChatSkeleton = () => {
+  return (
+    <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-950 overflow-hidden">
+      {/* Top Bar Skeleton */}
+      <div className="h-16 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 flex items-center px-4 justify-between shrink-0">
+        <div className="flex items-center gap-3">
+          {/* Mobile Menu Placeholder */}
+          <div className="lg:hidden w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-800 animate-pulse" />
+          
+          <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-800 animate-pulse" />
+          <div className="space-y-2">
+            <div className="h-4 w-32 bg-gray-200 dark:bg-gray-800 rounded animate-pulse" />
+            <div className="h-3 w-20 bg-gray-200 dark:bg-gray-800 rounded animate-pulse" />
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <div className="w-8 h-8 rounded-lg bg-gray-200 dark:bg-gray-800 animate-pulse" />
+        </div>
+      </div>
+
+      <div className="flex-1 flex overflow-hidden">
+        {/* SIDEBAR SKELETON (User List) 
+           - Mobile: w-full (Takes full screen)
+           - Desktop: w-80 (Fixed width)
+        */}
+        <div className="flex w-full lg:w-80 border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 flex-col">
+          <div className="p-4 border-b border-gray-200 dark:border-gray-800">
+             <div className="h-10 w-full bg-gray-200 dark:bg-gray-800 rounded-xl animate-pulse" />
+          </div>
+          <div className="flex-1 p-2 space-y-2 overflow-y-auto">
+            {[...Array(10)].map((_, i) => (
+              <div key={i} className="flex items-center gap-3 p-3 rounded-xl">
+                <div className="w-12 h-12 rounded-full bg-gray-200 dark:bg-gray-800 animate-pulse shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="flex justify-between">
+                    <div className="h-4 w-32 bg-gray-200 dark:bg-gray-800 rounded animate-pulse" />
+                    <div className="h-3 w-10 bg-gray-200 dark:bg-gray-800 rounded animate-pulse" />
+                  </div>
+                  <div className="h-3 w-48 bg-gray-200 dark:bg-gray-800 rounded animate-pulse" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* CHAT AREA SKELETON 
+           - Mobile: Hidden (hidden)
+           - Desktop: Visible (lg:flex)
+        */}
+        <div className="hidden lg:flex flex-1 flex-col bg-gray-50 dark:bg-gray-950 relative">
+          <div className="flex-1 p-4 space-y-6 overflow-y-auto">
+            {/* Incoming Message Skeleton */}
+            <div className="flex gap-3 max-w-[80%]">
+              <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-800 animate-pulse shrink-0 mt-auto" />
+              <div className="space-y-1">
+                <div className="h-12 w-48 bg-gray-200 dark:bg-gray-800 rounded-2xl rounded-bl-none animate-pulse" />
+                <div className="h-3 w-12 bg-gray-200 dark:bg-gray-800 rounded animate-pulse ml-1" />
+              </div>
+            </div>
+
+            {/* Outgoing Message Skeleton */}
+            <div className="flex gap-3 max-w-[80%] ml-auto justify-end">
+              <div className="space-y-1 items-end flex flex-col">
+                <div className="h-16 w-64 bg-blue-100 dark:bg-blue-900/20 rounded-2xl rounded-br-none animate-pulse" />
+                <div className="h-3 w-12 bg-gray-200 dark:bg-gray-800 rounded animate-pulse mr-1" />
+              </div>
+            </div>
+
+            {/* Incoming Message Skeleton */}
+            <div className="flex gap-3 max-w-[80%]">
+              <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-800 animate-pulse shrink-0 mt-auto" />
+              <div className="space-y-1">
+                <div className="h-8 w-32 bg-gray-200 dark:bg-gray-800 rounded-2xl rounded-bl-none animate-pulse" />
+              </div>
+            </div>
+            
+             {/* Outgoing Message Skeleton */}
+             <div className="flex gap-3 max-w-[80%] ml-auto justify-end">
+              <div className="space-y-1 items-end flex flex-col">
+                <div className="h-10 w-40 bg-blue-100 dark:bg-blue-900/20 rounded-2xl rounded-br-none animate-pulse" />
+              </div>
+            </div>
+          </div>
+
+          {/* Input Area Skeleton */}
+          <div className="p-4 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
+            <div className="h-12 w-full bg-gray-200 dark:bg-gray-800 rounded-xl animate-pulse" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 /* -------------------------------- HELPERS -------------------------------- */
 const isValidObjectId = (id?: string) =>
   typeof id === "string" && id.length === 24;
@@ -684,22 +779,16 @@ export default function ChatPage() {
   }, [] as (Message & { isGrouped?: boolean })[]);
 
   /* -------------------------------- LOADING -------------------------------- */
+  // UPDATED: Using the new ChatSkeleton instead of the spinner
   if (status === "loading" || loadingUsers) {
-    return (
-      <div className="flex items-center justify-center h-[100dvh] bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950">
-        <div className="text-center">
-          <Loader2 className="h-12 w-12 animate-spin text-purple-600 mx-auto" />
-          <p className="mt-4 text-gray-600 dark:text-gray-400 font-medium">Loading chat...</p>
-        </div>
-      </div>
-    );
+    return <ChatSkeleton />;
   }
 
   if (!session) {
     return (
       <div className="flex items-center justify-center h-[100dvh] bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950 p-4">
         <div className="text-center max-w-md p-8 bg-white dark:bg-gray-800 rounded-2xl shadow-xl">
-          <Users className="h-16 w-16 text-purple-600 dark:text-purple-400 mx-auto mb-4" />
+          <Users className="h-16 w-16 text-blue-600 dark:text-blue-400 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
             Sign in to Chat
           </h2>
@@ -708,7 +797,7 @@ export default function ChatPage() {
           </p>
           <button
             onClick={() => (window.location.href = "/login")}
-            className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg hover:shadow-xl active:scale-95 font-medium"
+            className="px-6 py-3 bg-gradient-to-r from-blue-600 to-pink-600 text-white rounded-xl hover:from-blue-700 hover:to-pink-700 transition-all shadow-lg hover:shadow-xl active:scale-95 font-medium"
           >
             Sign In
           </button>

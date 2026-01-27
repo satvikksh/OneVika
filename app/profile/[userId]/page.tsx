@@ -181,7 +181,7 @@ export default function UserProfilePage() {
             </button>
             <button
               onClick={() => router.push('/chat')}
-              className="px-6 py-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-colors font-medium"
+              className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium"
             >
               Go to Chats
             </button>
@@ -234,7 +234,7 @@ export default function UserProfilePage() {
             {isCurrentUser && (
               <button
                 onClick={() => router.push('/settings/profile')}
-                className="px-4 py-2 text-sm font-medium text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded-xl transition-colors"
+                className="px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-xl transition-colors"
               >
                 Edit Profile
               </button>
@@ -253,7 +253,7 @@ export default function UserProfilePage() {
               <div className="flex flex-col items-center">
                 {/* Avatar */}
                 <div className="relative mb-6">
-                  <div className="w-40 h-40 rounded-full overflow-hidden bg-gradient-to-br from-purple-500 to-blue-500 ring-4 ring-white dark:ring-gray-900 shadow-xl">
+                  <div className="w-40 h-40 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-blue-500 ring-4 ring-white dark:ring-gray-900 shadow-xl">
                     {user.avatar ? (
                       <Image
                         src={user.avatar}
@@ -300,7 +300,7 @@ export default function UserProfilePage() {
                     onClick={handleViewFollowers}
                     className="flex flex-col items-center group cursor-pointer"
                   >
-                    <span className="text-2xl font-bold text-gray-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+                    <span className="text-2xl font-bold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                       {user.followersCount || 0}
                     </span>
                     <span className="text-sm text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300 transition-colors">
@@ -314,7 +314,7 @@ export default function UserProfilePage() {
                     onClick={handleViewFollowing}
                     className="flex flex-col items-center group cursor-pointer"
                   >
-                    <span className="text-2xl font-bold text-gray-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+                    <span className="text-2xl font-bold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                       {user.followingCount || 0}
                     </span>
                     <span className="text-sm text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300 transition-colors">
@@ -333,7 +333,7 @@ export default function UserProfilePage() {
                         className={`w-full py-3 rounded-xl transition-all duration-200 font-medium flex items-center justify-center gap-2 active:scale-[0.98] ${
                           user.isFollowing
                             ? 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
-                            : 'bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700'
+                            : 'bg-gradient-to-r from-blue-600 to-blue-600 text-white hover:from-blue-700 hover:to-blue-700'
                         }`}
                       >
                         {followLoading ? (
@@ -354,7 +354,7 @@ export default function UserProfilePage() {
                       <div className="grid grid-cols-2 gap-3">
                         <button
                           onClick={handleSendMessage}
-                          className="py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl hover:from-purple-700 hover:to-blue-700 transition-colors font-medium flex items-center justify-center gap-2"
+                          className="py-3 bg-gradient-to-r from-blue-600 to-blue-600 text-white rounded-xl hover:from-blue-700 hover:to-blue-700 transition-colors font-medium flex items-center justify-center gap-2"
                         >
                           <MessageCircle size={18} />
                           Message
@@ -373,7 +373,7 @@ export default function UserProfilePage() {
                   {isCurrentUser && (
                     <button
                       onClick={() => router.push('/settings/profile')}
-                      className="w-full py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl hover:from-purple-700 hover:to-blue-700 transition-all duration-200 font-medium flex items-center justify-center gap-2 active:scale-[0.98]"
+                      className="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-600 text-white rounded-xl hover:from-blue-700 hover:to-blue-700 transition-all duration-200 font-medium flex items-center justify-center gap-2 active:scale-[0.98]"
                     >
                       <User size={18} />
                       Edit Profile
@@ -390,8 +390,8 @@ export default function UserProfilePage() {
                 className="w-full flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl transition-colors group"
               >
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
-                    <Users size={18} className="text-purple-600 dark:text-purple-400" />
+                  <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                    <Users size={18} className="text-blue-600 dark:text-blue-400" />
                   </div>
                   <div className="text-left">
                     <p className="font-medium text-gray-900 dark:text-white">Followers</p>
@@ -428,8 +428,8 @@ export default function UserProfilePage() {
               <div className="space-y-4">
                 {user.email && (
                   <div className="flex items-start gap-3">
-                    <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex-shrink-0">
-                      <Mail size={18} className="text-purple-600 dark:text-purple-400" />
+                    <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex-shrink-0">
+                      <Mail size={18} className="text-blue-600 dark:text-blue-400" />
                     </div>
                     <div>
                       <p className="text-sm text-gray-500 dark:text-gray-400">Email</p>

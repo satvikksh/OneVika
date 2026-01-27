@@ -125,7 +125,7 @@ export default function FollowersPage() {
             </button>
             
             <div className="flex items-center gap-2">
-              <Users size={24} className="text-purple-600 dark:text-purple-400" />
+              <Users size={24} className="text-blue-600 dark:text-blue-400" />
               <h1 className="text-xl font-bold text-gray-900 dark:text-white">
                 Followers
               </h1>
@@ -148,7 +148,7 @@ export default function FollowersPage() {
             </h2>
             <button
               onClick={() => router.back()}
-              className="px-6 py-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-colors font-medium mt-4"
+              className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium mt-4"
             >
               Go Back
             </button>
@@ -177,7 +177,7 @@ export default function FollowersPage() {
                   onClick={() => handleViewProfile(follower.id)}
                 >
                   <div className="relative">
-                    <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-purple-500 to-blue-500 ring-2 ring-white dark:ring-gray-900">
+                    <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-blue-500 ring-2 ring-white dark:ring-gray-900">
                       {follower.avatar ? (
                         <Image
                           src={follower.avatar}
@@ -212,7 +212,7 @@ export default function FollowersPage() {
                     className={`px-4 py-2 rounded-xl transition-all duration-200 font-medium flex items-center gap-2 ${
                       follower.isFollowing
                         ? 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
-                        : 'bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700'
+                        : 'bg-gradient-to-r from-blue-600 to-blue-600 text-white hover:from-blue-700 hover:to-blue-700'
                     }`}
                   >
                     {followLoading === follower.id ? (

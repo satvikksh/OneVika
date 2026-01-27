@@ -465,7 +465,7 @@ export default function SettingsPage() {
                   alt={profile.name}
                   className="w-24 h-24 rounded-2xl border-4 border-white/10"
                 />
-                <button className="absolute -bottom-2 -right-2 p-2 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full hover:scale-110 transition-transform">
+                <button className="absolute -bottom-2 -right-2 p-2 bg-gradient-to-r from-indigo-600 to-blue-600 rounded-full hover:scale-110 transition-transform">
                   <Upload className="w-4 h-4" />
                 </button>
               </div>
@@ -581,7 +581,7 @@ export default function SettingsPage() {
               <h3 className="text-lg font-semibold mb-4">Accent Color</h3>
               <div className="flex flex-wrap gap-3">
                 {[
-                  "#8b5cf6", // Purple
+                  "#8b5cf6", // blue
                   "#3b82f6", // Blue
                   "#10b981", // Green
                   "#f59e0b", // Amber
@@ -1066,7 +1066,7 @@ export default function SettingsPage() {
             <div className="flex gap-4">
               <button
                 onClick={changePassword}
-                className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 rounded-xl transition-all font-medium"
+                className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 rounded-xl transition-all font-medium"
               >
                 Change Password
               </button>
@@ -1092,7 +1092,7 @@ export default function SettingsPage() {
       case "backup":
         return (
           <div className="space-y-6">
-            <div className="p-6 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 rounded-2xl border border-white/10">
+            <div className="p-6 bg-gradient-to-br from-indigo-500/10 to-blue-500/10 rounded-2xl border border-white/10">
               <div className="flex items-start gap-4">
                 <div className="p-3 bg-indigo-500/20 rounded-xl">
                   <Database className="w-6 h-6 text-indigo-400" />
@@ -1107,7 +1107,7 @@ export default function SettingsPage() {
                   </p>
                   <button
                     onClick={backupSettings}
-                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 rounded-xl transition-all font-medium"
+                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 rounded-xl transition-all font-medium"
                   >
                     <Download className="w-5 h-5" />
                     Create Backup
@@ -1116,7 +1116,7 @@ export default function SettingsPage() {
                     <div className="mt-4">
                       <div className="h-2 bg-white/10 rounded-full overflow-hidden">
                         <div
-                          className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-300"
+                          className="h-full bg-gradient-to-r from-indigo-500 to-blue-500 transition-all duration-300"
                           style={{ width: `${backupProgress}%` }}
                         />
                       </div>
@@ -1315,7 +1315,7 @@ export default function SettingsPage() {
       default:
         return (
           <div className="text-center py-12">
-            <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-indigo-500/20 to-purple-500/20 rounded-full flex items-center justify-center">
+            <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-indigo-500/20 to-blue-500/20 rounded-full flex items-center justify-center">
               <Settings className="w-10 h-10 text-indigo-400" />
             </div>
             <h3 className="text-2xl font-bold mb-3">Settings Dashboard</h3>
@@ -1328,7 +1328,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-black via-indigo-950/40 to-purple-950/30 text-white p-4 md:p-8">
+    <div className="min-h-screen bg-gradient-to-br from-black via-indigo-950/40 to-blue-950/30 text-white p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -1360,7 +1360,7 @@ export default function SettingsPage() {
                       onClick={() => setActiveSection(item.id)}
                       className={`w-full flex items-center justify-between p-3 rounded-xl transition-all ${
                         activeSection === item.id
-                          ? "bg-gradient-to-r from-indigo-500/20 to-purple-500/20 text-indigo-300 border border-indigo-500/30"
+                          ? "bg-gradient-to-r from-indigo-500/20 to-blue-500/20 text-indigo-300 border border-indigo-500/30"
                           : "hover:bg-white/10 text-white/80"
                       }`}
                     >
@@ -1379,7 +1379,7 @@ export default function SettingsPage() {
                   <button
                     onClick={saveSettings}
                     disabled={isSaving}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 rounded-xl transition-all font-medium"
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 rounded-xl transition-all font-medium"
                   >
                     {isSaving ? (
                       <>
@@ -1648,7 +1648,7 @@ function Toggle({
       onClick={onChange}
       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
         enabled
-          ? "bg-gradient-to-r from-indigo-500 to-purple-500"
+          ? "bg-gradient-to-r from-indigo-500 to-blue-500"
           : "bg-white/10"
       }`}
     >
