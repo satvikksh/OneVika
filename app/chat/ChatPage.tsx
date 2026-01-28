@@ -74,7 +74,7 @@ const ChatSkeleton = () => {
             {/* Outgoing Message Skeleton */}
             <div className="flex gap-3 max-w-[80%] ml-auto justify-end">
               <div className="space-y-1 items-end flex flex-col">
-                <div className="h-16 w-64 bg-blue-100 dark:bg-blue-900/20 rounded-2xl rounded-br-none animate-pulse" />
+                <div className="h-16 w-64 bg-purple-100 dark:bg-purple-900/20 rounded-2xl rounded-br-none animate-pulse" />
                 <div className="h-3 w-12 bg-gray-200 dark:bg-gray-800 rounded animate-pulse mr-1" />
               </div>
             </div>
@@ -90,7 +90,7 @@ const ChatSkeleton = () => {
              {/* Outgoing Message Skeleton */}
              <div className="flex gap-3 max-w-[80%] ml-auto justify-end">
               <div className="space-y-1 items-end flex flex-col">
-                <div className="h-10 w-40 bg-blue-100 dark:bg-blue-900/20 rounded-2xl rounded-br-none animate-pulse" />
+                <div className="h-10 w-40 bg-purple-100 dark:bg-purple-900/20 rounded-2xl rounded-br-none animate-pulse" />
               </div>
             </div>
           </div>
@@ -788,7 +788,7 @@ export default function ChatPage() {
     return (
       <div className="flex items-center justify-center h-[100dvh] bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950 p-4">
         <div className="text-center max-w-md p-8 bg-white dark:bg-gray-800 rounded-2xl shadow-xl">
-          <Users className="h-16 w-16 text-blue-600 dark:text-blue-400 mx-auto mb-4" />
+          <Users className="h-16 w-16 text-purple-600 dark:text-purple-400 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
             Sign in to Chat
           </h2>
@@ -797,7 +797,7 @@ export default function ChatPage() {
           </p>
           <button
             onClick={() => (window.location.href = "/login")}
-            className="px-6 py-3 bg-gradient-to-r from-blue-600 to-pink-600 text-white rounded-xl hover:from-blue-700 hover:to-pink-700 transition-all shadow-lg hover:shadow-xl active:scale-95 font-medium"
+            className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg hover:shadow-xl active:scale-95 font-medium"
           >
             Sign In
           </button>

@@ -55,7 +55,7 @@ export function initSocket(res: NextApiResponseServerIO) {
     cors: {
       origin:
         process.env.NODE_ENV === "production"
-          ? ["https://onevika.vercel.app"]
+          ? ["https://orbitbyte.vercel.app"]
           : ["http://localhost:3000"],
       credentials: true,
     },

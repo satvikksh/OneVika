@@ -84,7 +84,7 @@ const projects: Project[] = [
     status: 'active',
     progress: 75,
     githubUrl: "https://github.com/satvikksh/OneVika",
-    liveUrl: "https://onevika.vercel.app",
+    liveUrl: "https://orbitbyte.vercel.app",
     teamSize: 8,
     duration: "6 months",
     stars: 234,
