@@ -952,7 +952,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
             isVisible ? 'translate-y-0' : 'translate-y-full'
           }`}
         >
-          <div className="flex items-center justify-around h-15 px-0">
+          <div className="flex items-center justify-around h-14 px-0">
             {bottomNavItems.map((item) => {
               const isActive = pathname === item.path;
 

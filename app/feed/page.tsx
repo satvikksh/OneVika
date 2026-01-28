@@ -18,10 +18,25 @@ import {
   Play,
   MoreVertical,
   Flag,
+  Copy,
+  Edit,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { useTheme } from "../theme-provider";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+
+// --- UTILS ---
+// Fisher-Yates Shuffle Algorithm
+function shuffleArray<T>(array: T[]): T[] {
+  const newArray = [...array];
+  for (let i = newArray.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+  }
+  return newArray;
+}
 
 // --- TYPES ---
 interface UserType {
@@ -66,24 +81,138 @@ interface CommentsModalProps {
   onCommentDeleted: (commentId: string) => void;
 }
 
-// --- SKELETON LOADER COMPONENT (FIXED) ---
+interface EditPostModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  postId: string;
+  currentContent: string;
+  onPostUpdated: (postId: string, newContent: string) => void;
+}
+
+// --- EDIT POST MODAL COMPONENT ---
+function EditPostModal({ isOpen, onClose, postId, currentContent, onPostUpdated }: EditPostModalProps) {
+  const [content, setContent] = useState(currentContent);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setContent(currentContent);
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+          textareaRef.current.setSelectionRange(content.length, content.length);
+        }
+      }, 100);
+    }
+  }, [isOpen, currentContent]);
+
+  const handleSubmit = async () => {
+    if (!content.trim() || content === currentContent) {
+      onClose();
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const response = await fetch(`/api/posts/${postId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+
+      if (response.ok) {
+        onPostUpdated(postId, content);
+        onClose();
+      }
+    } catch (error) {
+      console.error("Failed to update post:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
+    }
+    if (e.key === "Escape") {
+      onClose();
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md max-h-[80vh] flex flex-col"
+      >
+        <div className="p-6 border-b dark:border-gray-900 flex items-center justify-between">
+          <div>
+            <h3 className="text-xl font-bold">Edit Post</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Update your post content
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full"
+            disabled={isSubmitting}
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="flex-1 p-6">
+          <textarea
+            ref={textareaRef}
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            onKeyDown={handleKeyDown}
+            className="w-full p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none min-h-[200px]"
+            placeholder="What's on your mind?"
+          />
+          <div className="mt-4 text-sm text-gray-500 dark:text-gray-400">
+            <p>Press Enter to save, Shift+Enter for new line</p>
+          </div>
+        </div>
+
+        <div className="p-6 border-t dark:border-gray-700 flex justify-end gap-3">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            disabled={isSubmitting}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={isSubmitting || !content.trim() || content === currentContent}
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {isSubmitting ? "Saving..." : "Save Changes"}
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+// --- SKELETON LOADER COMPONENT ---
 function FeedSkeleton() {
   return (
-    // FIX: Changed z-50 to z-0 so it doesn't overlap the main Navbar
     <div className="fixed inset-0 w-screen h-[100dvh] overflow-hidden bg-black z-0">
-      {/* Main content area */}
       <div className="absolute inset-0 flex flex-col">
-        {/* Media skeleton */}
         <div className="flex-1 relative bg-gradient-to-b from-gray-900 to-black">
-          {/* Shimmer effect for media area */}
           <div className="absolute inset-0 overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-gray-800/20 to-transparent animate-shimmer" />
           </div>
         </div>
-
-        {/* Content overlay skeleton */}
         <div className="absolute bottom-2 left-0 right-0 px-4 pb-12">
-          {/* User info skeleton */}
           <div className="flex items-center gap-3 mb-4">
             <div className="w-9 h-9 rounded-full bg-gray-800 animate-pulse" />
             <div className="flex-1 space-y-2">
@@ -91,15 +220,11 @@ function FeedSkeleton() {
               <div className="h-2 w-16 bg-gray-800 rounded animate-pulse" />
             </div>
           </div>
-
-          {/* Text content skeleton */}
           <div className="space-y-2 w-3/4">
             <div className="h-3 w-full bg-gray-800 rounded animate-pulse" />
             <div className="h-3 w-2/3 bg-gray-800 rounded animate-pulse" />
           </div>
         </div>
-
-        {/* Right side action bar skeleton */}
         <div className="absolute right-4 bottom-32 flex flex-col gap-5">
           {[1, 2, 3, 4, 5].map((i) => (
             <div key={i} className="flex flex-col items-center gap-1">
@@ -108,13 +233,9 @@ function FeedSkeleton() {
             </div>
           ))}
         </div>
-
-        {/* Top navigation skeleton */}
-        {/* Adjusted top padding to likely sit below a global navbar if present */}
         <div className="absolute top-16 left-0 right-0 p-4">
           <div className="flex justify-between">
             <div className="h-6 w-20 bg-gray-800 rounded animate-pulse" />
-            {/* Removed the right circle if it conflicts with nav elements */}
           </div>
         </div>
       </div>
@@ -507,8 +628,8 @@ function CommentsModal({
 // --- ANIMATION VARIANTS (INSTANT SCROLL) ---
 const variants: Variants = {
   enter: (direction: number) => ({
-    y: direction > 0 ? "100%" : "-100%", // From bottom if Down, from top if Up
-    opacity: 1, // Start fully opaque for instant feel
+    y: direction > 0 ? "100%" : "-100%",
+    opacity: 1,
   }),
   center: {
     zIndex: 1,
@@ -517,8 +638,8 @@ const variants: Variants = {
   },
   exit: (direction: number) => ({
     zIndex: 0,
-    y: direction < 0 ? "100%" : "-100%", // Exit to bottom if Up, to top if Down
-    opacity: 1, // Stay opaque while sliding out
+    y: direction < 0 ? "100%" : "-100%",
+    opacity: 1,
   }),
 };
 
@@ -535,7 +656,7 @@ export default function FeedPage() {
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(1);
   const [initialLoad, setInitialLoad] = useState(true);
-   
+     
   // Navigation State
   const [currentPostIndex, setCurrentPostIndex] = useState(0);
   const [direction, setDirection] = useState(0); // 1 = down/next, -1 = up/prev
@@ -548,6 +669,17 @@ export default function FeedPage() {
   const [isVideoPlaying, setIsVideoPlaying] = useState<Record<string, boolean>>({});
   const [isVideoMuted, setIsVideoMuted] = useState<Record<string, boolean>>({});
   const [doubleTapLike, setDoubleTapLike] = useState<string | null>(null);
+
+  // Edit modal state
+  const [editModal, setEditModal] = useState<{
+    isOpen: boolean;
+    postId: string;
+    content: string;
+  }>({
+    isOpen: false,
+    postId: "",
+    content: "",
+  });
 
   const [likeModal, setLikeModal] = useState<{
     isOpen: boolean;
@@ -571,6 +703,7 @@ export default function FeedPage() {
   });
 
   const feedContainerRef = useRef<HTMLDivElement>(null);
+  const carouselContainerRef = useRef<HTMLDivElement>(null); // REF FOR CAROUSEL
   const videoRefs = useRef<Record<string, HTMLVideoElement | null>>({});
   const lastTapRef = useRef<number>(0);
   const tapTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -578,6 +711,7 @@ export default function FeedPage() {
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const lastScrollY = useRef(0);
   const scrollingRef = useRef(false);
+  const [carouselIndex, setCarouselIndex] = useState(0);
 
   /* ============================
        🔐 REDIRECT (SIDE EFFECT)
@@ -587,6 +721,18 @@ export default function FeedPage() {
       router.replace("/login");
     }
   }, [status, router]);
+
+  /* ============================
+       SCROLL CAROUSEL ON INDEX CHANGE
+  ============================ */
+  useEffect(() => {
+    if (carouselContainerRef.current) {
+        carouselContainerRef.current.scrollTo({
+            left: carouselIndex * carouselContainerRef.current.clientWidth,
+            behavior: "smooth"
+        });
+    }
+  }, [carouselIndex]);
 
   /* ============================
        CHECK IF MEDIA IS VIDEO
@@ -599,19 +745,7 @@ export default function FeedPage() {
   };
 
   /* ============================
-       SHUFFLE ARRAY FUNCTION
-  ============================ */
-  const shuffleArray = <T,>(array: T[]): T[] => {
-    const shuffled = [...array];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    return shuffled;
-  };
-
-  /* ============================
-       FETCH POSTS WITH PAGINATION
+       FETCH POSTS WITH PAGINATION & SHUFFLE
   ============================ */
   const fetchPosts = useCallback(
     async (pageNum: number, isInitialLoad = false, customLimit = 10) => {
@@ -661,7 +795,7 @@ export default function FeedPage() {
         );
 
         if (isInitialLoad) {
-          // If customLimit is 1, shuffling doesn't do much, but keeps logic consistent
+          // SHUFFLE POSTS ON INITIAL LOAD
           const shuffledPosts = shuffleArray(postsWithComments);
           setPosts(shuffledPosts);
           setInitialLoad(false);
@@ -670,14 +804,21 @@ export default function FeedPage() {
           const playingStates: Record<string, boolean> = {};
           const muteStates: Record<string, boolean> = {};
           shuffledPosts.forEach((post) => {
-            playingStates[post._id] = true;
-            muteStates[post._id] = false;
+            if (post.images?.length > 0) {
+               post.images.forEach((_, idx) => {
+                 playingStates[`${post._id}-${idx}`] = true;
+                 muteStates[`${post._id}-${idx}`] = false;
+               })
+            }
           });
           setIsVideoPlaying(playingStates);
           setIsVideoMuted(muteStates);
         } else {
           setPosts((prev) => {
-            const newPosts = postsWithComments.filter(
+            // SHUFFLE NEW BATCH AS WELL
+            const shuffledNewPosts = shuffleArray(postsWithComments);
+             
+            const newPosts = shuffledNewPosts.filter(
               (newPost) =>
                 !prev.some((existingPost) => existingPost._id === newPost._id)
             );
@@ -685,8 +826,12 @@ export default function FeedPage() {
             const newPlayingStates: Record<string, boolean> = {};
             const newMuteStates: Record<string, boolean> = {};
             newPosts.forEach((post) => {
-              newPlayingStates[post._id] = true;
-              newMuteStates[post._id] = false;
+               if (post.images?.length > 0) {
+                 post.images.forEach((_, idx) => {
+                    newPlayingStates[`${post._id}-${idx}`] = true;
+                    newMuteStates[`${post._id}-${idx}`] = false;
+                 })
+               }
             });
 
             setIsVideoPlaying((prevStates) => ({
@@ -721,8 +866,7 @@ export default function FeedPage() {
   ============================ */
   useEffect(() => {
     if (status === "authenticated" && initialLoad) {
-      // FETCH ONLY 1 POST INITIALLY FOR INSTANT LOAD
-      fetchPosts(1, true, 1);
+      fetchPosts(1, true, 5);
     }
   }, [status, initialLoad, fetchPosts]);
 
@@ -746,7 +890,6 @@ export default function FeedPage() {
         if (entries[0].isIntersecting && hasMore && !loadingMore) {
           const nextPage = page + 1;
           setPage(nextPage);
-          // FETCH 5 POSTS ON SUBSEQUENT LOADS
           fetchPosts(nextPage, false, 5);
         }
       },
@@ -769,7 +912,6 @@ export default function FeedPage() {
   ============================ */
   const navigateFeed = useCallback(
     (navDirection: number) => {
-      // 1 = Next (Scroll Down), -1 = Prev (Scroll Up)
       const nextIndex = currentPostIndex + navDirection;
 
       if (nextIndex < 0 || nextIndex >= posts.length) return;
@@ -777,26 +919,31 @@ export default function FeedPage() {
       scrollingRef.current = true;
       setDirection(navDirection);
 
-      // Hide Overlay controls
       setIsNavbarVisible(navDirection === -1 && nextIndex === 0);
       setShowOptions(false);
 
       // Handle Video Logic (Pause current)
       const currentPost = posts[currentPostIndex];
-      if (currentPost && isVideo(currentPost.images?.[0])) {
-        const video = videoRefs.current[currentPost._id];
-        if (video) {
-          video.pause();
-          setIsVideoPlaying((prev) => ({
-            ...prev,
-            [currentPost._id]: false,
-          }));
-        }
+      // Pause ALL videos in the current post (carousel support)
+      if (currentPost && currentPost.images) {
+         currentPost.images.forEach((_, idx) => {
+             const key = `${currentPost._id}-${idx}`;
+             const video = videoRefs.current[key];
+             if (video) {
+                 video.pause();
+                 setIsVideoPlaying(prev => ({ ...prev, [key]: false }));
+             }
+         });
       }
 
       setCurrentPostIndex(nextIndex);
+      setCarouselIndex(0); // Reset carousel index when changing posts
+      
+      // Reset scroll position of carousel when changing posts
+      if (carouselContainerRef.current) {
+          carouselContainerRef.current.scrollTo({ left: 0, behavior: "instant" as ScrollBehavior });
+      }
 
-      // Unlock scroll VERY QUICKLY for "Instant" feel
       setTimeout(() => {
         scrollingRef.current = false;
       }, 200); 
@@ -814,7 +961,7 @@ export default function FeedPage() {
       if (scrollingRef.current || posts.length === 0) return;
 
       const delta = e.deltaY;
-       
+        
       if (Math.abs(delta) < 20) return;
 
       const currentTime = Date.now();
@@ -825,7 +972,7 @@ export default function FeedPage() {
       } else {
         navigateFeed(-1);
       }
-       
+        
       lastScrollY.current = currentTime;
     },
     [posts.length, navigateFeed]
@@ -846,24 +993,27 @@ export default function FeedPage() {
         target.closest("button") ||
         target.closest("a") ||
         target.closest("textarea") ||
-        target.closest("input");
+        target.closest("input") ||
+        target.closest(".carousel-container"); // Added class for check
+
+      // Allow horizontal scroll in carousel without triggering vertical nav
+      if (target.closest(".carousel-container")) return;
 
       if (isInteractive) return;
 
-      e.preventDefault();
-
-      if (scrollingRef.current || posts.length === 0) return;
-
       const touchStartY = lastScrollY.current;
       const touchEndY = e.changedTouches[0].clientY;
-      const diff = touchStartY - touchEndY;
+      const diffY = touchStartY - touchEndY;
+      
+      if (Math.abs(diffY) > 50) {
+        e.preventDefault();
+        if (scrollingRef.current || posts.length === 0) return;
 
-      if (Math.abs(diff) < 50) return; 
-
-      if (diff > 0) {
-        navigateFeed(1);
-      } else {
-        navigateFeed(-1);
+        if (diffY > 0) {
+          navigateFeed(1);
+        } else {
+          navigateFeed(-1);
+        }
       }
     },
     [posts.length, navigateFeed]
@@ -920,17 +1070,19 @@ export default function FeedPage() {
   /* ============================
        HANDLE SINGLE TAP
   ============================ */
-  const handleSingleTap = useCallback((postId: string, isVideo: boolean) => {
+  const handleSingleTap = useCallback((postId: string, isVideo: boolean, index: number = 0) => {
     if (!isVideo) return;
-
-    const video = videoRefs.current[postId];
+    
+    const key = `${postId}-${index}`;
+    const video = videoRefs.current[key];
+    
     if (video) {
       if (video.paused) {
         video.play();
-        setIsVideoPlaying((prev) => ({ ...prev, [postId]: true }));
+        setIsVideoPlaying((prev) => ({ ...prev, [key]: true }));
       } else {
         video.pause();
-        setIsVideoPlaying((prev) => ({ ...prev, [postId]: false }));
+        setIsVideoPlaying((prev) => ({ ...prev, [key]: false }));
       }
     }
 
@@ -939,23 +1091,34 @@ export default function FeedPage() {
   }, []);
 
   /* ============================
-       HANDLE DOUBLE TAP
+       HANDLE DOUBLE TAP (MODIFIED)
   ============================ */
   const handleDoubleTap = useCallback(
     (postId: string) => {
-      toggleLike(postId);
+      // Find the post to check current status
+      const post = posts.find((p) => p._id === postId);
+      if (post && session?.user?.id) {
+        const isLiked = post.likes.includes(session.user.id);
+        
+        // ONLY toggle if NOT already liked
+        if (!isLiked) {
+           toggleLike(postId);
+        }
+      }
+      
+      // Always show animation regardless of whether we called toggleLike
       setDoubleTapLike(postId);
       setTimeout(() => setDoubleTapLike(null), 1000);
       setIsNavbarVisible(true);
     },
-    [toggleLike]
+    [toggleLike, posts, session?.user?.id] // Added dependencies
   );
 
   /* ============================
        HANDLE MEDIA CLICK
   ============================ */
   const handleMediaClick = useCallback(
-    (e: React.MouseEvent, postId: string, isVideo: boolean) => {
+    (e: React.MouseEvent, postId: string, isVideo: boolean, index: number = 0) => {
       e.stopPropagation();
       if (showOptions) {
         setShowOptions(false);
@@ -965,44 +1128,19 @@ export default function FeedPage() {
       const currentTime = new Date().getTime();
       const timeDiff = currentTime - lastTapRef.current;
 
-      if (timeDiff < 500 && timeDiff > 0) {
-        handleDoubleTap(postId);
-      } else {
-        handleSingleTap(postId, isVideo);
-      }
-
-      lastTapRef.current = currentTime;
-    },
-    [handleSingleTap, handleDoubleTap, showOptions]
-  );
-
-  /* ============================
-       HANDLE TOUCH TAP
-  ============================ */
-  const handleMediaTap = useCallback(
-    (e: React.TouchEvent, postId: string, isVideo: boolean) => {
-      e.stopPropagation();
-      if (showOptions) {
-        setShowOptions(false);
-        return;
-      }
-
-      const currentTime = new Date().getTime();
-      const timeDiff = currentTime - lastTapRef.current;
-
-      if (tapTimeoutRef.current) {
-        clearTimeout(tapTimeoutRef.current);
-      }
-
+      // Single/Double Click Logic
+      // If clicks are very close together (<300ms), treat as double click
       if (timeDiff < 300 && timeDiff > 0) {
         handleDoubleTap(postId);
+        lastTapRef.current = 0; // Reset to prevent triple-click triggering another double
       } else {
-        tapTimeoutRef.current = setTimeout(() => {
-          handleSingleTap(postId, isVideo);
-        }, 300);
+        // Otherwise treat as single tap (play/pause)
+        // Note: For perfect double-tap isolation on click, we usually need a small delay,
+        // but for immediate play/pause feedback, firing single tap immediately is preferred UX.
+        // If the user intends double tap, the second click will catch the condition above.
+        handleSingleTap(postId, isVideo, index);
+        lastTapRef.current = currentTime;
       }
-
-      lastTapRef.current = currentTime;
     },
     [handleSingleTap, handleDoubleTap, showOptions]
   );
@@ -1010,14 +1148,42 @@ export default function FeedPage() {
   /* ============================
        TOGGLE VIDEO MUTE
   ============================ */
-  const toggleMute = useCallback((postId: string) => {
-    const video = videoRefs.current[postId];
+  const toggleMute = useCallback((postId: string, index: number = 0) => {
+    const key = `${postId}-${index}`;
+    const video = videoRefs.current[key];
     if (video) {
       video.muted = !video.muted;
-      setIsVideoMuted((prev) => ({ ...prev, [postId]: !prev[postId] }));
+      setIsVideoMuted((prev) => ({ ...prev, [key]: !prev[key] }));
     }
     setIsNavbarVisible(true);
   }, []);
+
+  /* ============================
+       SHARE POST FUNCTION
+  ============================ */
+  const handleShare = async (postId: string) => {
+    const shareUrl = `${window.location.origin}/post/${postId}`;
+    
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Check out this post!',
+          text: 'Look at this amazing content!',
+          url: shareUrl,
+        });
+      } catch (error) {
+        console.log('Error sharing:', error);
+      }
+    } else {
+      // Fallback: copy to clipboard
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        alert('Link copied to clipboard!');
+      } catch (err) {
+        console.error('Failed to copy:', err);
+      }
+    }
+  };
 
   const openLikeModal = (postId: string, likeCount: number) => {
     setLikeModal({ isOpen: true, postId, likeCount });
@@ -1101,6 +1267,14 @@ export default function FeedPage() {
     }
   };
 
+  const handlePostUpdated = (postId: string, newContent: string) => {
+    setPosts((prev) =>
+      prev.map((post) =>
+        post._id === postId ? { ...post, content: newContent } : post
+      )
+    );
+  };
+
   const deletePost = async (id: string) => {
     if (!confirm("Are you sure you want to delete this post?")) return;
     const res = await fetch(`/api/posts/${id}`, { method: "DELETE" });
@@ -1114,8 +1288,29 @@ export default function FeedPage() {
     router.push(`/profile/${userId}`);
   };
 
-  // Show skeleton loader during initial load
-  // If loadingPosts AND initialLoad is true, show Skeleton
+  // Handle carousel navigation
+  const handleCarouselNavigate = (direction: 'left' | 'right') => {
+    const currentPost = posts[currentPostIndex];
+    if (!currentPost?.images || currentPost.images.length <= 1) return;
+    
+    const newIndex = direction === 'right' 
+      ? Math.min(carouselIndex + 1, currentPost.images.length - 1)
+      : Math.max(carouselIndex - 1, 0);
+    
+    setCarouselIndex(newIndex);
+  };
+
+  // Sync scroll with index
+  const handleCarouselScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const container = e.currentTarget;
+    const scrollLeft = container.scrollLeft;
+    const width = container.clientWidth;
+    const index = Math.round(scrollLeft / width);
+    if (index !== carouselIndex) {
+        setCarouselIndex(index);
+    }
+  }
+
   if (loadingPosts && initialLoad) {
     return <FeedSkeleton />;
   }
@@ -1125,15 +1320,30 @@ export default function FeedPage() {
   }
 
   const currentPost = posts[currentPostIndex];
-  const currentImage = currentPost?.images?.[0];
-  const isCurrentVideo = currentImage ? isVideo(currentImage) : false;
+  const mediaCount = currentPost?.images?.length || 0;
+  const isTextOnly = mediaCount === 0;
+  const isCarousel = mediaCount > 1;
+
+  // Check if current media is video
+  const currentMediaIsVideo = currentPost?.images 
+    ? isVideo(currentPost.images[carouselIndex])
+    : false;
 
   return (
     <>
+      {/* Add CSS for scrollbar hide */}
+      <style jsx global>{`
+        .no-scrollbar::-webkit-scrollbar {
+          display: none;
+        }
+        .no-scrollbar {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+      `}</style>
+
       <div
         ref={feedContainerRef}
-        // FIX: Added 'touch-none' and 'overscroll-none' to disable pull-to-refresh
-        // FIX: Changed 'h-screen' to 'h-[100dvh]' for better mobile address bar handling
         className={`fixed inset-0 w-screen h-[100dvh] overflow-hidden touch-none overscroll-none ${
           isDark ? "dark bg-black" : "bg-black"
         }`}
@@ -1154,67 +1364,228 @@ export default function FeedPage() {
               }}
               className="absolute inset-0 flex flex-col"
             >
-              {/* POST MEDIA - FULL SCREEN */}
-              {currentImage && (
-                <div
-                  className="flex-1 relative"
-                  onClick={(e) =>
-                    handleMediaClick(e, currentPost._id, isCurrentVideo)
-                  }
-                  onTouchEnd={(e) =>
-                    handleMediaTap(e, currentPost._id, isCurrentVideo)
-                  }
-                >
-                  {isCurrentVideo ? (
-                    <>
-                      <video
-                        ref={(el) => {
-                          videoRefs.current[currentPost._id] = el;
-                        }}
-                        src={currentImage}
-                        className="absolute inset-0 w-full h-full object-contain bg-black pointer-events-none"
-                        autoPlay
-                        loop
-                        muted={isVideoMuted[currentPost._id]}
-                        playsInline
-                      />
-                      {!isVideoPlaying[currentPost._id] && (
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                          <div className="w-20 h-20 bg-black/50 rounded-full flex items-center justify-center">
-                            <Play size={40} className="text-white" />
-                          </div>
+              {/* ==================================================
+                                MEDIA CONTENT AREA
+                 ================================================== */}
+              <div className="flex-1 relative bg-black flex items-center justify-center">
+                
+                {/* --- 1. TEXT ONLY MODE --- */}
+                {isTextOnly && (
+                  <div 
+                    className="w-full h-full flex items-center justify-center p-8 bg-gradient-to-br from-blue-900 via-blue-500 to-teal-500"
+                    onDoubleClick={() => handleDoubleTap(currentPost._id)}
+                  >
+                    <p className="text-white text-2xl md:text-3xl font-bold text-center leading-relaxed drop-shadow-lg break-words max-w-2xl">
+                       {currentPost.content}
+                    </p>
+                    
+                    {/* Double Tap Heart Animation for Text Mode */}
+                    <AnimatePresence>
+                      {doubleTapLike === currentPost._id && (
+                        <motion.div
+                          initial={{ scale: 0, opacity: 1 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          exit={{ scale: 1.5, opacity: 0 }}
+                          transition={{ duration: 0.5 }}
+                          className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                        >
+                          <Heart
+                            size={100}
+                            className="text-transparent fill-white drop-shadow-xl"
+                          />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                )}
+
+                {/* --- 2. CAROUSEL MODE ( > 1 IMAGE) --- */}
+                {isCarousel && (
+                    <div className="relative w-full h-full carousel-container">
+                      <div 
+                        ref={carouselContainerRef} // ATTACH REF HERE
+                        onScroll={handleCarouselScroll} // ATTACH SCROLL LISTENER
+                        className="w-full h-full flex overflow-x-scroll snap-x snap-mandatory no-scrollbar"
+                        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                      >
+                        {currentPost.images.map((src, index) => {
+                           const isItemVideo = isVideo(src);
+                           const key = `${currentPost._id}-${index}`;
+                           
+                           return (
+                             <div 
+                                key={key} 
+                                className="w-full h-full flex-shrink-0 snap-center relative flex items-center justify-center bg-black"
+                                onClick={(e) => handleMediaClick(e, currentPost._id, isItemVideo, index)}
+                             >
+                                {isItemVideo ? (
+                                  <>
+                                    <video
+                                      ref={(el) => {
+                                        videoRefs.current[key] = el;
+                                      }}
+                                      src={src}
+                                      className="w-full h-full object-contain pointer-events-none"
+                                      loop
+                                      muted={isVideoMuted[key]}
+                                      playsInline
+                                    />
+                                    {!isVideoPlaying[key] && (
+                                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/20">
+                                        <div className="w-16 h-16 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center">
+                                          <Play size={32} className="text-white fill-white ml-1" />
+                                        </div>
+                                      </div>
+                                    )}
+                                  </>
+                                ) : (
+                                  <div className="relative w-full h-full">
+                                      <Image
+                                        src={src}
+                                        alt={`Post image ${index + 1}`}
+                                        fill
+                                        className="object-contain"
+                                        priority={index === 0}
+                                      />
+                                  </div>
+                                )}
+                                
+                                {/* Page indicator overlay for specific item */}
+                                <div className="absolute top-4 right-4 bg-black/50 backdrop-blur-md px-3 py-1 rounded-full text-white text-xs font-medium pointer-events-none">
+                                   {index + 1}/{mediaCount}
+                                </div>
+                             </div>
+                           )
+                        })}
+                      </div>
+                      
+                      {/* Carousel Navigation Buttons - Desktop Only */}
+                      {window.innerWidth >= 768 && (
+                        <>
+                          {carouselIndex > 0 && (
+                            <button
+                              onClick={(e) => {
+                                 e.stopPropagation();
+                                 handleCarouselNavigate('left');
+                              }}
+                              className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-black/50 backdrop-blur-md rounded-full flex items-center justify-center z-10 hover:bg-black/70 transition-colors"
+                            >
+                              <ChevronLeft className="text-white" size={24} />
+                            </button>
+                          )}
+                          {carouselIndex < mediaCount - 1 && (
+                            <button
+                              onClick={(e) => {
+                                 e.stopPropagation();
+                                 handleCarouselNavigate('right');
+                              }}
+                              className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-black/50 backdrop-blur-md rounded-full flex items-center justify-center z-10 hover:bg-black/70 transition-colors"
+                            >
+                              <ChevronRight className="text-white" size={24} />
+                            </button>
+                          )}
+                        </>
+                      )}
+                      
+                      {/* Carousel Dots - Always visible */}
+                      {mediaCount > 1 && (
+                        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-10">
+                          {currentPost.images.map((_, index) => (
+                            <button
+                              key={index}
+                              onClick={(e) => {
+                                 e.stopPropagation();
+                                 setCarouselIndex(index);
+                              }}
+                              className={`transition-all duration-300 ${
+                               index === carouselIndex 
+                                 ? 'w-8 h-2 bg-white rounded-full' 
+                                 : 'w-2 h-2 bg-white/50 rounded-full hover:bg-white/70'
+                              }`}
+                            />
+                          ))}
                         </div>
                       )}
-                    </>
-                  ) : (
-                    <Image
-                      src={currentImage}
-                      alt="Post image"
-                      fill
-                      className="object-contain"
-                      priority
-                    />
-                  )}
+                      
+                      {/* Double Tap Heart Animation (Global for carousel) */}
+                      <AnimatePresence>
+                       {doubleTapLike === currentPost._id && (
+                         <motion.div
+                           initial={{ scale: 0, opacity: 1 }}
+                           animate={{ scale: 1, opacity: 1 }}
+                           exit={{ scale: 1.5, opacity: 0 }}
+                           transition={{ duration: 0.5 }}
+                           className="absolute inset-0 flex items-center justify-center pointer-events-none z-20"
+                         >
+                           <Heart
+                             size={100}
+                             className="text-transparent fill-red-600 drop-shadow-lg"
+                           />
+                         </motion.div>
+                       )}
+                      </AnimatePresence>
+                    </div>
+                )}
 
-                  {/* Double Tap Heart Animation */}
-                  <AnimatePresence>
-                    {doubleTapLike === currentPost._id && (
-                      <motion.div
-                        initial={{ scale: 0, opacity: 1 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 1.5, opacity: 0 }}
-                        transition={{ duration: 0.5 }}
-                        className="absolute inset-0 flex items-center justify-center pointer-events-none"
-                      >
-                        <Heart
-                          size={100}
-                          className="text-transparent fill-red-600 drop-shadow-lg"
+                {/* --- 3. SINGLE MEDIA MODE --- */}
+                {!isTextOnly && !isCarousel && (
+                  <div
+                    className="w-full h-full relative"
+                    onClick={(e) =>
+                      handleMediaClick(e, currentPost._id, isVideo(currentPost.images[0]))
+                    }
+                  >
+                    {isVideo(currentPost.images[0]) ? (
+                      <>
+                        <video
+                          ref={(el) => {
+                            videoRefs.current[`${currentPost._id}-0`] = el;
+                          }}
+                          src={currentPost.images[0]}
+                          className="absolute inset-0 w-full h-full object-contain bg-black pointer-events-none"
+                          autoPlay
+                          loop
+                          muted={isVideoMuted[`${currentPost._id}-0`]}
+                          playsInline
                         />
-                      </motion.div>
+                        {!isVideoPlaying[`${currentPost._id}-0`] && (
+                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                            <div className="w-20 h-20 bg-black/50 rounded-full flex items-center justify-center">
+                              <Play size={40} className="text-white ml-1 fill-white" />
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <Image
+                        src={currentPost.images[0]}
+                        alt="Post image"
+                        fill
+                        className="object-contain"
+                        priority
+                      />
                     )}
-                  </AnimatePresence>
-                </div>
-              )}
+
+                    {/* Double Tap Heart Animation */}
+                    <AnimatePresence>
+                      {doubleTapLike === currentPost._id && (
+                        <motion.div
+                          initial={{ scale: 0, opacity: 1 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          exit={{ scale: 1.5, opacity: 0 }}
+                          transition={{ duration: 0.5 }}
+                          className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                        >
+                          <Heart
+                            size={100}
+                            className="text-transparent fill-red-600 drop-shadow-lg"
+                          />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                )}
+              </div>
 
               {/* POST CONTENT OVERLAY */}
               <div className="absolute bottom-2 left-0 right-0 px-4 pb-12 pointer-events-none">
@@ -1225,7 +1596,7 @@ export default function FeedPage() {
                       onClick={() =>
                         handleUserAvatarClick(currentPost.userId?._id)
                       }
-                      className="w-9 h-9 rounded-full bg-gradient-to-r from-blue-500 to-blue-500 flex items-center justify-center overflow-hidden cursor-pointer hover:opacity-90 transition-opacity pointer-events-auto"
+                      className="w-9 h-9 rounded-full bg-gradient-to-r from-blue-500 to-blue-500 flex items-center justify-center overflow-hidden cursor-pointer hover:opacity-90 transition-opacity pointer-events-auto shadow-md"
                     >
                       {currentPost.userId?.image ||
                       currentPost.userId?.avatar ? (
@@ -1249,10 +1620,10 @@ export default function FeedPage() {
                     <div className="flex-1">
                       <div className="flex items-center justify-between">
                         <div>
-                          <h3 className="font-bold text-white text-sm">
+                          <h3 className="font-bold text-white text-sm drop-shadow-md">
                             {currentPost.userId?.name}
                           </h3>
-                          <p className="text-xs text-gray-300">
+                          <p className="text-xs text-gray-300 drop-shadow-md">
                             {new Date(currentPost.createdAt).toLocaleDateString(
                               "en-US",
                               {
@@ -1268,10 +1639,10 @@ export default function FeedPage() {
                     </div>
                   </div>
 
-                  {/* POST TEXT */}
-                  {currentPost.content && (
+                  {/* POST TEXT (Only show here if NOT Text-Only mode) */}
+                  {!isTextOnly && currentPost.content && (
                     <div className="mb-4">
-                      <p className="text-white text-sm leading-relaxed">
+                      <p className="text-white text-sm leading-relaxed drop-shadow-md line-clamp-3">
                         {currentPost.content}
                       </p>
                     </div>
@@ -1289,24 +1660,35 @@ export default function FeedPage() {
                     transition={{ duration: 0.3 }}
                     className="absolute top-0 left-0 right-0 z-30 pointer-events-none"
                   >
-                    <div className="absolute top-4 right-4 flex flex-col items-end gap-4 pointer-events-auto">
+                    <div className="absolute top-4 left-4 pointer-events-auto">
+                      <button
+                        onClick={() => router.back()}
+                        className="w-10 h-10 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center hover:bg-black/70 transition-colors"
+                      >
+                        <X size={20} className="text-white" />
+                      </button>
                     </div>
-                    <div className="absolute top-4 left-1/2 transform -translate-x-1/2 text-center pointer-events-auto">
+                    
+                    {/* Post counter */}
+                    <div className="absolute top-4 left-1/2 -translate-x-1/2 pointer-events-auto">
+                      <div className="bg-black/50 backdrop-blur-md px-3 py-1 rounded-full text-white text-sm">
+                        {currentPostIndex + 1} / {posts.length}
+                      </div>
                     </div>
                   </motion.div>
                 )}
               </AnimatePresence>
-               
-              {/* RIGHT SIDE ACTION BAR */}
-              <div className="absolute right-4 bottom-32 flex flex-col gap-5 z-50 pointer-events-none">
+                
+              {/* RIGHT SIDE ACTION BAR (SMALL ICONS) */}
+              <div className="absolute right-4 bottom-32 flex flex-col gap-4 z-50 pointer-events-none">
                 <div className="flex flex-col items-center">
                   <button
                     onClick={() => toggleLike(currentPost._id)}
-                    className="flex flex-col items-center gap-1 pointer-events-auto"
+                    className="flex flex-col items-center gap-1 pointer-events-auto transition-transform active:scale-90"
                   >
                     <Heart
-                      size={24}
-                      className={`transition-all duration-300 ${
+                      size={24} // Resized to smaller standard
+                      className={`transition-all duration-300 drop-shadow-md ${
                         currentPost.likes.includes(session?.user?.id || "")
                           ? "fill-red-500 text-red-500"
                           : "text-white"
@@ -1317,7 +1699,7 @@ export default function FeedPage() {
                     onClick={() =>
                       openLikeModal(currentPost._id, currentPost.likes.length)
                     }
-                    className="text-white text-xs font-medium hover:underline pointer-events-auto"
+                    className="text-white text-xs font-medium hover:underline pointer-events-auto drop-shadow-md"
                   >
                     {currentPost.likes.length}
                   </button>
@@ -1332,9 +1714,9 @@ export default function FeedPage() {
                         currentPost.comments || []
                       )
                     }
-                    className="flex flex-col items-center gap-1 pointer-events-auto"
+                    className="flex flex-col items-center gap-1 pointer-events-auto transition-transform active:scale-90"
                   >
-                    <MessageCircle size={24} className="text-white" />
+                    <MessageCircle size={24} className="text-white drop-shadow-md" />
                   </button>
                   <button
                     onClick={() =>
@@ -1344,20 +1726,25 @@ export default function FeedPage() {
                         currentPost.comments || []
                       )
                     }
-                    className="text-white text-xs font-medium hover:underline pointer-events-auto"
+                    className="text-white text-xs font-medium hover:underline pointer-events-auto drop-shadow-md"
                   >
                     {currentPost.comments?.length || 0}
                   </button>
                 </div>
 
-                <button className="flex flex-col items-center gap-1 pointer-events-auto">
-                  <Share2 size={24} className="text-white" />
-                  <span className="text-white text-xs font-medium">Share</span>
-                </button>
+                <div className="flex flex-col items-center">
+                  <button
+                    onClick={() => handleShare(currentPost._id)}
+                    className="flex flex-col items-center gap-1 pointer-events-auto transition-transform active:scale-90"
+                  >
+                    <Share2 size={24} className="text-white drop-shadow-md" />
+                  </button>
+                  <span className="text-white text-xs font-medium drop-shadow-md"></span>
+                </div>
 
-                <button className="flex flex-col items-center gap-1 pointer-events-auto">
-                  <Bookmark size={24} className="text-white" />
-                  <span className="text-white text-xs font-medium">Save</span>
+                <button className="flex flex-col items-center gap-1 pointer-events-auto transition-transform active:scale-90">
+                  <Bookmark size={24} className="text-white drop-shadow-md" />
+                  <span className="text-white text-xs font-medium drop-shadow-md"></span>
                 </button>
 
                 <div className="relative pointer-events-auto">
@@ -1366,9 +1753,9 @@ export default function FeedPage() {
                       e.stopPropagation();
                       setShowOptions(!showOptions);
                     }}
-                    className="flex flex-col items-center gap-1"
+                    className="flex flex-col items-center gap-1 transition-transform active:scale-90"
                   >
-                    <MoreVertical size={24} className="text-white" />
+                    <MoreVertical size={24} className="text-white drop-shadow-md" />
                   </button>
 
                   <AnimatePresence>
@@ -1377,18 +1764,34 @@ export default function FeedPage() {
                         initial={{ opacity: 0, scale: 0.9, x: 10 }}
                         animate={{ opacity: 1, scale: 1, x: 0 }}
                         exit={{ opacity: 0, scale: 0.9, x: 10 }}
-                        className="absolute right-12 bottom-0 w-40 bg-white dark:bg-gray-800 rounded-xl shadow-xl overflow-hidden z-[60] origin-bottom-right"
+                        className="absolute right-12 bottom-0 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-xl overflow-hidden z-[60] origin-bottom-right"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <div className="flex flex-col py-1">
                           {currentPost.userId?._id === session?.user?.id ? (
-                            <button
-                              onClick={() => deletePost(currentPost._id)}
-                              className="flex items-center gap-2 w-full px-4 py-3 text-left text-red-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-sm font-medium"
-                            >
-                              <Trash2 size={16} />
-                              Delete Post
-                            </button>
+                            <>
+                              <button
+                                onClick={() => {
+                                  setEditModal({
+                                    isOpen: true,
+                                    postId: currentPost._id,
+                                    content: currentPost.content,
+                                  });
+                                  setShowOptions(false);
+                                }}
+                                className="flex items-center gap-2 w-full px-4 py-3 text-left text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-sm font-medium"
+                              >
+                                <Edit size={16} />
+                                Edit Post
+                              </button>
+                              <button
+                                onClick={() => deletePost(currentPost._id)}
+                                className="flex items-center gap-2 w-full px-4 py-3 text-left text-red-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-sm font-medium"
+                              >
+                                <Trash2 size={16} />
+                                Delete Post
+                              </button>
+                            </>
                           ) : (
                             <button
                               onClick={() => {
@@ -1407,22 +1810,26 @@ export default function FeedPage() {
                   </AnimatePresence>
                 </div>
 
-                {isCurrentVideo && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleMute(currentPost._id);
-                    }}
-                    className="flex flex-col items-center gap-1 pointer-events-auto"
-                  >
-                    <div className="p-2 bg-black/50 backdrop-blur-sm rounded-full">
-                      {isVideoMuted[currentPost._id] ? (
-                        <VolumeX size={20} className="text-white" />
-                      ) : (
-                        <Volume2 size={20} className="text-white" />
-                      )}
-                    </div>
-                  </button>
+                {/* --- MUTE BUTTON (Conditional) --- */}
+                {currentMediaIsVideo && (
+                    <button 
+                        onClick={(e) => {
+                        e.stopPropagation();
+                        toggleMute(currentPost._id, carouselIndex);
+                        }}
+                        className="flex flex-col items-center gap-1 pointer-events-auto transition-transform active:scale-90"
+                    >
+                        <div className="w-[24px] h-[24px] flex items-center justify-center">
+                            {isVideoMuted[`${currentPost._id}-${carouselIndex}`] ? (
+                                <VolumeX size={24} className="text-white drop-shadow-md" />
+                            ) : (
+                                <Volume2 size={24} className="text-white drop-shadow-md" />
+                            )}
+                        </div>
+                        <span className="text-white text-xs font-medium drop-shadow-md">
+                            {isVideoMuted[`${currentPost._id}-${carouselIndex}`]}
+                        </span>
+                    </button>
                 )}
               </div>
             </motion.div>
@@ -1437,6 +1844,12 @@ export default function FeedPage() {
                   <p className="text-gray-400 mb-6">
                     Be the first to share your imagination!
                   </p>
+                  <button
+                    onClick={() => router.push('/create')}
+                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full hover:opacity-90 transition-opacity"
+                  >
+                    Create Your First Post
+                  </button>
                 </div>
               ) : null}
             </div>
@@ -1450,9 +1863,16 @@ export default function FeedPage() {
           currentPostIndex > posts.length - 3 && (
             <div ref={loadMoreRef} className="h-1" />
           )}
-
-        {/* BOTTOM PROGRESS INDICATOR REMOVED HERE AS REQUESTED */}
       </div>
+
+      {/* MODALS */}
+      <EditPostModal
+        isOpen={editModal.isOpen}
+        onClose={() => setEditModal({ isOpen: false, postId: "", content: "" })}
+        postId={editModal.postId}
+        currentContent={editModal.content}
+        onPostUpdated={handlePostUpdated}
+      />
 
       <LikeUserModal
         isOpen={likeModal.isOpen}
