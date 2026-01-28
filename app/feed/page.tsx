@@ -1114,8 +1114,8 @@ export default function FeedPage() {
     [toggleLike, posts, session?.user?.id] // Added dependencies
   );
 
-  /* ============================
-       HANDLE MEDIA CLICK
+ /* ============================
+        HANDLE MEDIA CLICK (UPDATED)
   ============================ */
   const handleMediaClick = useCallback(
     (e: React.MouseEvent, postId: string, isVideo: boolean, index: number = 0) => {
@@ -1128,18 +1128,32 @@ export default function FeedPage() {
       const currentTime = new Date().getTime();
       const timeDiff = currentTime - lastTapRef.current;
 
-      // Single/Double Click Logic
-      // If clicks are very close together (<300ms), treat as double click
+      // Check if this click is part of a double-click (within 300ms)
       if (timeDiff < 300 && timeDiff > 0) {
+        // --- DOUBLE CLICK DETECTED ---
+        
+        // 1. Cancel the pending single click action! 
+        // This prevents the video from pausing/playing when you just wanted to Like.
+        if (tapTimeoutRef.current) {
+          clearTimeout(tapTimeoutRef.current);
+          tapTimeoutRef.current = null;
+        }
+
+        // 2. Perform Double Click Action (Like Only)
         handleDoubleTap(postId);
-        lastTapRef.current = 0; // Reset to prevent triple-click triggering another double
+        
+        // 3. Reset tap reference so a 3rd click doesn't register as another double tap immediately
+        lastTapRef.current = 0;
       } else {
-        // Otherwise treat as single tap (play/pause)
-        // Note: For perfect double-tap isolation on click, we usually need a small delay,
-        // but for immediate play/pause feedback, firing single tap immediately is preferred UX.
-        // If the user intends double tap, the second click will catch the condition above.
-        handleSingleTap(postId, isVideo, index);
+        // --- SINGLE CLICK DETECTED ---
         lastTapRef.current = currentTime;
+
+        // 4. Delay the Single Click action (Play/Pause)
+        // We wait 300ms to make sure the user isn't about to click again.
+        tapTimeoutRef.current = setTimeout(() => {
+           handleSingleTap(postId, isVideo, index);
+           tapTimeoutRef.current = null;
+        }, 300);
       }
     },
     [handleSingleTap, handleDoubleTap, showOptions]
