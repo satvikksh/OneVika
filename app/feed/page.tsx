@@ -26,6 +26,10 @@ import {
 import { useTheme } from "../theme-provider";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+// import { useSettings } from "../components/settings-provider";
+
+
+
 
 // --- UTILS ---
 // Fisher-Yates Shuffle Algorithm
@@ -131,6 +135,8 @@ function EditPostModal({ isOpen, onClose, postId, currentContent, onPostUpdated 
       setIsSubmitting(false);
     }
   };
+
+  // const { feed } = useSettings();
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {

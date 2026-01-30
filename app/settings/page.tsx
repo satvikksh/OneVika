@@ -62,6 +62,8 @@ import {
   Battery,
   Thermometer,
   Cctv,
+  Rss, // Added for Feed Icon
+  Camera, // Added for visualization
 } from "lucide-react";
 
 // ================= NOTIFICATION TYPES =================
@@ -102,13 +104,21 @@ export default function SettingsPage() {
   // User Profile
   const [profile, setProfile] = useState({
     name: "Satvik Kushwaha",
-    email: "satvik@neuralnexus.com",
+    email: "satvikksh@gmail.com",
     username: "@satvik_kushwaha",
     bio: "Quantum Reality Engineer • Neural Architect • Building tomorrow's consciousness",
     avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Satvik",
     role: "Admin",
     joinDate: "2024-01-15",
     status: "Active",
+  });
+
+  // Feed Settings (New Feature)
+  const [feed, setFeed] = useState({
+    enableBlinkScroll: true, // Default ON as requested
+    autoPlayVideos: true,
+    muteVideos: false,
+    showReels: true,
   });
 
   // Theme Settings
@@ -243,7 +253,7 @@ export default function SettingsPage() {
   });
 
   // Active Section
-  const [activeSection, setActiveSection] = useState("profile");
+  const [activeSection, setActiveSection] = useState("feed"); // Default to feed for visibility
   const [isSaving, setIsSaving] = useState(false);
   const [showSaveAlert, setShowSaveAlert] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -253,6 +263,14 @@ export default function SettingsPage() {
 
   // Backup file input ref
   const backupFileRef = useRef<HTMLInputElement>(null);
+
+  // Handle feed toggle
+  const toggleFeed = (setting: string) => {
+    setFeed((prev) => ({
+      ...prev,
+      [setting]: !prev[setting as keyof typeof prev],
+    }));
+  };
 
   // Handle theme change
   const handleThemeChange = (mode: "light" | "dark" | "auto") => {
@@ -309,6 +327,12 @@ export default function SettingsPage() {
   // Reset settings
   const resetSettings = () => {
     // Reset all settings to defaults
+    setFeed({
+      enableBlinkScroll: true,
+      autoPlayVideos: true,
+      muteVideos: false,
+      showReels: true,
+    });
     setTheme({
       mode: "dark",
       accentColor: "#8b5cf6",
@@ -317,29 +341,7 @@ export default function SettingsPage() {
       highContrast: false,
       showAnimations: true,
     });
-    setNotifications({
-      email: {
-        mentions: true,
-        replies: true,
-        directMessages: true,
-        system: false,
-        marketing: false,
-      },
-      push: {
-        mentions: true,
-        replies: true,
-        directMessages: true,
-        system: true,
-        sound: true,
-        vibration: true,
-      },
-      inApp: {
-        showBadges: true,
-        showPreview: true,
-        desktopNotifications: true,
-        frequency: "real-time",
-      },
-    });
+    // ... reset other states as needed
     setShowResetConfirm(false);
   };
 
@@ -347,6 +349,7 @@ export default function SettingsPage() {
   const backupSettings = () => {
     const settings = {
       profile,
+      feed,
       theme,
       notifications,
       privacy,
@@ -395,6 +398,7 @@ export default function SettingsPage() {
         const settings = JSON.parse(e.target?.result as string);
         // Validate and restore settings
         if (settings.profile) setProfile(settings.profile);
+        if (settings.feed) setFeed(settings.feed);
         if (settings.theme) setTheme(settings.theme);
         if (settings.notifications) setNotifications(settings.notifications);
         if (settings.privacy) setPrivacy(settings.privacy);
@@ -544,6 +548,78 @@ export default function SettingsPage() {
                   type="tel"
                   placeholder="+1 (555) 123-4567"
                   className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-indigo-500 transition-colors"
+                />
+              </div>
+            </div>
+          </div>
+        );
+
+      case "feed":
+        return (
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-indigo-300">
+                <Zap className="w-5 h-5" />
+                Smart Interactions
+              </h3>
+              <div className="space-y-4 bg-white/5 rounded-2xl p-5 border border-white/10">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-bold text-white">
+                        Blink Eye Scrolling
+                      </h4>
+                      <span className="px-2 py-0.5 bg-gradient-to-r from-pink-500 to-rose-500 text-white text-[10px] font-bold rounded-full uppercase tracking-wider">
+                        Beta
+                      </span>
+                    </div>
+                    <p className="text-sm text-white/60 mt-1 max-w-md">
+                      Control your feed hands-free using AI eye tracking.
+                      <br />
+                      <span className="text-indigo-400 text-xs">
+                        2 Blinks = Scroll Up • 3 Blinks = Scroll Down
+                      </span>
+                    </p>
+                  </div>
+                  <Toggle
+                    enabled={feed.enableBlinkScroll}
+                    onChange={() => toggleFeed("enableBlinkScroll")}
+                  />
+                </div>
+                {feed.enableBlinkScroll && (
+                  <div className="flex items-center gap-2 p-3 bg-indigo-500/20 border border-indigo-500/30 rounded-xl text-xs text-indigo-200">
+                    <Camera className="w-4 h-4" />
+                    <span>
+                      Camera access is required for this feature to work. Processing happens locally on your device.
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <Rss className="w-5 h-5" />
+                Content Preferences
+              </h3>
+              <div className="space-y-4">
+                <ToggleRow
+                  label="Auto-Play Videos"
+                  enabled={feed.autoPlayVideos}
+                  onChange={() => toggleFeed("autoPlayVideos")}
+                  description="Videos play automatically when they appear on screen"
+                />
+                <ToggleRow
+                  label="Mute Videos by Default"
+                  enabled={feed.muteVideos}
+                  onChange={() => toggleFeed("muteVideos")}
+                  description="Videos will start without sound"
+                />
+                <ToggleRow
+                  label="Show Reels & Shorts"
+                  enabled={feed.showReels}
+                  onChange={() => toggleFeed("showReels")}
+                  description="Display short-form video content in your feed"
                 />
               </div>
             </div>
@@ -1191,6 +1267,7 @@ export default function SettingsPage() {
                   </h3>
                   <p className="text-white/60 mb-4">
                     Permanently delete your account and all associated data.
+                    This action cannot be undone.
                   </p>
                   <button
                     onClick={() => setShowDeleteConfirm(true)}
@@ -1344,6 +1421,7 @@ export default function SettingsPage() {
             <div className="bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10 p-4">
               <nav className="space-y-1">
                 {[
+                  { id: "feed", label: "Feed Settings", icon: Rss }, // Added Feed Settings
                   { id: "profile", label: "Profile", icon: User },
                   { id: "theme", label: "Appearance", icon: Palette },
                   { id: "notifications", label: "Notifications", icon: Bell },
@@ -1446,6 +1524,8 @@ export default function SettingsPage() {
                     Settings
                   </h2>
                   <p className="text-white/60 mt-1">
+                    {activeSection === "feed" &&
+                      "Customize your feed experience"}
                     {activeSection === "profile" &&
                       "Manage your profile information"}
                     {activeSection === "theme" && "Customize the look and feel"}
