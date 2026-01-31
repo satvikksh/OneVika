@@ -75,7 +75,7 @@ export default function MoodSelector({ onMoodSelect }: MoodSelectorProps) {
       {/* Header */}
       <div className="flex justify-between items-center mb-6 px-1">
         <div>
-          <h2 className="text-xl font-serif text-stone-800">How's your energy today?</h2>
+          <h2 className="text-xl font-serif text-stone-300">How's your energy today?</h2>
           <p className="text-stone-500 text-sm mt-1">Choose what resonates • Optional</p>
         </div>
         {selectedMoodId && selectedMoodId !== 'skipped' && (
