@@ -28,7 +28,7 @@ export async function GET() {
     mediaUrl: story.mediaUrl,
     mediaType: story.mediaType,
     isMine: story.userId.toString() === userId,
-    seen: story.viewers?.some((v: any) => v.toString() === userId),
+    seen: story.viewers?.some(v => v.toString() === userId)
   }));
 
   return NextResponse.json(normalized);
