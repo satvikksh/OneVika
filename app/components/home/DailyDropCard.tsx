@@ -3,6 +3,8 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { moodPrompts } from "../../lib/dailyDropPrompts";
+import { DailyDrop } from '../../types/home';
+
 
 type DailyDropState =
   | "idle"
@@ -17,8 +19,11 @@ interface Response {
   userName: string;
   response: string;
 }
+type DailyDropCardProps = {
+  drop: DailyDrop;
+};
 
-export default function DailyDropCard() {
+export default function DailyDropCard({ drop }: DailyDropCardProps) {
   const { data: session } = useSession();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
