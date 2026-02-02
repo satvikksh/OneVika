@@ -1,24 +1,27 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { X, Trash2, Plus } from 'lucide-react';
 
 type Story = {
   _id: string;
   mediaUrl: string;
-  isMine?: boolean;
+  mediaType: 'image' | 'video';
+  isMine: boolean;
+  seen: boolean;
 };
 
 export default function MoodStory() {
   const [stories, setStories] = useState<Story[]>([]);
+  const [active, setActive] = useState<Story | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [activeStory, setActiveStory] = useState<Story | null>(null);
 
   /* ================= LOAD STORIES ================= */
   const loadStories = async () => {
     const res = await fetch('/api/stories/today', { cache: 'no-store' });
-    const data = await res.json();
-    setStories(Array.isArray(data) ? data : []);
+    if (!res.ok) return setStories([]);
+    setStories(await res.json());
   };
 
   useEffect(() => {
@@ -26,12 +29,14 @@ export default function MoodStory() {
     loadStories();
   }, []);
 
-  /* ================= CREATE STORY ================= */
+  const myStory = stories.find(s => s.isMine);
+  const otherStories = stories.filter(s => !s.isMine);
+
+  /* ================= UPLOAD ================= */
   async function uploadStory() {
     if (!file) return;
 
     setUploading(true);
-
     const form = new FormData();
     form.append('media', file);
 
@@ -42,124 +47,139 @@ export default function MoodStory() {
 
     setFile(null);
     setUploading(false);
-
-    await loadStories(); // 🔥 refresh immediately
+    loadStories();
   }
 
-  const myStory = stories.find(s => s.isMine);
-  const otherStories = stories.filter(s => !s.isMine);
+  /* ================= DELETE ================= */
+  async function deleteStory(id: string) {
+    await fetch(`/api/stories/delete/${id}`, { method: 'DELETE' });
+    setActive(null);
+    loadStories();
+  }
+
+  /* ================= OPEN STORY ================= */
+  async function openStory(story: Story) {
+    setActive(story);
+
+    // mark seen (optional backend)
+    await fetch(`/api/stories/seen/${story._id}`, { method: 'POST' });
+    loadStories();
+  }
 
   return (
     <>
       {/* ================= STORY ROW ================= */}
       <section className="flex gap-4 overflow-x-auto pb-3">
 
-        {/* ===== YOUR STORY ===== */}
-        <div className="flex flex-col items-center gap-2 min-w-[76px]">
-
-          {/* CLICKABLE STORY */}
-          <label className="cursor-pointer">
-            <div
-              onClick={() => myStory && setActiveStory(myStory)}
-              className={`w-16 h-16 rounded-2xl p-[2px]
-                ${myStory
-                  ? 'bg-gradient-to-tr from-pink-500 via-yellow-400 to-blue-500'
-                  : 'bg-stone-700'
-                }`}
-            >
-              <div className="w-full h-full rounded-xl bg-black overflow-hidden flex items-center justify-center">
-                {myStory ? (
-                  myStory.mediaUrl.endsWith('.mp4') ? (
-                    <video
-                      src={myStory.mediaUrl}
-                      className="w-full h-full object-cover"
-                      muted
-                    />
-                  ) : (
-                    <img
-                      src={myStory.mediaUrl}
-                      className="w-full h-full object-cover"
-                      alt="my-story"
-                    />
-                  )
-                ) : (
-                  <span className="text-white text-xl">+</span>
-                )}
-              </div>
+        {/* ADD STORY */}
+        <div className="flex flex-col items-center gap-2 min-w-[80px]">
+          <label className="relative cursor-pointer">
+            <div className="w-16 h-16 rounded-2xl bg-stone-800 flex items-center justify-center">
+              <Plus className="text-white" />
             </div>
-
-            {!myStory && (
-              <input
-                type="file"
-                hidden
-                accept="image/*,video/*"
-                onChange={(e) => setFile(e.target.files?.[0] || null)}
-              />
-            )}
+            <input
+              type="file"
+              hidden
+              accept="image/*,video/*"
+              onChange={e => setFile(e.target.files?.[0] || null)}
+            />
           </label>
-
-          <span className="text-xs text-stone-300">Your story</span>
+          <span className="text-xs text-stone-400">Add</span>
 
           {file && (
-            <button
-              onClick={uploadStory}
-              className="text-xs text-green-400"
-            >
+            <button onClick={uploadStory} className="text-xs text-green-400">
               {uploading ? 'Uploading…' : 'Post'}
             </button>
           )}
         </div>
 
-        {/* ===== OTHER STORIES ===== */}
-        {otherStories.map(story => (
-          <button
-            key={story._id}
-            onClick={() => setActiveStory(story)}
-            className="flex flex-col items-center gap-2 min-w-[76px]"
-          >
-            <div className="w-16 h-16 rounded-2xl p-[2px]
-                            bg-gradient-to-tr from-indigo-500 to-purple-500">
-              {story.mediaUrl.endsWith('.mp4') ? (
-                <video
-                  src={story.mediaUrl}
-                  className="w-full h-full rounded-xl object-cover"
-                  muted
-                />
-              ) : (
-                <img
-                  src={story.mediaUrl}
-                  className="w-full h-full rounded-xl object-cover"
-                  alt="story"
-                />
-              )}
-            </div>
-            <span className="text-xs text-stone-400">Story</span>
-          </button>
+        {/* MY STORY */}
+        {myStory && (
+          <StoryBubble story={myStory} onClick={() => openStory(myStory)} />
+        )}
+
+        {/* OTHERS */}
+        {otherStories.map(s => (
+          <StoryBubble key={s._id} story={s} onClick={() => openStory(s)} />
         ))}
       </section>
 
-      {/* ================= FULLSCREEN VIEWER ================= */}
-      {activeStory && (
-        <div
-          onClick={() => setActiveStory(null)}
-          className="fixed inset-0 z-50 bg-black flex items-center justify-center"
-        >
-          {activeStory.mediaUrl.endsWith('.mp4') ? (
+      {/* ================= VIEWER ================= */}
+      {active && (
+        <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
+          {active.mediaType === 'video' ? (
             <video
-              src={activeStory.mediaUrl}
+              src={active.mediaUrl}
               autoPlay
+              playsInline
               controls={false}
               className="max-h-full max-w-full"
             />
           ) : (
             <img
-              src={activeStory.mediaUrl}
+              src={active.mediaUrl}
               className="max-h-full max-w-full object-contain"
-              alt="story-view"
+              alt="story"
             />
+          )}
+
+          {/* CLOSE */}
+          <button
+            onClick={() => setActive(null)}
+            className="absolute top-4 right-4 text-white"
+          >
+            <X />
+          </button>
+
+          {/* DELETE (ONLY MINE) */}
+          {active.isMine && (
+            <button
+              onClick={() => deleteStory(active._id)}
+              className="absolute bottom-6 bg-red-500 px-4 py-2 rounded-xl text-white flex gap-2"
+            >
+              <Trash2 size={16} /> Delete
+            </button>
           )}
         </div>
       )}
     </>
+  );
+}
+
+/* ================= STORY BUBBLE ================= */
+function StoryBubble({
+  story,
+  onClick,
+}: {
+  story: Story;
+  onClick: () => void;
+}) {
+  return (
+    <button onClick={onClick} className="flex flex-col items-center gap-2 min-w-[80px]">
+      <div
+        className={`w-16 h-16 rounded-2xl p-[2px]
+          ${story.seen
+            ? 'bg-stone-700'
+            : 'bg-gradient-to-tr from-pink-500 via-yellow-400 to-blue-500'
+          }`}
+      >
+        <div className="w-full h-full bg-black rounded-xl overflow-hidden">
+          {story.mediaType === 'video' ? (
+            <video
+              src={story.mediaUrl}
+              muted
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <img
+              src={story.mediaUrl}
+              className="w-full h-full object-cover"
+              alt="story"
+            />
+          )}
+        </div>
+      </div>
+      <span className="text-xs text-stone-400">Story</span>
+    </button>
   );
 }

@@ -1,34 +1,55 @@
 import mongoose, { Schema, Document, Model } from "mongoose";
 
 export interface IStory extends Document {
-  userId: string;
-  text: string;
-  mediaUrl?: string;
-  mediaType?: "image" | "video";
-  mood: number;
-  createdAt: Date;
+  userId: mongoose.Types.ObjectId;
+  mediaUrl: string;
+  mediaType: "image" | "video";
+  viewers: mongoose.Types.ObjectId[];
   expiresAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
-const StorySchema = new Schema<IStory>({
-  userId: { type: String, required: true, index: true },
+const StorySchema = new Schema<IStory>(
+  {
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true,
+    },
 
-  text: { type: String, required: true, maxlength: 200 },
+    mediaUrl: {
+      type: String,
+      required: true,
+    },
 
-  mediaUrl: { type: String },
-  mediaType: { type: String, enum: ["image", "video"] },
+    mediaType: {
+      type: String,
+      enum: ["image", "video"],
+      required: true,
+    },
 
-  mood: { type: Number, min: 1, max: 5 },
+    // 👀 Seen / Unseen tracking
+    viewers: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
 
-  createdAt: { type: Date, default: Date.now },
-
-  // 🔥 AUTO DELETE AFTER 24 HOURS
-  expiresAt: {
-    type: Date,
-    default: () => new Date(Date.now() + 24 * 60 * 60 * 1000),
-    index: { expires: 0 },
+    // ⏳ Auto-expire stories (24 hours)
+    expiresAt: {
+      type: Date,
+      required: true,
+      index: true,
+    },
   },
-});
+  { timestamps: true }
+);
+
+// 🔥 TTL INDEX (Mongo auto delete)
+StorySchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 const Story: Model<IStory> =
   mongoose.models.Story || mongoose.model<IStory>("Story", StorySchema);
