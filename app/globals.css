@@ -75,6 +75,15 @@ body {
   gap: 4px;
 }
 
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
 .typing-dot {
   width: 6px;
   height: 6px;

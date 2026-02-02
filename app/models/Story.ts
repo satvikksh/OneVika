@@ -13,10 +13,10 @@ export interface IStory extends Document {
 const StorySchema = new Schema<IStory>(
   {
     userId: {
-      type: Schema.Types.ObjectId,
-      ref: 'User',
-      required: true,
-    },
+  type: Schema.Types.ObjectId,
+  ref: "User",
+  required: true,
+},
     mediaUrl: {
       type: String,
       required: true,

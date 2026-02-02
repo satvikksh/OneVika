@@ -10,6 +10,7 @@ type Story = {
   mediaType: 'image' | 'video';
   isMine: boolean;
   seen: boolean;
+  username: string;
 };
 
 export default function MoodStory() {
@@ -75,48 +76,57 @@ export default function MoodStory() {
   return (
     <>
       {/* ================= STORY ROW ================= */}
-      <section className="flex gap-4 overflow-x-auto pb-3">
-
+      <section
+       className="
+    flex gap-4 px-2
+    overflow-x-auto
+    overflow-y-visible
+    scrollbar-hide
+        "
+      >
         {/* ADD STORY */}
-        <div className="flex flex-col items-center gap-2 min-w-[80px]">
-          <label
-            className="cursor-pointer"
-            onClick={(e) => {
-              if (!session) {
-                e.preventDefault();
-                signIn();
-              }
-            }}
-          >
-            <div className="w-16 h-16 rounded-2xl bg-stone-800 flex items-center justify-center">
-              <Plus className="text-white" />
-            </div>
-            <input
-              type="file"
-              hidden
-              accept="image/*,video/*"
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
-            />
-          </label>
+<div className="flex flex-col items-center min-w-[80px]">
+  <label
+    className="cursor-pointer flex flex-col items-center"
+    onClick={(e) => {
+      if (!session) {
+        e.preventDefault();
+        signIn();
+      }
+    }}
+  >
+    <div className="w-16 h-16 rounded-2xl bg-stone-800 flex items-center justify-center">
+      <Plus className="text-white" />
+    </div>
 
-          <span className="text-xs text-stone-400">Add</span>
+    {/* TEXT BELOW ADD ICON ✅ */}
+    <span className="mt-1 text-xs text-stone-300">Add</span>
 
-          {file && (
-            <button
-              onClick={uploadStory}
-              className="text-xs text-green-400"
-            >
-              {uploading ? 'Uploading…' : 'Post'}
-            </button>
-          )}
-        </div>
+    <input
+      type="file"
+      hidden
+      accept="image/*,video/*"
+      onChange={(e) => setFile(e.target.files?.[0] || null)}
+    />
+  </label>
+
+  {file && (
+    <button
+      onClick={uploadStory}
+      className="text-xs text-green-400 mt-1"
+    >
+      {uploading ? 'Uploading…' : 'Post'}
+    </button>
+  )}
+</div>
+
 
         {/* MY STORY */}
         {myStory && (
           <StoryBubble story={myStory} onClick={() => openStory(myStory)} />
         )}
 
-        {/* OTHERS */}
+        {/* OTHER STORIES */}
         {otherStories.map(story => (
           <StoryBubble
             key={story._id}
@@ -128,13 +138,13 @@ export default function MoodStory() {
 
       {/* ================= FULLSCREEN VIEWER ================= */}
       {active && (
-        <div className="fixed inset-0 z-50 bg-black flex items-center justify-center pointer-events-auto">
+        <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
 
-          {/* MEDIA */}
           {active.mediaType === 'video' ? (
             <video
               src={active.mediaUrl}
               autoPlay
+              controls={false}
               className="max-h-full max-w-full"
             />
           ) : (
@@ -148,22 +158,16 @@ export default function MoodStory() {
           {/* CLOSE */}
           <button
             onClick={() => setActive(null)}
-            className="fixed z-[100] text-white"
-            style={{ top: 'calc(env(safe-area-inset-top) + 16px)', left: 16 }}
+            className="fixed top-4 left-4 z-[100] text-white"
           >
             <X size={28} />
           </button>
 
-          {/* DELETE ICON - CHANGED POSITION HERE */}
+          {/* DELETE */}
           {active.isMine && (
             <button
               onClick={() => deleteStory(active._id)}
-              className="fixed z-[100] text-white opacity-80 hover:opacity-100 transition"
-              /* Updated bottom value from 20px to 80px. 
-                 This ensures it floats above mobile browser bottom bars.
-              */
-              style={{ bottom: 'calc(env(safe-area-inset-bottom) + 80px)', right: 16 }}
-              title="Delete story"
+              className="fixed bottom-20 right-4 z-[100] text-white opacity-80 hover:opacity-100"
             >
               <Trash2 size={26} />
             </button>
@@ -185,8 +189,9 @@ function StoryBubble({
   return (
     <button
       onClick={onClick}
-      className="flex flex-col items-center gap-2 min-w-[80px]"
+      className="flex flex-col items-center min-w-[80px]"
     >
+      {/* STORY IMAGE */}
       <div
         className={`w-16 h-16 rounded-2xl p-[2px]
           ${story.seen
@@ -210,7 +215,12 @@ function StoryBubble({
           )}
         </div>
       </div>
-      <span className="text-xs text-stone-400">Story</span>
+
+      {/* ✅ USERNAME BELOW STORY (FIXED) */}
+      <span className="mt-1 text-xs text-stone-300 truncate max-w-[72px] text-center">
+        {story.isMine ? 'Your story' : story.username}
+      </span>
     </button>
   );
 }
+
