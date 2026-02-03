@@ -196,7 +196,7 @@ function StoryBubble({
         className={`w-16 h-16 rounded-2xl p-[2px]
           ${story.seen
             ? 'bg-stone-700'
-            : 'bg-gradient-to-tr from-pink-500 via-yellow-400 to-blue-500'
+            : 'bg-gradient-to-tr from-blue-600 via-cyan-400 to-cyan-300'
           }`}
       >
         <div className="w-full h-full bg-black rounded-xl overflow-hidden">
@@ -218,7 +218,7 @@ function StoryBubble({
 
       {/* ✅ USERNAME BELOW STORY (FIXED) */}
       <span className="mt-1 text-xs text-stone-300 truncate max-w-[72px] text-center">
-        {story.isMine ? 'Your story' : story.username}
+        {story.isMine ? 'Your thought' : story.username}
       </span>
     </button>
   );
