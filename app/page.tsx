@@ -81,7 +81,7 @@ export default function Home() {
   if (!currentTime) return null;
 
   return (
-    <main className="min-h-screen bg-stone-950 flex justify-center">
+    <main className="min-h-screen bg-black flex justify-center">
       <div className="w-full max-w-md px-5 py-8 flex flex-col gap-8">
 
         {/* Header */}
