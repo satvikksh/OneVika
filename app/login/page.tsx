@@ -23,7 +23,7 @@ export default function LoginPage() {
   /* ✅ Redirect if already logged in */
   useEffect(() => {
     if (status === "authenticated") {
-      router.replace("/feed");
+      router.replace("/");
     }
   }, [status, router]);
 
@@ -37,7 +37,7 @@ export default function LoginPage() {
       email,
       password,
       redirect: true,        // 🔥 FIX
-      callbackUrl: "/feed",  // 🔥 FIX
+      callbackUrl: "/",  // 🔥 FIX
     });
 
     if (res?.error) {
@@ -52,7 +52,7 @@ export default function LoginPage() {
     setLoading(true);
 
     await signIn("google", {
-      callbackUrl: "/feed",
+      callbackUrl: "/",
     });
   };
 
@@ -88,10 +88,6 @@ export default function LoginPage() {
           >
             Login to Continue
           </h2>
-
-          <p className="text-gray-600 dark:text-gray-400 mt-2">
-            Access your imagination feed
-          </p>
         </div>
 
         {error && (
