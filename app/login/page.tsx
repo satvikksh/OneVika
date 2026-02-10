@@ -70,7 +70,7 @@ export default function LoginPage() {
 
       <div
         className="relative w-full max-w-md p-8 rounded-3xl shadow-xl border backdrop-blur-lg 
-        bg-white/20 dark:bg-gray-900/40 border-white/20 dark:border-gray-700"
+        bg-white/20 dark:bg-black/40 border-white/20 dark:border-gray-700"
       >
         {/* Header */}
         <div className="text-center mb-8">
