@@ -59,7 +59,7 @@ export default function LoginPage() {
   return (
     <div
       className={`min-h-screen flex items-center justify-center px-4 ${
-        isDark ? "bg-black" : "bg-gray-50"
+        isDark ? "bg-black" : "bg-gray-60"
       }`}
     >
       {/* Background Glow */}
