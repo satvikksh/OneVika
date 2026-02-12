@@ -31,7 +31,7 @@ export default function FollowingPage() {
         setLoading(true);
         setError(null);
         
-        const response = await fetch(`/api/user/${userId}/following`, {
+        const response = await fetch(`/api/user/profile/${userId}/following`, {
           headers: {
             'Content-Type': 'application/json',
           },
@@ -64,7 +64,7 @@ export default function FollowingPage() {
     try {
       setFollowLoading(followingId);
       
-      const response = await fetch(`/api/user/${followingId}/follow`, {
+      const response = await fetch(`/api/user/profile/${followingId}/follow`, {
         method: currentStatus ? 'DELETE' : 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -98,7 +98,7 @@ export default function FollowingPage() {
     try {
       setFollowLoading(followingId);
       
-      const response = await fetch(`/api/user/${followingId}/follow`, {
+      const response = await fetch(`/api/user/profile/${followingId}/follow`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',

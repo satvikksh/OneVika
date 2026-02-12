@@ -222,7 +222,7 @@ if (postsResponse.ok) {
         setUser(fetchedUser);
         setPosts(normalizedPosts);
 
-        // ----- REDIRECT IF THIS PROFILE BELONGS TO THE CURRENT USER -----
+        // ----- REDIRECT IF THIS PROFILE BELONGS TO THE CURRENT USER ----- 
         if (
           status === "authenticated" &&
           session?.user?.id &&
@@ -567,7 +567,7 @@ if (postsResponse.ok) {
             </div>
 
             {/* Follow Lists */}
-            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg p-4 mb-6">
+            {/* <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg p-4 mb-6">
               <button
                 onClick={handleViewFollowers}
                 className="w-full flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl transition-colors group"
@@ -619,7 +619,7 @@ if (postsResponse.ok) {
                   className="text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300"
                 />
               </button>
-            </div>
+            </div> */}
 
             {/* Contact Info */}
             <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg p-6 mb-6">
