@@ -63,7 +63,6 @@ interface UserProfile {
   isFollowing?: boolean;
   isActive?: boolean;
   lastSeen?: string;
-  // Add flexible support for various backend structures
   _count?: {
     followers?: number;
     following?: number;
@@ -87,9 +86,22 @@ export default function ProfilePage() {
   const params = useParams();
   const router = useRouter();
   const { onlineUsers } = useSocket();
+  const pathname = usePathname();
 
   const profileUsername = (params?.username as string) || null;
 
+  // ---------- REDIRECT LOGIC (own profile → ID‑based route) ----------
+  const [isRedirecting, setIsRedirecting] = useState(false);
+
+  // Redirect /profile (no username) to /profile/[userId]
+  useEffect(() => {
+    if (status === "authenticated" && !profileUsername && !isRedirecting) {
+      setIsRedirecting(true);
+      router.replace(`/user/profile/${session.user.id}`);
+    }
+  }, [status, profileUsername, session, router, isRedirecting]);
+
+  // ---------- DATA FETCHING ----------
   const [user, setUser] = useState<UserProfile | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -100,12 +112,10 @@ export default function ProfilePage() {
   const [editPostText, setEditPostText] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const isCurrentUser = !profileUsername || user?.id === session?.user?.id;
-  const isUserOnline = user?.id ? onlineUsers.includes(user.id) : false;
-
-  const pathname = usePathname();
-
   useEffect(() => {
+    // Don't fetch if we are about to redirect
+    if (isRedirecting) return;
+
     const fetchProfileData = async () => {
       try {
         setLoading(true);
@@ -130,10 +140,18 @@ export default function ProfilePage() {
 
         const data = await response.json();
         const userData = data.user || data;
-        const postsData = Array.isArray(data.posts) ? data.posts : [];
+        // const postsData = Array.isArray(data.posts) ? data.posts : [];
+        const postsResponse = await fetch(`/api/posts?userId=${userData._id || userData.id}`, {
+  cache: "no-store",
+});
+
+let postsData = [];
+
+if (postsResponse.ok) {
+  postsData = await postsResponse.json();
+}
 
         // --- 1. ROBUST COUNT RESOLVER ---
-        // Checks: Array (.length), Number, String, or Prisma style (_count)
         const resolveCount = (val: any) => {
           if (Array.isArray(val)) return val.length;
           if (typeof val === "number") return val;
@@ -141,29 +159,12 @@ export default function ProfilePage() {
           return 0;
         };
 
-        // Check all possible locations for followers/following data
-        const rawFollowers =
-          userData.followers ||
-          userData.followersCount ||
-          userData._count?.followers ||
-          data.followers ||
-          data.followersCount ||
-          0;
-
-        const rawFollowing =
-          userData.following ||
-          userData.followingCount ||
-          userData._count?.following ||
-          data.following ||
-          data.followingCount ||
-          0;
-
         const finalFollowersCount = resolveCount(
           userData.followers ??
             userData.followersCount ??
             userData._count?.followers ??
             data.followers ??
-            data.followersCount
+            data.followersCount,
         );
 
         const finalFollowingCount = resolveCount(
@@ -171,7 +172,7 @@ export default function ProfilePage() {
             userData.followingCount ??
             userData._count?.following ??
             data.following ??
-            data.followingCount
+            data.followingCount,
         );
 
         // --- 2. POST NORMALIZATION ---
@@ -189,14 +190,14 @@ export default function ProfilePage() {
             id: typeof post._id === "string" ? post._id : post.id,
             content: String(content),
             image: post.image,
-            likes: resolveCount(post.likes), // Use same resolver for consistency
+            likes: resolveCount(post.likes),
             comments: resolveCount(post.comments),
             timestamp: post.timestamp || post.createdAt,
             isLiked: post.isLiked || false,
           };
         });
 
-        setUser({
+        const fetchedUser = {
           id: userData._id || userData.id,
           name: userData.name,
           username: userData.username,
@@ -216,9 +217,21 @@ export default function ProfilePage() {
           isFollowing: data.isFollowing || userData.isFollowing || false,
           isActive: userData.isActive !== undefined ? userData.isActive : true,
           lastSeen: userData.lastSeen,
-        });
+        };
 
+        setUser(fetchedUser);
         setPosts(normalizedPosts);
+
+        // ----- REDIRECT IF THIS PROFILE BELONGS TO THE CURRENT USER -----
+        if (
+          status === "authenticated" &&
+          session?.user?.id &&
+          fetchedUser.id === session.user.id &&
+          !isRedirecting
+        ) {
+          setIsRedirecting(true);
+          router.replace(`/user/profile/${fetchedUser.id}`);
+        }
       } catch (err) {
         console.error("Error fetching profile:", err);
         setError(err instanceof Error ? err.message : "An error occurred");
@@ -230,32 +243,31 @@ export default function ProfilePage() {
     if (status !== "loading") {
       fetchProfileData();
     }
-  }, [status, profileUsername, pathname]);
+  }, [status, profileUsername, session, router, isRedirecting, pathname]);
 
+  // ---------- HANDLERS ----------
   const handleEditProfile = () => {
     router.push("/profile/edit");
   };
 
   const handleViewFollowers = () => {
-    if (user?.id) router.push(`/profile/${user.id}/followers`);
+    if (user?.id) router.push(`/user/profile/${user.id}/followers`);
   };
 
   const handleViewFollowing = () => {
-    if (user?.id) router.push(`/profile/${user.id}/following`);
+    if (user?.id) router.push(`/user/profile/${user.id}/following`);
   };
 
   const handleSendMessage = () => {
     if (user?.id) router.push(`/chat?userId=${user.id}`);
   };
+
   const handleFollowToggle = async () => {
-    // if (!user || !session || followLoading) return;
+    if (!user || !session) return;
 
-    // setFollowLoading(true);
-
-    // 🔹 Optimistic UI update
+    // Optimistic update
     setUser((prev) => {
       if (!prev) return prev;
-
       return {
         ...prev,
         isFollowing: !prev.isFollowing,
@@ -266,21 +278,16 @@ export default function ProfilePage() {
     });
 
     try {
-      const res = await fetch(`/api/user/${user.id}/follow`, {
+      const res = await fetch(`/api/user/profile/${user.id}/follow`, {
         method: user.isFollowing ? "DELETE" : "POST",
         headers: { "Content-Type": "application/json" },
       });
-
-      if (!res.ok) {
-        throw new Error("Follow action failed");
-      }
+      if (!res.ok) throw new Error("Follow action failed");
     } catch (err) {
       console.error("Follow error:", err);
-
-      // 🔁 Rollback if API fails
+      // Rollback
       setUser((prev) => {
         if (!prev) return prev;
-
         return {
           ...prev,
           isFollowing: !prev.isFollowing,
@@ -289,8 +296,6 @@ export default function ProfilePage() {
             : Math.max(0, (prev.followersCount ?? 0) - 1),
         };
       });
-    } finally {
-      // setFollowLoading(false);
     }
   };
 
@@ -378,6 +383,12 @@ export default function ProfilePage() {
     }
   };
 
+  const isCurrentUser = user?.id === session?.user?.id;
+  const isUserOnline = user?.id ? onlineUsers.includes(user.id) : false;
+
+  // If redirecting, render nothing
+  if (isRedirecting) return null;
+
   if (loading)
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
@@ -402,6 +413,7 @@ export default function ProfilePage() {
       </div>
     );
 
+  // ---------- FULL UI (RESTORED) ----------
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
       {/* Header */}
@@ -433,7 +445,7 @@ export default function ProfilePage() {
                 onClick={handleEditProfile}
                 className="px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-xl transition-colors"
               >
-                {/* Edit Profile */}
+                {/* Edit Profile - hidden, we redirect anyway */}
               </button>
             ) : (
               <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl">
@@ -446,7 +458,7 @@ export default function ProfilePage() {
 
       <div className="max-w-6xl mx-auto px-4 py-8">
         <div className="flex flex-col lg:flex-row gap-8">
-          {/* Left Column */}
+          {/* ---------- LEFT COLUMN ---------- */}
           <div className="lg:w-1/3">
             {/* Profile Card */}
             <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg p-6 mb-6">
@@ -499,7 +511,7 @@ export default function ProfilePage() {
                   </p>
                 )}
 
-                {/* Follow Stats (Center) */}
+                {/* Follow Stats */}
                 <div className="flex justify-around w-full mb-6">
                   <button
                     onClick={handleViewFollowers}
@@ -536,8 +548,11 @@ export default function ProfilePage() {
                     </button>
                   ) : (
                     <div className="flex flex-col gap-3">
-                      <button className="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-600 text-white rounded-xl font-medium">
-                        Follow
+                      <button
+                        onClick={handleFollowToggle}
+                        className="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-600 text-white rounded-xl font-medium"
+                      >
+                        {user.isFollowing ? "Following" : "Follow"}
                       </button>
                       <button
                         onClick={handleSendMessage}
@@ -551,7 +566,7 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* Follow Lists (List Cards) */}
+            {/* Follow Lists */}
             <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg p-4 mb-6">
               <button
                 onClick={handleViewFollowers}
@@ -724,7 +739,7 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* Right Column */}
+          {/* ---------- RIGHT COLUMN ---------- */}
           <div className="lg:w-2/3">
             {/* Bio */}
             <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg p-6 mb-6">
@@ -874,7 +889,7 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* Posts */}
+            {/* ---------- POSTS SECTION ---------- */}
             <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg p-6">
               <div className="flex justify-center mb-6 border-b border-gray-200 dark:border-gray-800">
                 <button className="px-6 py-3 flex items-center gap-2 font-medium text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400">

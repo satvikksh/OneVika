@@ -1,8 +1,18 @@
 import { withAuth } from "next-auth/middleware";
 
-export default withAuth({
-  pages: { signIn: "/login" },
-});
+export default withAuth(
+  function middleware(req) {
+    // You can add custom logic here later
+  },
+  {
+    callbacks: {
+      authorized: ({ token }) => {
+        return !!token; // only logged in users
+      },
+    },
+    pages: { signIn: "/login" },
+  }
+);
 
 export const config = {
   matcher: [
@@ -11,5 +21,5 @@ export const config = {
     "/profile/edit",
     "/create",
     "/settings",
-  ]
+  ],
 };

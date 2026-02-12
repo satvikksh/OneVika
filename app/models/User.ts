@@ -1,7 +1,18 @@
-import mongoose, { Schema, Model, Document , Types} from "mongoose";
+import mongoose, { Schema, Model, Document, Types } from "mongoose";
 
 /* =======================
-   1️⃣ User Interface
+   🎨 1️⃣ Theme Interface
+======================= */
+export interface IUITheme {
+  background: string;
+  card: string;
+  accent: string;
+  text: string;
+  radius: string;
+}
+
+/* =======================
+   👤 2️⃣ User Interface
 ======================= */
 export interface IUser extends Document {
   name: string;
@@ -9,20 +20,29 @@ export interface IUser extends Document {
   password?: string;
   provider: "credentials" | "google";
   image?: string;
+
   isPrivate: boolean;
   cover?: string;
   avatar?: string;
   bio?: string;
+
   sessionVersion: number;
   likedPosts: mongoose.Types.ObjectId[];
+
+  followers: Types.ObjectId[];
+  following: Types.ObjectId[];
+
+  // 💎 PREMIUM SYSTEM
+  isPremium: boolean;
+  premiumExpiresAt?: Date;
+  uiTheme?: IUITheme | null;
+
   createdAt: Date;
   updatedAt: Date;
-    followers: Types.ObjectId[];
-  following: Types.ObjectId[];
 }
 
 /* =======================
-   2️⃣ User Schema
+   🧠 3️⃣ User Schema
 ======================= */
 const UserSchema = new Schema<IUser>(
   {
@@ -40,20 +60,17 @@ const UserSchema = new Schema<IUser>(
       index: true,
     },
 
-    // 🔑 OPTIONAL password (Google users)
     password: {
       type: String,
       required: false,
     },
 
-    // 🔐 Auth provider
     provider: {
       type: String,
       enum: ["credentials", "google"],
       default: "credentials",
     },
 
-    // 🖼️ Google profile image
     image: {
       type: String,
     },
@@ -88,13 +105,61 @@ const UserSchema = new Schema<IUser>(
         ref: "Post",
       },
     ],
+
+    followers: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+
+    following: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+
+    /* =======================
+       💎 PREMIUM SYSTEM
+    ======================= */
+
+    isPremium: {
+      type: Boolean,
+      default: false,
+    },
+
+    premiumExpiresAt: {
+      type: Date,
+    },
+
+    uiTheme: {
+      type: Object,
+      default: null,
+    },
   },
   { timestamps: true }
 );
 
 /* =======================
-   3️⃣ Export Model (Next.js Safe)
+   4️⃣ Auto Premium Expiry Middleware
 ======================= */
+
+UserSchema.pre<IUser>("save", function (next: (err?: Error) => void) {
+  if (this.premiumExpiresAt && this.premiumExpiresAt < new Date()) {
+    this.isPremium = false;
+    this.uiTheme = null;
+  }
+  next();
+});
+
+
+
+
+/* =======================
+   5️⃣ Export Model (Next.js Safe)
+======================= */
+
 const User: Model<IUser> =
   mongoose.models.User || mongoose.model<IUser>("User", UserSchema);
 

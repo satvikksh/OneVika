@@ -10,24 +10,35 @@ import Post from "../../models/Post";
 /* =========================
    GET — PUBLIC FEED
 ========================= */
-export async function GET() {
+export async function GET(req: Request) {
   try {
     await dbConnect();
 
-    const posts = await Post.find()
+    const { searchParams } = new URL(req.url);
+    const userId = searchParams.get("userId");
+
+    let query = {};
+
+    if (userId) {
+      query = { userId }; // 🔥 filter by profile user
+    }
+
+    const posts = await Post.find(query)
       .populate({
         path: "userId",
         select: "name email avatar",
       })
       .sort({ createdAt: -1 })
-      .lean()
-      .populate("comments.user", "name avatar");
+      .lean();
+
     return NextResponse.json(posts);
+
   } catch (err) {
     console.error("❌ GET POSTS ERROR:", err);
     return NextResponse.json([], { status: 500 });
   }
 }
+
 
 /* =========================
    POST — LOGIN REQUIRED

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/lib/authOptions";
 import { dbConnect } from "@/app/lib/mongodb";
 import mongoose from "mongoose";
+import Post from "@/app/models/Post";
 
 const { ObjectId } = mongoose.Types;
 
@@ -113,6 +114,11 @@ export async function GET(
       status: "active"
     });
 
+    /* ---------------- FETCH USER POSTS ---------------- */
+const posts = await Post.find({ userId: profileObjectId })
+  .sort({ createdAt: -1 })
+  .lean();
+
     /* ---------------- FORMAT RESPONSE ---------------- */
     const formattedProfile = {
       id: userProfile._id.toString(),
@@ -155,7 +161,11 @@ export async function GET(
       }
     }
 
-    return NextResponse.json(formattedProfile);
+ return NextResponse.json({
+  ...formattedProfile,
+  posts,
+});
+
 
   } catch (error) {
     console.error("FETCH USER PROFILE ERROR:", error);
