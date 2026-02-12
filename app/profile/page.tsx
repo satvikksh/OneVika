@@ -97,7 +97,7 @@ export default function ProfilePage() {
   useEffect(() => {
     if (status === "authenticated" && !profileUsername && !isRedirecting) {
       setIsRedirecting(true);
-      router.replace(`/user/profile/${session.user.id}`);
+      router.replace(`/profile/${session.user.id}`);
     }
   }, [status, profileUsername, session, router, isRedirecting]);
 
@@ -230,7 +230,7 @@ if (postsResponse.ok) {
           !isRedirecting
         ) {
           setIsRedirecting(true);
-          router.replace(`/user/profile/${fetchedUser.id}`);
+          router.replace(`/profile/${fetchedUser.id}`);
         }
       } catch (err) {
         console.error("Error fetching profile:", err);
