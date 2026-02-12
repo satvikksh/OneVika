@@ -749,61 +749,6 @@ export default function UserProfilePage() {
               )}
             </div>
 
-            {/* Follow Lists (always visible) */}
-            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg p-4 mb-6">
-              <button
-                onClick={handleViewFollowers}
-                className="w-full flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl transition-colors group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                    <Users
-                      size={18}
-                      className="text-blue-600 dark:text-blue-400"
-                    />
-                  </div>
-                  <div className="text-left">
-                    <p className="font-medium text-gray-900 dark:text-white">
-                      Followers
-                    </p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      {user.followersCount || 0} people
-                    </p>
-                  </div>
-                </div>
-                <ChevronRight
-                  size={20}
-                  className="text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300"
-                />
-              </button>
-
-              <button
-                onClick={handleViewFollowing}
-                className="w-full flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl transition-colors group mt-2"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                    <UserCheck
-                      size={18}
-                      className="text-blue-600 dark:text-blue-400"
-                    />
-                  </div>
-                  <div className="text-left">
-                    <p className="font-medium text-gray-900 dark:text-white">
-                      Following
-                    </p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      {user.followingCount || 0} people
-                    </p>
-                  </div>
-                </div>
-                <ChevronRight
-                  size={20}
-                  className="text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300"
-                />
-              </button>
-            </div>
-
             {/* Contact Information (read‑only while editing profile) */}
             {!isEditingProfile && (
               <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg p-6">
@@ -1051,7 +996,7 @@ export default function UserProfilePage() {
                           window.location.reload();
                         }
                       }}
-                      className="col-span-full py-3 bg-gradient-to-r from-blue-600 to-cyan-400 text-white rounded-xl font-semibold hover:from-yellow-600 hover:to-orange-600 transition-all duration-200"
+                      className="col-span-half py-3 bg-gradient-to-r from-blue-600 to-cyan-400 text-white rounded-xl font-semibold hover:from-yellow-600 hover:to-orange-600 transition-all duration-200"
                     >
                       🚀 Activate Premium
                     </button>
