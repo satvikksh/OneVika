@@ -70,7 +70,7 @@ export default function RoomModal({ isOpen, onClose }: Props) {
         <button
           onClick={createRoom}
           disabled={loading}
-          className="bg-indigo-600 hover:bg-indigo-700 py-2 rounded-lg text-sm"
+          className="bg-cyan-400 hover:bg-cyan-500 py-2 rounded-lg text-sm"
         >
           {loading ? "Creating..." : "➕ Create Room"}
         </button>
