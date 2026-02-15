@@ -115,7 +115,7 @@ export default function Home() {
               onClick={() => setShowRoomModal(true)}
               className="text-xs px-3 py-1.5 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-800 hover:to-cyan-700 rounded-full text-white transition"
             >
-              🎥 Room
+              🎥 Talk in
             </button>
           </div>
         </header>
