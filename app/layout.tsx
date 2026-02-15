@@ -60,7 +60,7 @@ export default async function RootLayout({
         {/* External SDK */}
         <Script
           src="https://cdn.metered.ca/sdk/frame/1.4.3/sdk-frame.min.js"
-          strategy="afterInteractive"
+          strategy="beforeInteractive"
         />
 
         <ClientLayout>
