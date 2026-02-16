@@ -120,9 +120,7 @@ const UserSchema = new Schema<IUser>(
       },
     ],
 
-    /* =======================
-       💎 PREMIUM SYSTEM
-    ======================= */
+    // 💎 PREMIUM SYSTEM
 
     isPremium: {
       type: Boolean,
@@ -140,20 +138,6 @@ const UserSchema = new Schema<IUser>(
   },
   { timestamps: true }
 );
-
-/* =======================
-   4️⃣ Auto Premium Expiry Middleware
-======================= */
-
-UserSchema.pre<IUser>("save", function (next: (err?: Error) => void) {
-  if (this.premiumExpiresAt && this.premiumExpiresAt < new Date()) {
-    this.isPremium = false;
-    this.uiTheme = null;
-  }
-  next();
-});
-
-
 
 
 /* =======================
