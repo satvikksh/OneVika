@@ -122,6 +122,12 @@ const normalizeUsers = (users: any[]): User[] =>
     })
     .filter(Boolean) as User[];
 
+const getMessageTimestamp = (message: Message) => {
+  const rawTs = (message as Message & { createdAt?: string }).timestamp ?? (message as Message & { createdAt?: string }).createdAt;
+  const ts = new Date(rawTs as string | Date).getTime();
+  return Number.isNaN(ts) ? 0 : ts;
+};
+
 type ChatPageCache = {
   users: User[];
   selectedUserId: string | null;
@@ -805,6 +811,25 @@ export default function ChatPage() {
       return;
     }
 
+    // Clear unread badge immediately when opening a chat.
+    if (currentUserId) {
+      const unreadForUser = socketMessages.filter((msg) => {
+        const isIncoming =
+          msg.senderId === user.id && msg.receiverId === currentUserId;
+        const isRead = msg.status === "read" || msg.read === true;
+        return isIncoming && !isRead;
+      });
+
+      if (unreadForUser.length > 0) {
+        unreadForUser.forEach((msg) => markMessageAsRead(msg.id));
+        fetch(`/api/messages/by-user/${user.id}/read`, {
+          method: "POST",
+        }).catch((error) => {
+          console.error("Failed to mark chat as read:", error);
+        });
+      }
+    }
+
     setSelectedUser(user);
     setReplyTo(null);
     setContextMenu(null);
@@ -883,6 +908,7 @@ export default function ChatPage() {
   /* ---------------------------- GET UNREAD COUNT ---------------------------- */
   const getUnreadCount = useCallback((userId: string) => {
     if (!currentUserId) return 0;
+    if (selectedUser?.id === userId) return 0;
     
     const userMessages = socketMessages.filter(msg => 
       msg.senderId === userId && 
@@ -891,7 +917,7 @@ export default function ChatPage() {
       msg.read !== true
     );
     return userMessages.length;
-  }, [socketMessages, currentUserId]);
+  }, [socketMessages, currentUserId, selectedUser?.id]);
 
   const usersSortedByRecentMessage = useMemo(() => {
     if (!currentUserId) return users;
@@ -908,8 +934,8 @@ export default function ChatPage() {
 
       if (!otherUserId) return;
 
-      const ts = new Date(msg.timestamp).getTime();
-      if (Number.isNaN(ts)) return;
+      const ts = getMessageTimestamp(msg);
+      if (ts <= 0) return;
 
       const prev = latestByUser.get(otherUserId) ?? 0;
       if (ts > prev) {
