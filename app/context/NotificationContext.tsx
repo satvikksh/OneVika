@@ -1,10 +1,8 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { useSocket } from "./SocketContext";
 import { useSession } from "next-auth/react";
-import { Message } from "../types/socket";
-import { m } from "framer-motion";
 
 interface NotificationContextType {
   unreadNotifications: number;
@@ -24,22 +22,42 @@ export const NotificationProvider = ({
   const { messages } = useSocket();
   const { data: session } = useSession();
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const seenMessageIds = useRef<Set<string>>(new Set());
+  const hasInitialized = useRef(false);
 
   useEffect(() => {
-    if (!messages || !session?.user?.id) return;
+    const userId = session?.user?.id;
+    if (!messages || !userId) return;
 
-    // 🔔 NEW MESSAGE ARRIVED
-    // messages.on("new_notification", ({ message }: { message: Message }) => {
-    //   // do NOT count messages sent by yourself
-    //   if (message.senderId !== session.user.id) {
-    //     setUnreadNotifications((prev) => prev + 1);
-    //   }
-    // });
+    if (!hasInitialized.current) {
+      messages.forEach((message) => seenMessageIds.current.add(message.id));
+      hasInitialized.current = true;
+      return;
+    }
 
-    return () => {
-      // messages.off("new_notification");
-    };
+    let nextUnreadCount = 0;
+    for (const message of messages) {
+      if (seenMessageIds.current.has(message.id)) {
+        continue;
+      }
+
+      seenMessageIds.current.add(message.id);
+
+      if (message.senderId !== userId) {
+        nextUnreadCount += 1;
+      }
+    }
+
+    if (nextUnreadCount > 0) {
+      setUnreadNotifications((prev) => prev + nextUnreadCount);
+    }
   }, [messages, session?.user?.id]);
+
+  useEffect(() => {
+    seenMessageIds.current.clear();
+    hasInitialized.current = false;
+    setUnreadNotifications(0);
+  }, [session?.user?.id]);
 
   const clearNotifications = () => setUnreadNotifications(0);
 
