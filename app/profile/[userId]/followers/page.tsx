@@ -121,7 +121,7 @@ export default function FollowersPage() {
               className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors group"
             >
               <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
-              <span className="font-medium">Back</span>
+              <span className="hidden sm:inline font-medium">Back</span>
             </button>
             
             <div className="flex items-center gap-2">
@@ -131,7 +131,7 @@ export default function FollowersPage() {
               </h1>
             </div>
             
-            <div className="w-20"></div> {/* Spacer for alignment */}
+            <div className="w-6 sm:w-20"></div> {/* Spacer for alignment */}
           </div>
         </div>
       </div>
@@ -170,66 +170,68 @@ export default function FollowersPage() {
             {followers.map((follower) => (
               <div
                 key={follower.id}
-                className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg p-4 flex items-center justify-between hover:shadow-xl transition-shadow"
+                className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg p-4 hover:shadow-xl transition-shadow"
               >
-                <div 
-                  className="flex items-center gap-3 cursor-pointer flex-1"
-                  onClick={() => handleViewProfile(follower.id)}
-                >
-                  <div className="relative">
-                    <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-blue-500 ring-2 ring-white dark:ring-gray-900">
-                      {follower.avatar ? (
-                        <Image
-                          src={follower.avatar}
-                          alt={follower.name}
-                          width={48}
-                          height={48}
-                          className="object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <span className="text-white font-bold text-lg">
-                            {follower.name.charAt(0).toUpperCase()}
-                          </span>
-                        </div>
-                      )}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div
+                    className="flex items-center gap-3 cursor-pointer flex-1 min-w-0"
+                    onClick={() => handleViewProfile(follower.id)}
+                  >
+                    <div className="relative">
+                      <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-blue-500 ring-2 ring-white dark:ring-gray-900">
+                        {follower.avatar ? (
+                          <Image
+                            src={follower.avatar}
+                            alt={follower.name}
+                            width={48}
+                            height={48}
+                            className="object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <span className="text-white font-bold text-lg">
+                              {follower.name.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="font-semibold text-gray-900 dark:text-white truncate">
+                        {follower.name}
+                      </h3>
                     </div>
                   </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900 dark:text-white">
-                      {follower.name}
-                    </h3>
-                  </div>
+
+                  {session?.user?.id !== follower.id && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleFollowToggle(follower.id, follower.isFollowing);
+                      }}
+                      disabled={followLoading === follower.id}
+                      className={`w-full sm:w-auto px-4 py-2 rounded-xl transition-all duration-200 font-medium flex items-center justify-center gap-2 ${
+                        follower.isFollowing
+                          ? 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                          : 'bg-gradient-to-r from-blue-600 to-blue-600 text-white hover:from-blue-700 hover:to-blue-700'
+                      }`}
+                    >
+                      {followLoading === follower.id ? (
+                        <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                      ) : follower.isFollowing ? (
+                        <>
+                          <UserCheck size={16} />
+                          Following
+                        </>
+                      ) : (
+                        <>
+                          <UserPlus size={16} />
+                          Follow
+                        </>
+                      )}
+                    </button>
+                  )}
                 </div>
-                
-                {session?.user?.id !== follower.id && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleFollowToggle(follower.id, follower.isFollowing);
-                    }}
-                    disabled={followLoading === follower.id}
-                    className={`px-4 py-2 rounded-xl transition-all duration-200 font-medium flex items-center gap-2 ${
-                      follower.isFollowing
-                        ? 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
-                        : 'bg-gradient-to-r from-blue-600 to-blue-600 text-white hover:from-blue-700 hover:to-blue-700'
-                    }`}
-                  >
-                    {followLoading === follower.id ? (
-                      <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
-                    ) : follower.isFollowing ? (
-                      <>
-                        <UserCheck size={16} />
-                        Following
-                      </>
-                    ) : (
-                      <>
-                        <UserPlus size={16} />
-                        Follow
-                      </>
-                    )}
-                  </button>
-                )}
               </div>
             ))}
           </div>

@@ -661,6 +661,9 @@ type FeedPageCache = {
 let feedPageCache: FeedPageCache | null = null;
 
 const feedCacheKey = (userId: string) => `orbitbyte:feed-cache:${userId}`;
+const WHEEL_SCROLL_THROTTLE_MS = 120;
+const WHEEL_DELTA_THRESHOLD = 28;
+const SCROLL_UNLOCK_DELAY_MS = 260;
 
 // --- MAIN FEED PAGE ---
 export default function FeedPage() {
@@ -694,6 +697,7 @@ export default function FeedPage() {
     () => feedPageCache?.isVideoMuted ?? {}
   );
   const [doubleTapLike, setDoubleTapLike] = useState<string | null>(null);
+  const [isDesktop, setIsDesktop] = useState(false);
 
   // Edit modal state
   const [editModal, setEditModal] = useState<{
@@ -736,7 +740,12 @@ export default function FeedPage() {
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const lastScrollY = useRef(0);
   const scrollingRef = useRef(false);
+  const scrollUnlockTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const currentPostIndexRef = useRef(currentPostIndex);
+  const postsRef = useRef(posts);
   const [carouselIndex, setCarouselIndex] = useState(0);
+  const carouselIndexRef = useRef(0);
+  const carouselRafRef = useRef<number | null>(null);
 
   /* ============================
        🔐 REDIRECT (SIDE EFFECT)
@@ -746,6 +755,42 @@ export default function FeedPage() {
       router.replace("/login");
     }
   }, [status, router]);
+
+  useEffect(() => {
+    currentPostIndexRef.current = currentPostIndex;
+  }, [currentPostIndex]);
+
+  useEffect(() => {
+    postsRef.current = posts;
+  }, [posts]);
+
+  useEffect(() => {
+    carouselIndexRef.current = carouselIndex;
+  }, [carouselIndex]);
+
+  useEffect(() => {
+    const onResize = () => {
+      setIsDesktop(window.innerWidth >= 768);
+    };
+
+    onResize();
+    window.addEventListener("resize", onResize, { passive: true });
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (tapTimeoutRef.current) {
+        clearTimeout(tapTimeoutRef.current);
+      }
+      if (scrollUnlockTimeoutRef.current) {
+        clearTimeout(scrollUnlockTimeoutRef.current);
+      }
+      if (carouselRafRef.current !== null) {
+        window.cancelAnimationFrame(carouselRafRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (status !== "authenticated" || !session?.user?.id) return;
@@ -990,9 +1035,11 @@ export default function FeedPage() {
   ============================ */
   const navigateFeed = useCallback(
     (navDirection: number) => {
-      const nextIndex = currentPostIndex + navDirection;
+      const currentIndex = currentPostIndexRef.current;
+      const postsSnapshot = postsRef.current;
+      const nextIndex = currentIndex + navDirection;
 
-      if (nextIndex < 0 || nextIndex >= posts.length) return;
+      if (nextIndex < 0 || nextIndex >= postsSnapshot.length) return;
 
       scrollingRef.current = true;
       setDirection(navDirection);
@@ -1001,32 +1048,52 @@ export default function FeedPage() {
       setShowOptions(false);
 
       // Handle Video Logic (Pause current)
-      const currentPost = posts[currentPostIndex];
+      const currentPost = postsSnapshot[currentIndex];
       // Pause ALL videos in the current post (carousel support)
       if (currentPost && currentPost.images) {
-         currentPost.images.forEach((_, idx) => {
-             const key = `${currentPost._id}-${idx}`;
-             const video = videoRefs.current[key];
-             if (video) {
-                 video.pause();
-                 setIsVideoPlaying(prev => ({ ...prev, [key]: false }));
-             }
-         });
+        const pausedKeys: string[] = [];
+        currentPost.images.forEach((_, idx) => {
+          const key = `${currentPost._id}-${idx}`;
+          const video = videoRefs.current[key];
+          if (video && !video.paused) {
+            video.pause();
+            pausedKeys.push(key);
+          }
+        });
+
+        if (pausedKeys.length > 0) {
+          setIsVideoPlaying((prev) => {
+            const next = { ...prev };
+            let hasChanges = false;
+            pausedKeys.forEach((key) => {
+              if (next[key]) {
+                next[key] = false;
+                hasChanges = true;
+              }
+            });
+            return hasChanges ? next : prev;
+          });
+        }
       }
 
       setCurrentPostIndex(nextIndex);
+      currentPostIndexRef.current = nextIndex;
       setCarouselIndex(0); // Reset carousel index when changing posts
+      carouselIndexRef.current = 0;
       
       // Reset scroll position of carousel when changing posts
       if (carouselContainerRef.current) {
           carouselContainerRef.current.scrollTo({ left: 0, behavior: "instant" as ScrollBehavior });
       }
 
-      setTimeout(() => {
+      if (scrollUnlockTimeoutRef.current) {
+        clearTimeout(scrollUnlockTimeoutRef.current);
+      }
+      scrollUnlockTimeoutRef.current = setTimeout(() => {
         scrollingRef.current = false;
-      }, 200); 
+      }, SCROLL_UNLOCK_DELAY_MS);
     },
-    [currentPostIndex, posts]
+    []
   );
 
   /* ============================
@@ -1040,10 +1107,10 @@ export default function FeedPage() {
 
       const delta = e.deltaY;
         
-      if (Math.abs(delta) < 20) return;
+      if (Math.abs(delta) < WHEEL_DELTA_THRESHOLD) return;
 
       const currentTime = Date.now();
-      if (currentTime - lastScrollY.current < 50) return; 
+      if (currentTime - lastScrollY.current < WHEEL_SCROLL_THROTTLE_MS) return; 
 
       if (delta > 0) {
         navigateFeed(1);
@@ -1395,13 +1462,18 @@ export default function FeedPage() {
   // Sync scroll with index
   const handleCarouselScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const container = e.currentTarget;
-    const scrollLeft = container.scrollLeft;
-    const width = container.clientWidth;
-    const index = Math.round(scrollLeft / width);
-    if (index !== carouselIndex) {
+    if (carouselRafRef.current !== null) return;
+
+    carouselRafRef.current = window.requestAnimationFrame(() => {
+      const width = container.clientWidth || 1;
+      const index = Math.round(container.scrollLeft / width);
+      if (index !== carouselIndexRef.current) {
+        carouselIndexRef.current = index;
         setCarouselIndex(index);
-    }
-  }
+      }
+      carouselRafRef.current = null;
+    });
+  };
 
   if (loadingPosts && initialLoad) {
     return <FeedSkeleton />;
@@ -1552,7 +1624,7 @@ export default function FeedPage() {
                       </div>
                       
                       {/* Carousel Navigation Buttons - Desktop Only */}
-                      {window.innerWidth >= 768 && (
+                      {isDesktop && (
                         <>
                           {carouselIndex > 0 && (
                             <button

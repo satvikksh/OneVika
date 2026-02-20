@@ -159,7 +159,7 @@ export default function FollowingPage() {
               className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors group"
             >
               <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
-              <span className="font-medium">Back</span>
+              <span className="hidden sm:inline font-medium">Back</span>
             </button>
             
             <div className="flex items-center gap-2">
@@ -169,7 +169,7 @@ export default function FollowingPage() {
               </h1>
             </div>
             
-            <div className="w-20"></div>
+            <div className="w-6 sm:w-20"></div>
           </div>
         </div>
       </div>
@@ -211,90 +211,94 @@ export default function FollowingPage() {
             {following.map((user) => (
               <div
                 key={user.id}
-                className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg p-4 flex items-center justify-between hover:shadow-xl transition-shadow"
+                className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg p-4 hover:shadow-xl transition-shadow"
               >
-                <div 
-                  className="flex items-center gap-3 cursor-pointer flex-1"
-                  onClick={() => handleViewProfile(user.id)}
-                >
-                  <div className="relative">
-                    <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-blue-500 ring-2 ring-white dark:ring-gray-900">
-                      {user.avatar ? (
-                        <Image
-                          src={user.avatar}
-                          alt={user.name}
-                          width={48}
-                          height={48}
-                          className="object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <span className="text-white font-bold text-lg">
-                            {user.name.charAt(0).toUpperCase()}
-                          </span>
-                        </div>
-                      )}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div
+                    className="flex items-center gap-3 cursor-pointer min-w-0 flex-1"
+                    onClick={() => handleViewProfile(user.id)}
+                  >
+                    <div className="relative">
+                      <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-blue-500 ring-2 ring-white dark:ring-gray-900">
+                        {user.avatar ? (
+                          <Image
+                            src={user.avatar}
+                            alt={user.name}
+                            width={48}
+                            height={48}
+                            className="object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <span className="text-white font-bold text-lg">
+                              {user.name.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="font-semibold text-gray-900 dark:text-white truncate">
+                        {user.name}
+                      </h3>
                     </div>
                   </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900 dark:text-white">
-                      {user.name}
-                    </h3>
+
+                  <div className="flex items-center gap-2 sm:justify-end">
+                    {session?.user?.id !== user.id ? (
+                      isCurrentUser ? (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleUnfollow(user.id);
+                          }}
+                          disabled={followLoading === user.id}
+                          className="w-full sm:w-auto px-3 py-2 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-800/50 rounded-xl transition-colors font-medium flex items-center justify-center gap-2"
+                        >
+                          {followLoading === user.id ? (
+                            <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                          ) : (
+                            <>
+                              <UserMinus size={16} />
+                              Unfollow
+                            </>
+                          )}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleFollowToggle(user.id, user.isFollowing);
+                          }}
+                          disabled={followLoading === user.id}
+                          className={`w-full sm:w-auto px-4 py-2 rounded-xl transition-all duration-200 font-medium flex items-center justify-center gap-2 ${
+                            user.isFollowing
+                              ? 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                              : 'bg-gradient-to-r from-blue-600 to-blue-600 text-white hover:from-blue-700 hover:to-blue-700'
+                          }`}
+                        >
+                          {followLoading === user.id ? (
+                            <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                          ) : user.isFollowing ? (
+                            <>
+                              <UserCheck size={16} />
+                              Following
+                            </>
+                          ) : (
+                            <>
+                              <UserPlus size={16} />
+                              Follow
+                            </>
+                          )}
+                        </button>
+                      )
+                    ) : (
+                      <div className="px-1 py-2 text-sm text-gray-500 dark:text-gray-400">
+                        You
+                      </div>
+                    )}
                   </div>
                 </div>
-                
-                {session?.user?.id !== user.id ? (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleFollowToggle(user.id, user.isFollowing);
-                    }}
-                    disabled={followLoading === user.id}
-                    className={`px-4 py-2 rounded-xl transition-all duration-200 font-medium flex items-center gap-2 ${
-                      user.isFollowing
-                        ? 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
-                        : 'bg-gradient-to-r from-blue-600 to-blue-600 text-white hover:from-blue-700 hover:to-blue-700'
-                    }`}
-                  >
-                    {followLoading === user.id ? (
-                      <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
-                    ) : user.isFollowing ? (
-                      <>
-                        <UserCheck size={16} />
-                        Following
-                      </>
-                    ) : (
-                      <>
-                        <UserPlus size={16} />
-                        Follow
-                      </>
-                    )}
-                  </button>
-                ) : (
-                  <div className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
-                    You
-                  </div>
-                )}
-                
-                {isCurrentUser && session?.user?.id !== user.id && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleUnfollow(user.id);
-                    }}
-                    disabled={followLoading === user.id}
-                    className="ml-2 px-3 py-2 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-800/50 rounded-xl transition-colors font-medium flex items-center gap-2"
-                  >
-                    {followLoading === user.id ? (
-                      <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
-                    ) : (
-                      <>
-                        <UserMinus size={16} />
-                        Unfollow
-                      </>
-                    )}
-                  </button>
-                )}
               </div>
             ))}
           </div>
