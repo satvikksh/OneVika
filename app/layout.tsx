@@ -2,7 +2,6 @@
 import "./globals.css";
 import ClientLayout from "./ClientLayout";
 import { Inter } from "next/font/google";
-import { SocketProvider } from "./context/SocketContext";
 import Script from "next/script";
 import { getServerSession } from "next-auth";
 import { dbConnect } from "./lib/mongodb";
@@ -64,9 +63,7 @@ export default async function RootLayout({
         />
 
         <ClientLayout>
-          <SocketProvider>
-            {children}
-          </SocketProvider>
+          {children}
         </ClientLayout>
 
       </body>
