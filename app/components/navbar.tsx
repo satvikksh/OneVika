@@ -838,6 +838,50 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                       }}
                     />
                   </form>
+                  {showSearchSuggestions && searchQuery.trim().length > 0 && (
+                    <div className="mt-3 bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-lg overflow-hidden">
+                      {isSearchLoading && (
+                        <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                          Searching users...
+                        </div>
+                      )}
+
+                      {!isSearchLoading && searchResults.length === 0 && (
+                        <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                          No users found
+                        </div>
+                      )}
+
+                      {!isSearchLoading &&
+                        searchResults.slice(0, 6).map((user) => (
+                          <button
+                            key={user._id}
+                            type="button"
+                            onClick={() => selectSearchUser(user._id)}
+                            className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                          >
+                            <div className="w-8 h-8 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-blue-500 flex items-center justify-center text-white text-xs font-semibold">
+                              {user.avatar ? (
+                                <Image
+                                  src={user.avatar}
+                                  alt={user.name}
+                                  width={32}
+                                  height={32}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <span>{user.name?.[0]?.toUpperCase() ?? "U"}</span>
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                {user.name || "Unknown user"}
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                    </div>
+                  )}
                 </div>
               )}
 

@@ -19,6 +19,7 @@ interface Message {
   senderId: string;
   receiverId: string;
   timestamp: string | Date;
+  read?: boolean;
   chatId?: string;
   type?: "text" | "image" | "file";
   status?: "sending" | "sent" | "delivered" | "read";
@@ -66,7 +67,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
   const socketRef = useRef<Socket | null>(null);
 
   const [isConnected, setIsConnected] = useState(false);
-  const [onlineUsers] = useState<string[]>([]);
+  const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
 
   const upsertMessage = useCallback((msg: Message) => {
@@ -157,6 +158,26 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     [userId, upsertMessage, removeMessage]
   );
 
+  const markMessageAsRead = useCallback(
+    (messageId: string) => {
+      if (!messageId || !userId) return;
+
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId
+            ? { ...m, read: true, status: "read" }
+            : m
+        )
+      );
+
+      const socket = socketRef.current;
+      if (!socket) return;
+
+      socket.emit("mark_as_read", { messageId, userId });
+    },
+    [userId]
+  );
+
   useEffect(() => {
     if (!userId || socketRef.current) return;
 
@@ -174,11 +195,29 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     socket.on("connect_error", (err) => {
       console.error("Socket connect error:", err.message);
     });
+    socket.on("online_users", (ids: string[]) => {
+      setOnlineUsers(Array.isArray(ids) ? ids : []);
+    });
+    socket.on(
+      "user_status",
+      ({ userId: changedUserId, isOnline }: { userId: string; isOnline: boolean }) => {
+        if (!changedUserId) return;
+        setOnlineUsers((prev) => {
+          if (isOnline) {
+            return prev.includes(changedUserId) ? prev : [...prev, changedUserId];
+          }
+          return prev.filter((id) => id !== changedUserId);
+        });
+      }
+    );
 
     return () => {
+      socket.off("online_users");
+      socket.off("user_status");
       socket.disconnect();
       socketRef.current = null;
       setIsConnected(false);
+      setOnlineUsers([]);
     };
   }, [userId]);
 
@@ -202,6 +241,20 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
       upsertMessage(msg);
     });
 
+    socket.on(
+      "message_read",
+      ({ messageId }: { messageId: string }) => {
+        if (!messageId) return;
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === messageId
+              ? { ...m, read: true, status: "read" }
+              : m
+          )
+        );
+      }
+    );
+
     socket.on("message_deleted", ({ messageId }: { messageId: string }) => {
       if (!messageId) return;
       removeMessage(messageId);
@@ -210,6 +263,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     return () => {
       socket.off("receive_message");
       socket.off("message_sent");
+      socket.off("message_read");
       socket.off("message_deleted");
     };
   }, [upsertMessage, userId, removeMessage]);
@@ -223,7 +277,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
       removeMessage,
       emitMessageDelete,
       addMessages: (msgs: Message[]) => msgs.forEach(upsertMessage),
-      markMessageAsRead: () => {},
+      markMessageAsRead,
       joinChat: () => {},
       leaveChat: () => {},
       clearMessages: () => setMessages([]),
@@ -236,6 +290,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
       sendMessage,
       removeMessage,
       emitMessageDelete,
+      markMessageAsRead,
       upsertMessage,
     ]
   );

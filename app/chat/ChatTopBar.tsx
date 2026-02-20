@@ -187,9 +187,15 @@ const {
                       typing...
                     </span>
                   ) : isUserOnline ? (
-                    "Online"
+                    <span className="inline-flex items-center gap-1 text-green-600 dark:text-green-400">
+                      <span className="w-2 h-2 rounded-full bg-green-500" />
+                      Online
+                    </span>
                   ) : (
-                    "Offline"
+                    <span className="inline-flex items-center gap-1 text-gray-500 dark:text-gray-400">
+                      <span className="w-2 h-2 rounded-full bg-gray-400" />
+                      Offline
+                    </span>
                   )}
                 </p>
               </button>

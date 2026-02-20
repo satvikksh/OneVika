@@ -13,22 +13,27 @@ app.get("/", (_req, res) => {
 const io = new Server(httpServer, {
   path: "/socket.io",
   cors: {
-    origin: [
-      "http://localhost:3000",
-      "https://orbitbyte.vercel.app",
-    ],
+    origin: ["http://localhost:3000", "https://orbitbyte.vercel.app"],
     methods: ["GET", "POST"],
     credentials: true,
   },
 });
 
+const activeUsers = new Map<string, Set<string>>();
+
 io.on("connection", (socket) => {
   const userId = socket.handshake.auth?.userId;
 
-  console.log("✅ Socket connected:", socket.id, "user:", userId);
+  console.log("Socket connected:", socket.id, "user:", userId);
 
   if (userId) {
     socket.join(`user_${userId}`);
+    if (!activeUsers.has(userId)) {
+      activeUsers.set(userId, new Set());
+    }
+    activeUsers.get(userId)?.add(socket.id);
+    io.emit("user_status", { userId, isOnline: true });
+    io.emit("online_users", Array.from(activeUsers.keys()));
   }
 
   socket.on("join", (joinUserId: string) => {
@@ -39,7 +44,16 @@ io.on("connection", (socket) => {
 
   socket.on("send_message", (message) => {
     io.to(`user_${message.receiverId}`).emit("receive_message", message);
+    io.to(`user_${message.senderId}`).emit("receive_message", message);
   });
+
+  socket.on(
+    "mark_as_read",
+    ({ messageId, userId: readerId }: { messageId: string; userId: string }) => {
+      if (!messageId || !readerId) return;
+      io.emit("message_read", { messageId, userId: readerId });
+    }
+  );
 
   socket.on(
     "delete_message",
@@ -67,13 +81,21 @@ io.on("connection", (socket) => {
   );
 
   socket.on("disconnect", () => {
-    console.log("❌ Socket disconnected:", socket.id);
+    console.log("Socket disconnected:", socket.id);
+    if (userId && activeUsers.has(userId)) {
+      const userSockets = activeUsers.get(userId);
+      userSockets?.delete(socket.id);
+      if (!userSockets || userSockets.size === 0) {
+        activeUsers.delete(userId);
+        io.emit("user_status", { userId, isOnline: false });
+      }
+      io.emit("online_users", Array.from(activeUsers.keys()));
+    }
   });
 });
 
 const PORT = Number(process.env.PORT || 3001);
 
-// 🚨 THIS LINE FIXES RAILWAY
 httpServer.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 Socket server running on port ${PORT}`);
+  console.log(`Socket server running on port ${PORT}`);
 });

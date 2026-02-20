@@ -59,6 +59,7 @@ export default function ChatSidebar({
   setSearchQuery,
   loadingUsers,
   isConnected,
+  onlineUsers,
   typingUsers,
   getUnreadCount,
   isMobile = false,
@@ -109,6 +110,7 @@ export default function ChatSidebar({
       (u.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         u.email?.toLowerCase().includes(searchQuery.toLowerCase()))
   );
+  const suggestedUsers = searchQuery.trim() ? filteredUsers.slice(0, 5) : [];
 
   const handleUserSelect = (user: User) => {
     onSelectUser(user);
@@ -167,26 +169,50 @@ export default function ChatSidebar({
 
             {/* Search input for mobile */}
             {isSearching && (
-              <div className="relative mt-2 animate-fadeIn">
-                <Search
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  size={18}
-                />
-                <input
-                  type="text"
-                  placeholder="Search users..."
-                  className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white transition-all"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  autoFocus
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery("")}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                  >
-                    <span className="text-lg">×</span>
-                  </button>
+              <div className="mt-2 animate-fadeIn">
+                <div className="relative">
+                  <Search
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                    size={18}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Search users..."
+                    className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white transition-all"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    autoFocus
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    >
+                      <span className="text-lg">×</span>
+                    </button>
+                  )}
+                </div>
+                {searchQuery.trim() && (
+                  <div className="mt-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+                    {suggestedUsers.length > 0 ? (
+                      suggestedUsers.map((user) => (
+                        <button
+                          key={`suggest-${user.id}`}
+                          onClick={() => {
+                            handleUserSelect(user);
+                            setIsSearching(false);
+                          }}
+                          className="w-full px-3 py-2 text-left text-sm text-gray-800 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                        >
+                          {user.name || user.email || "Unknown user"}
+                        </button>
+                      ))
+                    ) : (
+                      <p className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
+                        No matching users
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
             )}
@@ -236,6 +262,7 @@ export default function ChatSidebar({
               filteredUsers.map((user) => {
                 const unreadCount = getUnreadCount(user.id);
                 const isSelected = selectedUser?.id === user.id;
+                const isOnline = onlineUsers.includes(user.id) || Boolean(user.isOnline);
 
                 return (
                   <button
@@ -265,7 +292,7 @@ export default function ChatSidebar({
                           </div>
                         )}
                       </div>
-                      {user.isOnline && (
+                      {isOnline && (
                         <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white dark:border-gray-900 rounded-full" />
                       )}
                     </div>
@@ -287,7 +314,9 @@ export default function ChatSidebar({
                             typing...
                           </span>
                         ) : (
-                          ""
+                          <span className={isOnline ? "text-green-600 dark:text-green-400" : ""}>
+                            {/* {isOnline ? "Online" : "Offline"} */}
+                          </span>
                         )}
                       </p>
                     </div>
@@ -297,7 +326,7 @@ export default function ChatSidebar({
                         {unreadCount > 99 ? '99+' : unreadCount}
                       </span>
                     )}
-                  </button>
+                sho  </button>
                 );
               })
             )}
@@ -312,7 +341,7 @@ export default function ChatSidebar({
 
   // Desktop sidebar
   return (
-    <aside className="fixed top-16 ${positionClasses} hidden lg:flex w-80 shrink-0 bg-white dark:bg-black border-r border-gray-200 dark:border-gray-800 flex-col h-full">
+    <aside className="fixed top-16 left-0 hidden lg:flex w-80 shrink-0 bg-white dark:bg-black border-r border-gray-200 dark:border-gray-800 flex-col h-full">
       {/* Desktop Sidebar Header */}
       <div className="shrink-0 p-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-black">
         <div className="flex items-center justify-between mb-4">
@@ -382,6 +411,7 @@ export default function ChatSidebar({
           filteredUsers.map((user) => {
             const unreadCount = getUnreadCount(user.id);
             const isSelected = selectedUser?.id === user.id;
+            const isOnline = onlineUsers.includes(user.id) || Boolean(user.isOnline);
 
             return (
               <button
@@ -411,7 +441,7 @@ export default function ChatSidebar({
                       </div>
                     )}
                   </div>
-                  {user.isOnline && (
+                  {isOnline && (
                     <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white dark:border-gray-900 rounded-full" />
                   )}
                 </div>
@@ -433,7 +463,9 @@ export default function ChatSidebar({
                         typing...
                       </span>
                     ) : (
-                     ""
+                      <span className={isOnline ? "text-green-600 dark:text-green-400" : ""}>
+                        {/* {isOnline ? "Online" : "Offline"} */}
+                      </span>
                     )}
                   </p>
                 </div>
@@ -520,3 +552,4 @@ if (typeof document !== 'undefined') {
   styleSheet.textContent = styles;
   document.head.appendChild(styleSheet);
 }
+

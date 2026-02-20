@@ -534,14 +534,22 @@ export default function ChatPage() {
   useEffect(() => {
     if (!selectedUser || !currentUserId) return;
 
-    sortedMessages
-      .filter(
-        m =>
-          m.senderId === selectedUser.id &&
-          m.receiverId === currentUserId &&
-          m.status !== "read"
-      )
-      .forEach(m => markMessageAsRead(m.id));
+    const unreadIncoming = sortedMessages.filter((m) => {
+      const isIncoming =
+        m.senderId === selectedUser.id && m.receiverId === currentUserId;
+      const isRead = m.status === "read" || m.read === true;
+      return isIncoming && !isRead;
+    });
+
+    if (unreadIncoming.length === 0) return;
+
+    unreadIncoming.forEach((m) => markMessageAsRead(m.id));
+
+    fetch(`/api/messages/by-user/${selectedUser.id}/read`, {
+      method: "POST",
+    }).catch((error) => {
+      console.error("Failed to mark chat as read:", error);
+    });
   }, [sortedMessages, selectedUser, currentUserId, markMessageAsRead]);
 
   /* -------------------------------- TYPING -------------------------------- */
@@ -879,10 +887,42 @@ export default function ChatPage() {
     const userMessages = socketMessages.filter(msg => 
       msg.senderId === userId && 
       msg.receiverId === currentUserId && 
-      msg.status !== 'read'
+      msg.status !== 'read' &&
+      msg.read !== true
     );
     return userMessages.length;
   }, [socketMessages, currentUserId]);
+
+  const usersSortedByRecentMessage = useMemo(() => {
+    if (!currentUserId) return users;
+
+    const latestByUser = new Map<string, number>();
+
+    socketMessages.forEach((msg) => {
+      let otherUserId: string | null = null;
+      if (msg.senderId === currentUserId) {
+        otherUserId = msg.receiverId;
+      } else if (msg.receiverId === currentUserId) {
+        otherUserId = msg.senderId;
+      }
+
+      if (!otherUserId) return;
+
+      const ts = new Date(msg.timestamp).getTime();
+      if (Number.isNaN(ts)) return;
+
+      const prev = latestByUser.get(otherUserId) ?? 0;
+      if (ts > prev) {
+        latestByUser.set(otherUserId, ts);
+      }
+    });
+
+    return [...users].sort((a, b) => {
+      const aTs = latestByUser.get(a.id) ?? 0;
+      const bTs = latestByUser.get(b.id) ?? 0;
+      return bTs - aTs;
+    });
+  }, [users, socketMessages, currentUserId]);
 
   // Group consecutive messages from same sender
   const groupedMessages = sortedMessages.reduce((acc, msg, idx) => {
@@ -949,7 +989,7 @@ export default function ChatPage() {
       <div className="flex h-full pt-16">
         {/* Sidebar */}
         <ChatSidebar
-          users={users}
+          users={usersSortedByRecentMessage}
           selectedUser={selectedUser}
           onSelectUser={handleSelectUser}
           searchQuery={searchQuery}
