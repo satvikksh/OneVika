@@ -13,8 +13,6 @@ import { io } from "socket.io-client";
 import type { Socket } from "socket.io-client";
 import { useSession } from "next-auth/react";
 
-/* ---------------- TYPES ---------------- */
-
 interface Message {
   id: string;
   content: string;
@@ -32,6 +30,12 @@ interface SocketContextType {
   onlineUsers: string[];
   messages: Message[];
   sendMessage: (message: Partial<Message>) => void;
+  removeMessage: (messageId: string) => void;
+  emitMessageDelete: (payload: {
+    messageId: string;
+    senderId: string;
+    receiverId: string;
+  }) => void;
   addMessages: (messages: Message[]) => void;
   markMessageAsRead: (messageId: string) => void;
   joinChat: (chatId: string) => void;
@@ -40,13 +44,13 @@ interface SocketContextType {
   markChatMessagesSeen: (chatId: string) => void;
 }
 
-/* ---------------- CONTEXT ---------------- */
-
 const SocketContext = createContext<SocketContextType>({
   isConnected: false,
   onlineUsers: [],
   messages: [],
   sendMessage: () => {},
+  removeMessage: () => {},
+  emitMessageDelete: () => {},
   addMessages: () => {},
   markMessageAsRead: () => {},
   joinChat: () => {},
@@ -54,8 +58,6 @@ const SocketContext = createContext<SocketContextType>({
   clearMessages: () => {},
   markChatMessagesSeen: () => {},
 });
-
-/* ---------------- PROVIDER ---------------- */
 
 export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
   const { data: session } = useSession();
@@ -67,74 +69,110 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
   const [onlineUsers] = useState<string[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
 
-  /* ---------------- HELPERS ---------------- */
-
   const upsertMessage = useCallback((msg: Message) => {
     setMessages((prev) => {
       const exists = prev.some((m) => m.id === msg.id);
-      return exists
-        ? prev.map((m) => (m.id === msg.id ? msg : m))
-        : [...prev, msg];
+      return exists ? prev.map((m) => (m.id === msg.id ? msg : m)) : [...prev, msg];
     });
   }, []);
 
-  /* ---------------- SEND MESSAGE ---------------- */
+  const removeMessage = useCallback((messageId: string) => {
+    setMessages((prev) => prev.filter((m) => m.id !== messageId));
+  }, []);
+
+  const emitMessageDelete = useCallback(
+    (payload: { messageId: string; senderId: string; receiverId: string }) => {
+      const socket = socketRef.current;
+      if (!socket) return;
+      socket.emit("delete_message", payload);
+    },
+    []
+  );
 
   const sendMessage = useCallback(
     (message: Partial<Message>) => {
       const socket = socketRef.current;
       if (!socket || !userId || !message.receiverId) return;
 
-      const fullMessage: Message = {
+      const messageText = (message.content ?? "").trim();
+      if (!messageText) return;
+
+      const tempMessage: Message = {
         id: message.id ?? crypto.randomUUID(),
-        content: message.content ?? "",
+        content: messageText,
         senderId: userId,
         receiverId: message.receiverId,
         chatId: message.chatId,
         timestamp: new Date().toISOString(),
-        status: "sent",
+        status: "sending",
         type: "text",
       };
 
-      socket.emit("send_message", fullMessage);
+      upsertMessage(tempMessage);
 
-      // ✅ optimistic update for sender
-      upsertMessage(fullMessage);
+      (async () => {
+        try {
+          const res = await fetch("/api/messages/send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              text: messageText,
+              receiverId: message.receiverId,
+            }),
+          });
+
+          const data = await res.json();
+          if (!res.ok || !data?.message) {
+            throw new Error(data?.error || "Failed to save message");
+          }
+
+          const savedMessage: Message = {
+            id: data.message.id,
+            content: data.message.text ?? messageText,
+            senderId: data.message.senderId ?? userId,
+            receiverId: data.message.receiverId ?? message.receiverId,
+            chatId: data.message.conversationId,
+            timestamp: data.message.timestamp ?? new Date().toISOString(),
+            status: "sent",
+            type: "text",
+          };
+
+          // Replace optimistic temp message with saved DB message
+          setMessages((prev) => {
+            const withoutTemp = prev.filter((m) => m.id !== tempMessage.id);
+            const existsSaved = withoutTemp.some((m) => m.id === savedMessage.id);
+            return existsSaved
+              ? withoutTemp.map((m) => (m.id === savedMessage.id ? savedMessage : m))
+              : [...withoutTemp, savedMessage];
+          });
+
+          socket.emit("send_message", savedMessage);
+        } catch (error) {
+          console.error("Failed to persist message:", error);
+          // Remove optimistic message if persistence fails
+          removeMessage(tempMessage.id);
+        }
+      })();
     },
-    [userId, upsertMessage]
+    [userId, upsertMessage, removeMessage]
   );
-
-  /* ---------------- CONNECTION ---------------- */
 
   useEffect(() => {
     if (!userId || socketRef.current) return;
 
-  const SOCKET_URL =
-  process.env.NEXT_PUBLIC_SOCKET_URL ?? "http://127.0.0.1:3001";
-
-
-    console.log("🔥 Connecting socket:", SOCKET_URL, "user:", userId);
-
-    const socket = io(SOCKET_URL, {
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL ?? "http://127.0.0.1:3001";
+    const socket = io(socketUrl, {
       path: "/socket.io",
-      transports: ["websocket"], // ✅ important
+      transports: ["websocket"],
       auth: { userId },
     });
 
     socketRef.current = socket;
 
-    socket.on("connect", () => {
-      console.log("🟢 Socket connected:", socket.id);
-      setIsConnected(true);
-    });
-
-    socket.on("disconnect", (reason) => {
-      console.log("🔴 Socket disconnected:", reason);
-      setIsConnected(false);
-    });
-
+    socket.on("connect", () => setIsConnected(true));
+    socket.on("disconnect", () => setIsConnected(false));
     socket.on("connect_error", (err) => {
-      console.error("❌ connect_error:", err.message);
+      console.error("Socket connect error:", err.message);
     });
 
     return () => {
@@ -144,39 +182,37 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     };
   }, [userId]);
 
-  /* ---------------- RECEIVE MESSAGE ---------------- */
-
   useEffect(() => {
     const socket = socketRef.current;
     if (!socket) return;
 
-   socket.on("receive_message", (msg: Message) => {
-  console.log("📥 receive_message:", msg);
+    socket.on("receive_message", (msg: Message) => {
+      upsertMessage(msg);
 
-  upsertMessage(msg);
-
-  // ✅ Only notify if this user is the receiver
-  if (msg.receiverId === userId) {
-    // 🔔 Dispatch global notification event
-    window.dispatchEvent(
-      new CustomEvent("orbitbyte:newMessageNotification", {
-        detail: msg,
-      })
-    );
-  }
-});
+      if (msg.receiverId === userId) {
+        window.dispatchEvent(
+          new CustomEvent("orbitbyte:newMessageNotification", {
+            detail: msg,
+          })
+        );
+      }
+    });
 
     socket.on("message_sent", (msg: Message) => {
       upsertMessage(msg);
     });
 
+    socket.on("message_deleted", ({ messageId }: { messageId: string }) => {
+      if (!messageId) return;
+      removeMessage(messageId);
+    });
+
     return () => {
       socket.off("receive_message");
       socket.off("message_sent");
+      socket.off("message_deleted");
     };
-  }, [upsertMessage]);
-
-  /* ---------------- CONTEXT VALUE ---------------- */
+  }, [upsertMessage, userId, removeMessage]);
 
   const value = useMemo(
     () => ({
@@ -184,6 +220,8 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
       onlineUsers,
       messages,
       sendMessage,
+      removeMessage,
+      emitMessageDelete,
       addMessages: (msgs: Message[]) => msgs.forEach(upsertMessage),
       markMessageAsRead: () => {},
       joinChat: () => {},
@@ -191,14 +229,18 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
       clearMessages: () => setMessages([]),
       markChatMessagesSeen: () => {},
     }),
-    [isConnected, onlineUsers, messages, sendMessage, upsertMessage]
+    [
+      isConnected,
+      onlineUsers,
+      messages,
+      sendMessage,
+      removeMessage,
+      emitMessageDelete,
+      upsertMessage,
+    ]
   );
 
-  return (
-    <SocketContext.Provider value={value}>
-      {children}
-    </SocketContext.Provider>
-  );
+  return <SocketContext.Provider value={value}>{children}</SocketContext.Provider>;
 };
 
 export const useSocket = () => useContext(SocketContext);

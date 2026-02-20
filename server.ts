@@ -42,6 +42,23 @@ io.on("connection", (socket) => {
   });
 
   socket.on(
+    "delete_message",
+    ({
+      messageId,
+      senderId,
+      receiverId,
+    }: {
+      messageId: string;
+      senderId: string;
+      receiverId: string;
+    }) => {
+      if (!messageId || !senderId || !receiverId) return;
+      io.to(`user_${senderId}`).emit("message_deleted", { messageId });
+      io.to(`user_${receiverId}`).emit("message_deleted", { messageId });
+    }
+  );
+
+  socket.on(
     "sendNotification",
     ({ userId: targetUserId, data }: { userId: string; data: any }) => {
       if (!targetUserId || !data) return;

@@ -33,11 +33,11 @@ import Image from "next/image";
 import { useSession, signOut } from "next-auth/react";
 
 // Types
-interface SearchSuggestion {
-  id: number;
-  text: string;
-  category: string;
-  icon?: React.ReactNode;
+interface UserSearchResult {
+  _id: string;
+  id: string;
+  name: string;
+  avatar?: string | null;
 }
 
 interface NavItem {
@@ -81,6 +81,8 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
+  const [searchResults, setSearchResults] = useState<UserSearchResult[]>([]);
+  const [isSearchLoading, setIsSearchLoading] = useState(false);
   const { unreadNotifications } = useNotifications();
 
   // State to track if chat text area is focused
@@ -211,38 +213,15 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
     }
   }, [pathname]);
 
-  const searchSuggestions: SearchSuggestion[] = [
-    {
-      id: 1,
-      text: "Imaginary Projects",
-      category: "Projects",
-      icon: <Zap size={14} />,
-    },
-    {
-      id: 2,
-      text: "Community Guidelines",
-      category: "Docs",
-      icon: <BookOpen size={14} />,
-    },
-    {
-      id: 3,
-      text: "Upcoming Events",
-      category: "Events",
-      icon: <Users size={14} />,
-    },
-    {
-      id: 4,
-      text: "Analytics Dashboard",
-      category: "Analytics",
-      icon: <BarChart size={14} />,
-    },
-    {
-      id: 5,
-      text: "Recent Conversations",
-      category: "Messages",
-      icon: <MessageSquare size={14} />,
-    },
-  ];
+  const isObjectId = (value: string) => /^[0-9a-fA-F]{24}$/.test(value);
+
+  const selectSearchUser = (userId: string) => {
+    setShowSearchSuggestions(false);
+    setIsMobileMenuOpen(false);
+    setSearchQuery("");
+    setSearchResults([]);
+    router.push(`/profile/${userId}`);
+  };
 
   const navItems: NavItem[] = [
     { path: "/", label: "Home", icon: <Home size={18} /> },
@@ -356,9 +335,65 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (searchQuery.trim()) {
-      router.push(`/search?q=${encodeURIComponent(searchQuery)}`);
+    const q = searchQuery.trim();
+    if (!q) return;
+
+    if (isObjectId(q)) {
       setShowSearchSuggestions(false);
+      setSearchQuery("");
+      setSearchResults([]);
+      router.push(`/profile/${q}`);
+      return;
+    }
+
+    if (searchResults.length > 0) {
+      selectSearchUser(searchResults[0]._id);
+    }
+  };
+
+  useEffect(() => {
+    const q = searchQuery.trim();
+
+    if (!q || !session?.user?.id) {
+      setSearchResults([]);
+      setIsSearchLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(async () => {
+      try {
+        setIsSearchLoading(true);
+        const res = await fetch(`/api/user/search?q=${encodeURIComponent(q)}`, {
+          signal: controller.signal,
+          cache: "no-store",
+        });
+
+        if (!res.ok) {
+          setSearchResults([]);
+          return;
+        }
+
+        const data = await res.json();
+        setSearchResults(Array.isArray(data.users) ? data.users : []);
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setIsSearchLoading(false);
+      }
+    }, 250);
+
+    return () => {
+      clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [searchQuery, session?.user?.id]);
+
+  const handleMobileSearchSubmit = (e: React.FormEvent) => {
+    handleSearch(e);
+    if (searchQuery.trim()) {
+      setShowSearchSuggestions(false);
+      setIsMobileMenuOpen(false);
     }
   };
 
@@ -477,7 +512,11 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                   {searchQuery && (
                     <button
                       type="button"
-                      onClick={() => setSearchQuery("")}
+                      onClick={() => {
+                        setSearchQuery("");
+                        setSearchResults([]);
+                        setShowSearchSuggestions(false);
+                      }}
                       className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                     >
                       <X size={16} />
@@ -485,33 +524,48 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                   )}
                 </div>
 
-                {showSearchSuggestions && searchSuggestions.length > 0 && (
+                {showSearchSuggestions && searchQuery.trim().length > 0 && (
                   <div className="absolute top-full mt-3 w-full bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-800 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
                     <div className="p-2">
-                      {searchSuggestions
-                        .filter((suggestion) =>
-                          suggestion.text
-                            .toLowerCase()
-                            .includes(searchQuery.toLowerCase())
-                        )
-                        .map((suggestion) => (
+                      {isSearchLoading && (
+                        <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
+                          Searching users...
+                        </div>
+                      )}
+
+                      {!isSearchLoading && searchResults.length === 0 && (
+                        <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
+                          No users found
+                        </div>
+                      )}
+
+                      {!isSearchLoading &&
+                        searchResults.map((user) => (
                           <button
-                            key={suggestion.id}
-                            onClick={() => {
-                              setSearchQuery(suggestion.text);
-                              setShowSearchSuggestions(false);
-                            }}
+                            key={user._id}
+                            type="button"
+                            onClick={() => selectSearchUser(user._id)}
                             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 text-left transition-colors group/item"
                           >
-                            <div className="text-gray-400 group-hover/item:text-blue-500 transition-colors">
-                              {suggestion.icon}
+                            <div className="w-8 h-8 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-blue-500 flex items-center justify-center text-white text-xs font-semibold">
+                              {user.avatar ? (
+                                <Image
+                                  src={user.avatar}
+                                  alt={user.name}
+                                  width={32}
+                                  height={32}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <span>{user.name?.[0]?.toUpperCase() ?? "U"}</span>
+                              )}
                             </div>
-                            <div className="flex-1">
-                              <div className="font-medium text-sm text-gray-900 dark:text-white">
-                                {suggestion.text}
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-sm text-gray-900 dark:text-white truncate">
+                                {user.name}
                               </div>
-                              <div className="text-[10px] text-gray-500 dark:text-gray-400">
-                                {suggestion.category}
+                              <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">
+                                ID: {user.id}
                               </div>
                             </div>
                           </button>
@@ -768,7 +822,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
               {/* Mobile Search */}
               {showSearch && (
                 <div className="mb-6">
-                  <form onSubmit={handleSearch} className="relative">
+                  <form onSubmit={handleMobileSearchSubmit} className="relative">
                     <Search
                       className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
                       size={18}
@@ -778,7 +832,10 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                       placeholder="Search..."
                       className="w-full pl-10 pr-4 py-3 bg-gray-100 dark:bg-gray-900 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white border border-transparent dark:border-gray-800"
                       value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        setShowSearchSuggestions(e.target.value.length > 0);
+                      }}
                     />
                   </form>
                 </div>

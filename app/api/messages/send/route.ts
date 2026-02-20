@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/lib/authOptions";
  import { getNativeDb } from "@/app/lib/mongodb";
 import mongoose from "mongoose";
+import { encryptChatText } from "@/app/lib/chatCrypto";
 const { Types } = mongoose;
 const { ObjectId } = Types;
 
@@ -14,7 +15,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { text, receiverId } = await req.json();
+    const body = await req.json();
+    const text = (body?.text ?? body?.content ?? "").toString();
+    const receiverId = body?.receiverId as string;
 
     if (!text?.trim() || !receiverId) {
       return NextResponse.json(
@@ -51,10 +54,11 @@ export async function POST(req: NextRequest) {
     }
 
     const createdAt = new Date();
+    const encrypted = encryptChatText(text.trim());
 
     const result = await db.collection("messages").insertOne({
       conversationId: conversation._id,
-      text,
+      ...encrypted,
       senderId: senderObjectId,
       receiverId: receiverObjectId,
       createdAt,
@@ -66,7 +70,7 @@ export async function POST(req: NextRequest) {
       message: {
         id: result.insertedId.toString(),
         conversationId: conversation._id.toString(),
-        text,
+        text: text.trim(),
         senderId: session.user.id,
         receiverId,
         timestamp: createdAt.toISOString(),

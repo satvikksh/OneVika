@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/lib/authOptions";
 import { dbConnect } from "@/app/lib/mongodb";
 import mongoose from "mongoose";
+import { decryptChatText } from "@/app/lib/chatCrypto";
 
 const { ObjectId } = mongoose.Types;
 
@@ -71,15 +72,33 @@ export async function GET(
       .toArray();
 
     /* ---------------- FORMAT RESPONSE ---------------- */
-    const formatted = messages.map((m: any) => ({
-      id: m._id.toString(),
-      text: m.text,
-      senderId: m.senderId.toString(),
-      receiverId: m.receiverId.toString(),
-      conversationId: m.conversationId.toString(),
-      timestamp: m.createdAt,
-      read: Boolean(m.read),
-    }));
+    const formatted = messages.map((m: any) => {
+      let text = m.text || "";
+
+      // New encrypted storage path
+      if (!text && m.textCipher && m.textIv && m.textTag) {
+        try {
+          text = decryptChatText({
+            textCipher: m.textCipher,
+            textIv: m.textIv,
+            textTag: m.textTag,
+          });
+        } catch (e) {
+          console.error("MESSAGE DECRYPT ERROR:", e);
+          text = "[Unable to decrypt message]";
+        }
+      }
+
+      return {
+        id: m._id.toString(),
+        text,
+        senderId: m.senderId.toString(),
+        receiverId: m.receiverId.toString(),
+        conversationId: m.conversationId.toString(),
+        timestamp: m.createdAt,
+        read: Boolean(m.read),
+      };
+    });
 
     return NextResponse.json({ messages: formatted });
   } catch (error) {

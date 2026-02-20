@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useSession } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import { useSocket } from "../context/SocketContext";
 import { Message, User } from "../types/socket";
 import ChatSidebar from "./ChatSidebar";
@@ -130,11 +131,14 @@ let chatPageCache: ChatPageCache | null = null;
 
 export default function ChatPage() {
   const { data: session, status } = useSession();
+  const searchParams = useSearchParams();
   const { 
     isConnected, 
     onlineUsers, 
     messages: socketMessages,
     sendMessage: socketSendMessage,
+    removeMessage,
+    emitMessageDelete,
     joinChat,
     leaveChat,
     markMessageAsRead,
@@ -182,6 +186,7 @@ export default function ChatPage() {
   const textAreaObserverRef = useRef<MutationObserver | null>(null);
   const focusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const loadedMessagesByUserRef = useRef<Set<string>>(new Set());
+  const routeSelectionHandledRef = useRef(false);
 
   /* ---------------------------- DISPATCH FOCUS EVENTS ---------------------------- */
   // Function to dispatch focus event to navbar
@@ -354,7 +359,7 @@ export default function ChatPage() {
     (async () => {
       try {
         setLoadingUsers(true);
-        const res = await fetch("/api/user");
+        const res = await fetch("/api/user/chat");
 
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({}));
@@ -403,6 +408,49 @@ export default function ChatPage() {
       selectedUserId: selectedUser?.id ?? null,
     };
   }, [users, selectedUser?.id]);
+
+  useEffect(() => {
+    const userIdFromRoute = searchParams.get("userId");
+    if (!userIdFromRoute || !session?.user?.id) return;
+    if (routeSelectionHandledRef.current) return;
+    if (!isValidObjectId(userIdFromRoute)) return;
+
+    const existing = users.find((u) => u.id === userIdFromRoute);
+    if (existing) {
+      setSelectedUser(existing);
+      routeSelectionHandledRef.current = true;
+      return;
+    }
+
+    (async () => {
+      try {
+        const res = await fetch(`/api/user/profile/${userIdFromRoute}`, {
+          cache: "no-store",
+        });
+        if (!res.ok) return;
+
+        const data = await res.json();
+        const user = {
+          id: data.id ?? data._id ?? userIdFromRoute,
+          _id: data.id ?? data._id ?? userIdFromRoute,
+          name: data.name ?? "Unknown",
+          email: data.email ?? "",
+          avatar: data.avatar ?? "",
+          isOnline: false,
+          lastSeen: data.lastSeen ?? null,
+        } as User;
+
+        setUsers((prev) => {
+          if (prev.some((u) => u.id === user.id)) return prev;
+          return [user, ...prev];
+        });
+        setSelectedUser(user);
+        routeSelectionHandledRef.current = true;
+      } catch (error) {
+        console.error("Failed to load chat target user:", error);
+      }
+    })();
+  }, [searchParams, users, session?.user?.id]);
 
   /* ------------------------------- JOIN/LEAVE CHAT ROOMS ------------------------------- */
   useEffect(() => {
@@ -590,7 +638,9 @@ export default function ChatPage() {
   /* ---------------------------- DELETE MESSAGE ---------------------------- */
   const handleDeleteMessage = async (message: Message) => {
     try {
-      if (!message.id.startsWith('temp_')) {
+      if (message.id.startsWith('temp_')) {
+        removeMessage(message.id);
+      } else {
         const response = await fetch(`/api/messages/by-message/${message.id}`, {
           method: "DELETE",
           headers: {
@@ -601,6 +651,15 @@ export default function ChatPage() {
         if (!response.ok) {
           const errorData = await response.json() as { error?: string };
           throw new Error(errorData.error || "Failed to delete message");
+        }
+
+        removeMessage(message.id);
+        if (currentUserId) {
+          emitMessageDelete({
+            messageId: message.id,
+            senderId: currentUserId,
+            receiverId: message.receiverId,
+          });
         }
       }
       

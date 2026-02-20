@@ -433,7 +433,7 @@ export default function ChatSidebar({
                         typing...
                       </span>
                     ) : (
-                      user.email || ""
+                     ""
                     )}
                   </p>
                 </div>
