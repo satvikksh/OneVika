@@ -649,6 +649,19 @@ const variants: Variants = {
   }),
 };
 
+type FeedPageCache = {
+  posts: PostType[];
+  page: number;
+  hasMore: boolean;
+  currentPostIndex: number;
+  isVideoPlaying: Record<string, boolean>;
+  isVideoMuted: Record<string, boolean>;
+};
+
+let feedPageCache: FeedPageCache | null = null;
+
+const feedCacheKey = (userId: string) => `orbitbyte:feed-cache:${userId}`;
+
 // --- MAIN FEED PAGE ---
 export default function FeedPage() {
   const { theme } = useTheme();
@@ -656,15 +669,17 @@ export default function FeedPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
 
-  const [posts, setPosts] = useState<PostType[]>([]);
+  const [posts, setPosts] = useState<PostType[]>(() => feedPageCache?.posts ?? []);
   const [loadingPosts, setLoadingPosts] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
-  const [page, setPage] = useState(1);
-  const [initialLoad, setInitialLoad] = useState(true);
+  const [hasMore, setHasMore] = useState(feedPageCache?.hasMore ?? true);
+  const [page, setPage] = useState(feedPageCache?.page ?? 1);
+  const [initialLoad, setInitialLoad] = useState(!feedPageCache);
      
   // Navigation State
-  const [currentPostIndex, setCurrentPostIndex] = useState(0);
+  const [currentPostIndex, setCurrentPostIndex] = useState(
+    feedPageCache?.currentPostIndex ?? 0
+  );
   const [direction, setDirection] = useState(0); // 1 = down/next, -1 = up/prev
 
   // NAVBAR & OPTIONS VISIBILITY STATE
@@ -672,8 +687,12 @@ export default function FeedPage() {
   const [showOptions, setShowOptions] = useState(false);
 
   // Video controls
-  const [isVideoPlaying, setIsVideoPlaying] = useState<Record<string, boolean>>({});
-  const [isVideoMuted, setIsVideoMuted] = useState<Record<string, boolean>>({});
+  const [isVideoPlaying, setIsVideoPlaying] = useState<Record<string, boolean>>(
+    () => feedPageCache?.isVideoPlaying ?? {}
+  );
+  const [isVideoMuted, setIsVideoMuted] = useState<Record<string, boolean>>(
+    () => feedPageCache?.isVideoMuted ?? {}
+  );
   const [doubleTapLike, setDoubleTapLike] = useState<string | null>(null);
 
   // Edit modal state
@@ -727,6 +746,59 @@ export default function FeedPage() {
       router.replace("/login");
     }
   }, [status, router]);
+
+  useEffect(() => {
+    if (status !== "authenticated" || !session?.user?.id) return;
+    if (feedPageCache) return;
+
+    try {
+      const cached = sessionStorage.getItem(feedCacheKey(session.user.id));
+      if (!cached) return;
+
+      const parsed = JSON.parse(cached) as FeedPageCache;
+      if (!parsed?.posts?.length) return;
+
+      feedPageCache = parsed;
+      setPosts(parsed.posts);
+      setPage(parsed.page ?? 1);
+      setHasMore(typeof parsed.hasMore === "boolean" ? parsed.hasMore : true);
+      setCurrentPostIndex(parsed.currentPostIndex ?? 0);
+      setIsVideoPlaying(parsed.isVideoPlaying ?? {});
+      setIsVideoMuted(parsed.isVideoMuted ?? {});
+      setInitialLoad(false);
+    } catch (error) {
+      console.warn("Failed to restore feed cache:", error);
+    }
+  }, [status, session?.user?.id]);
+
+  useEffect(() => {
+    if (!session?.user?.id || posts.length === 0) return;
+
+    const snapshot: FeedPageCache = {
+      posts,
+      page,
+      hasMore,
+      currentPostIndex,
+      isVideoPlaying,
+      isVideoMuted,
+    };
+
+    feedPageCache = snapshot;
+
+    try {
+      sessionStorage.setItem(feedCacheKey(session.user.id), JSON.stringify(snapshot));
+    } catch {
+      // ignore storage quota issues
+    }
+  }, [
+    session?.user?.id,
+    posts,
+    page,
+    hasMore,
+    currentPostIndex,
+    isVideoPlaying,
+    isVideoMuted,
+  ]);
 
   /* ============================
        SCROLL CAROUSEL ON INDEX CHANGE

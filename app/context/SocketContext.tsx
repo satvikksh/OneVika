@@ -150,10 +150,21 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     const socket = socketRef.current;
     if (!socket) return;
 
-    socket.on("receive_message", (msg: Message) => {
-      console.log("📥 receive_message:", msg);
-      upsertMessage(msg);
-    });
+   socket.on("receive_message", (msg: Message) => {
+  console.log("📥 receive_message:", msg);
+
+  upsertMessage(msg);
+
+  // ✅ Only notify if this user is the receiver
+  if (msg.receiverId === userId) {
+    // 🔔 Dispatch global notification event
+    window.dispatchEvent(
+      new CustomEvent("orbitbyte:newMessageNotification", {
+        detail: msg,
+      })
+    );
+  }
+});
 
     socket.on("message_sent", (msg: Message) => {
       upsertMessage(msg);

@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server';
 import { dbConnect } from '../../../lib/mongodb';
 import Story from '../../../models/Story';
+import Notification from '../../../models/Notification';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../lib/auth';
 import cloudinary from '../../../lib/cloudinary';
+import mongoose from "mongoose";
+import { emitRealtimeNotification } from '../../../lib/socketServerEmitter';
 
 export async function POST(req: Request) {
   try {
@@ -55,6 +58,48 @@ export async function POST(req: Request) {
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // ⏱️ 24h
       viewers: [],
     });
+
+    const db = mongoose.connection.db;
+    if (db) {
+      const followerRows = await db.collection("follows")
+        .find({
+          followingId: new mongoose.Types.ObjectId(session.user.id),
+          status: "active",
+        })
+        .project({ followerId: 1 })
+        .toArray();
+
+      const followers = followerRows
+        .map((row: any) => row.followerId?.toString?.())
+        .filter(Boolean) as string[];
+
+      if (followers.length > 0) {
+        const createdAt = new Date();
+        const notifications = followers.map((followerId) => ({
+          userId: new mongoose.Types.ObjectId(followerId),
+          senderId: new mongoose.Types.ObjectId(session.user.id),
+          type: "story" as const,
+          message: `${session.user.name ?? "Someone"} added a new thought`,
+          isRead: false,
+          createdAt,
+          updatedAt: createdAt,
+        }));
+
+        await Notification.insertMany(notifications, { ordered: false });
+
+        await Promise.all(
+          followers.map((followerId) =>
+            emitRealtimeNotification(followerId, {
+              message: `${session.user.name ?? "Someone"} added a new thought`,
+              senderId: session.user.id,
+              createdAt,
+              type: "story",
+              isRead: false,
+            })
+          )
+        );
+      }
+    }
 
     return NextResponse.json(story, { status: 201 });
   } catch (err) {

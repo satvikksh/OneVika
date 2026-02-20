@@ -202,6 +202,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
 
   // Reset bottom nav when route changes
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setShowBottomNav(true);
     setIsVisible(true);
     if (hideTimeoutRef.current) {
@@ -240,41 +241,6 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
       text: "Recent Conversations",
       category: "Messages",
       icon: <MessageSquare size={14} />,
-    },
-  ];
-
-  const notifications: Notification[] = [
-    {
-      id: 1,
-      title: "Project Update",
-      description: "Your project has been reviewed",
-      time: "2 min ago",
-      read: false,
-      icon: <Zap size={16} />,
-    },
-    {
-      id: 2,
-      title: "New Message",
-      description: "You have a new message from Alex",
-      time: "1 hour ago",
-      read: false,
-      icon: <MessageSquare size={16} />,
-    },
-    {
-      id: 3,
-      title: "Trend Alert",
-      description: "New trends in your industry",
-      time: "3 hours ago",
-      read: true,
-      icon: <TrendingUp size={16} />,
-    },
-    {
-      id: 4,
-      title: "System Update",
-      description: "New features available",
-      time: "1 day ago",
-      read: true,
-      icon: <Settings size={16} />,
     },
   ];
 
@@ -627,7 +593,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                         </button>
                       </div>
                     </div>
-                    <div className="max-h-[28rem] overflow-y-auto custom-scrollbar">
+                    {/* <div className="max-h-[28rem] overflow-y-auto custom-scrollbar">
                       {notifications.map((notification) => (
                         <div
                           key={notification.id}
@@ -663,7 +629,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                           </div>
                         </div>
                       ))}
-                    </div>
+                    </div> */}
                     <Link
                       href="/notifications"
                       className="block p-3 text-center text-xs font-medium text-gray-500 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-t border-gray-100 dark:border-gray-800"

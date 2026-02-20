@@ -35,6 +35,7 @@ import {
 import { useSocket } from "../../context/SocketContext";
 import { useSession } from "next-auth/react";
 
+
 // ---------- INTERFACES ----------
 interface UserProfile {
   id: string;
@@ -187,58 +188,66 @@ export default function UserProfilePage() {
   }, [userId]);
 
   // ---------- FOLLOW TOGGLE ----------
-  const handleFollowToggle = async () => {
-    if (!session || !user) return;
+ const handleFollowToggle = async () => {
+  if (!session || !user) return;
 
-    setFollowLoading(true);
-    // Optimistic update
+  const wasFollowing = user.isFollowing; // store original state
+
+  setFollowLoading(true);
+
+  // 🔥 Optimistic update
+  setUser((prev) =>
+    prev
+      ? {
+          ...prev,
+          isFollowing: !wasFollowing,
+          followersCount: wasFollowing
+            ? Math.max(0, (prev.followersCount ?? 0) - 1)
+            : (prev.followersCount ?? 0) + 1,
+        }
+      : prev
+  );
+
+  try {
+    const response = await fetch(`/api/user/profile/${userId}/follow`, {
+      method: wasFollowing ? "DELETE" : "POST",
+    });
+
+    if (!response.ok) throw new Error("Failed to update follow status");
+
+    const data = await response.json();
+
+    // ✅ Sync with server truth
     setUser((prev) =>
       prev
         ? {
             ...prev,
-            isFollowing: !prev.isFollowing,
-            followersCount: prev.isFollowing
-              ? Math.max(0, (prev.followersCount ?? 0) - 1)
-              : (prev.followersCount ?? 0) + 1,
+            isFollowing: data.isFollowing,
+            followersCount: data.followersCount,
           }
-        : prev,
+        : prev
     );
 
-    try {
-      const response = await fetch(`/api/user/profile/${userId}/follow`, {
-        method: user.isFollowing ? "DELETE" : "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-      if (!response.ok) throw new Error("Failed to update follow status");
-      const data = await response.json();
-      // Update with server data
-      setUser((prev) =>
-        prev
-          ? {
-              ...prev,
-              isFollowing: data.isFollowing,
-              followersCount: data.followersCount,
-            }
-          : prev,
-      );
-    } catch (err) {
-      console.error("Error toggling follow:", err);
-      // Rollback
-      setUser((prev) =>
-        prev
-          ? {
-              ...prev,
-              isFollowing: !prev.isFollowing,
-              followersCount: prev.isFollowing
-                ? (prev.followersCount ?? 0) + 1
-                : Math.max(0, (prev.followersCount ?? 0) - 1),
-            }
-          : prev,
-      );
-    } finally {
-      setFollowLoading(false);
-    }
-  };
+  } catch (err) {
+    console.error("Error toggling follow:", err);
+
+    // 🔄 Rollback to original state
+    setUser((prev) =>
+      prev
+        ? {
+            ...prev,
+            isFollowing: wasFollowing,
+            followersCount: wasFollowing
+              ? (prev.followersCount ?? 0) + 1
+              : Math.max(0, (prev.followersCount ?? 0) - 1),
+          }
+        : prev
+    );
+  } finally {
+    setFollowLoading(false);
+  }
+};
+
 
   // ---------- MESSAGE / CALL ----------
   const handleSendMessage = () => router.push(`/chat?userId=${userId}`);

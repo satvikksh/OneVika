@@ -31,9 +31,23 @@ io.on("connection", (socket) => {
     socket.join(`user_${userId}`);
   }
 
+  socket.on("join", (joinUserId: string) => {
+    if (typeof joinUserId === "string" && joinUserId.trim()) {
+      socket.join(`user_${joinUserId}`);
+    }
+  });
+
   socket.on("send_message", (message) => {
     io.to(`user_${message.receiverId}`).emit("receive_message", message);
   });
+
+  socket.on(
+    "sendNotification",
+    ({ userId: targetUserId, data }: { userId: string; data: any }) => {
+      if (!targetUserId || !data) return;
+      io.to(`user_${targetUserId}`).emit("receiveNotification", data);
+    }
+  );
 
   socket.on("disconnect", () => {
     console.log("❌ Socket disconnected:", socket.id);

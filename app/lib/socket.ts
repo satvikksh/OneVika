@@ -24,3 +24,5 @@ export const getSocket = () => {
 
   return socket;
 };
+
+export { io };

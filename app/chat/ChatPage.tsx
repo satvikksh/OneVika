@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { useSocket } from "../context/SocketContext";
 import { Message, User } from "../types/socket";
@@ -121,6 +121,13 @@ const normalizeUsers = (users: any[]): User[] =>
     })
     .filter(Boolean) as User[];
 
+type ChatPageCache = {
+  users: User[];
+  selectedUserId: string | null;
+};
+
+let chatPageCache: ChatPageCache | null = null;
+
 export default function ChatPage() {
   const { data: session, status } = useSession();
   const { 
@@ -135,7 +142,7 @@ export default function ChatPage() {
   } = useSocket();
 
   // State
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<User[]>(() => chatPageCache?.users ?? []);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [newMessage, setNewMessage] = useState("");
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
@@ -174,6 +181,7 @@ export default function ChatPage() {
   const chatIdRef = useRef<string | null>(null);
   const textAreaObserverRef = useRef<MutationObserver | null>(null);
   const focusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const loadedMessagesByUserRef = useRef<Set<string>>(new Set());
 
   /* ---------------------------- DISPATCH FOCUS EVENTS ---------------------------- */
   // Function to dispatch focus event to navbar
@@ -336,26 +344,26 @@ export default function ChatPage() {
   useEffect(() => {
     if (status !== "authenticated") return;
 
+    const cachedUsers = chatPageCache?.users ?? [];
+    if (cachedUsers.length > 0) {
+      setUsers(cachedUsers);
+      setLoadingUsers(false);
+      return;
+    }
+
     (async () => {
       try {
         setLoadingUsers(true);
         const res = await fetch("/api/user");
-        
+
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({}));
           throw new Error(errorData.error || "Failed to fetch users");
         }
-        
+
         const data = await res.json();
         const normalized = normalizeUsers(data.users || []);
-        
-        // Update online status based on socket context
-        const updatedUsers = normalized.map(user => ({
-          ...user,
-          isOnline: onlineUsers.includes(user.id)
-        }));
-        
-        setUsers(updatedUsers);
+        setUsers(normalized);
       } catch (error) {
         console.error("Error fetching users:", error);
         setUsers([]);
@@ -363,7 +371,38 @@ export default function ChatPage() {
         setLoadingUsers(false);
       }
     })();
-  }, [status, onlineUsers]);
+  }, [status]);
+
+  useEffect(() => {
+    if (!users.length) return;
+
+    setUsers((prev) =>
+      prev.map((user) => ({
+        ...user,
+        isOnline: onlineUsers.includes(user.id),
+      }))
+    );
+  }, [onlineUsers]);
+
+  useEffect(() => {
+    if (!users.length) return;
+
+    const selectedId = chatPageCache?.selectedUserId;
+    if (!selectedId) return;
+
+    const cachedSelection = users.find((u) => u.id === selectedId) ?? null;
+    if (cachedSelection) {
+      setSelectedUser(cachedSelection);
+    }
+  }, [users]);
+
+  useEffect(() => {
+    if (users.length === 0) return;
+    chatPageCache = {
+      users,
+      selectedUserId: selectedUser?.id ?? null,
+    };
+  }, [users, selectedUser?.id]);
 
   /* ------------------------------- JOIN/LEAVE CHAT ROOMS ------------------------------- */
   useEffect(() => {
@@ -381,47 +420,66 @@ export default function ChatPage() {
   }, [selectedUser?.id, session?.user?.id, joinChat, leaveChat]);
 
   /* ---------------------------- FETCH INITIAL MESSAGES ---------------------------- */
-  const fetchInitialMessages = async (userId: string) => {
-    if (!session?.user?.id) return;
+  const fetchInitialMessages = useCallback(
+    async (userId: string) => {
+      if (!session?.user?.id) return;
 
-    try {
-      setLoadingMessages(true);
+      try {
+        setLoadingMessages(true);
 
-      const res = await fetch(`/api/messages/by-user/${userId}`);
-      const data = await res.json();
+        const res = await fetch(`/api/messages/by-user/${userId}`);
+        const data = await res.json();
 
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to fetch messages");
+        if (!res.ok) {
+          throw new Error(data.error || "Failed to fetch messages");
+        }
+
+        // Push DB MESSAGES INTO SOCKET STATE
+        addMessages(data.messages);
+      } catch (err) {
+        console.error("Fetch initial messages failed:", err);
+      } finally {
+        setLoadingMessages(false);
       }
+    },
+    [session?.user?.id, addMessages]
+  );
 
-      // Push DB MESSAGES INTO SOCKET STATE
-      addMessages(data.messages);
+  useEffect(() => {
+    if (!selectedUser?.id) return;
+    if (loadedMessagesByUserRef.current.has(selectedUser.id)) return;
 
-    } catch (err) {
-      console.error("Fetch initial messages failed:", err);
-    } finally {
-      setLoadingMessages(false);
-    }
-  };
+    loadedMessagesByUserRef.current.add(selectedUser.id);
+    fetchInitialMessages(selectedUser.id);
+  }, [selectedUser?.id, fetchInitialMessages]);
 
   /* ---------------------------- FILTER MESSAGES FOR SELECTED USER ---------------------------- */
   const currentUserId = session?.user?.id;
   
   // Filter messages for the selected user from SocketContext
-  const filteredMessages = socketMessages.filter(msg => {
-    if (!selectedUser || !currentUserId) return false;
+  const filteredMessages = useMemo(
+    () =>
+      socketMessages.filter((msg) => {
+        if (!selectedUser || !currentUserId) return false;
 
-    return (
-      (msg.senderId === currentUserId &&
-       msg.receiverId === selectedUser.id) ||
-      (msg.senderId === selectedUser.id &&
-       msg.receiverId === currentUserId)
-    );
-  });
+        return (
+          (msg.senderId === currentUserId &&
+            msg.receiverId === selectedUser.id) ||
+          (msg.senderId === selectedUser.id &&
+            msg.receiverId === currentUserId)
+        );
+      }),
+    [socketMessages, selectedUser?.id, currentUserId]
+  );
 
   // Sort messages by timestamp
-  const sortedMessages = [...filteredMessages].sort((a, b) => 
-    new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  const sortedMessages = useMemo(
+    () =>
+      [...filteredMessages].sort(
+        (a, b) =>
+          new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      ),
+    [filteredMessages]
   );
 
   /* ---------------------------- MARK MESSAGES AS READ ---------------------------- */

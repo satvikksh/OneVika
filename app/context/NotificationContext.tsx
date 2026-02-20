@@ -1,10 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
-import { useSocket } from "./SocketContext";
 import { useSession } from "next-auth/react";
-import { Message } from "../types/socket";
-import { m } from "framer-motion";
 
 interface NotificationContextType {
   unreadNotifications: number;
@@ -21,25 +18,56 @@ export const NotificationProvider = ({
 }: {
   children: React.ReactNode;
 }) => {
-  const { messages } = useSocket();
   const { data: session } = useSession();
   const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   useEffect(() => {
-    if (!messages || !session?.user?.id) return;
+    if (!session?.user?.id) return;
 
-    // 🔔 NEW MESSAGE ARRIVED
-    // messages.on("new_notification", ({ message }: { message: Message }) => {
-    //   // do NOT count messages sent by yourself
-    //   if (message.senderId !== session.user.id) {
-    //     setUnreadNotifications((prev) => prev + 1);
-    //   }
-    // });
+    let active = true;
+
+    const loadUnread = async () => {
+      try {
+        const res = await fetch(`/api/notifications?userId=${session.user.id}`, {
+          cache: "no-store",
+        });
+
+        if (!res.ok) return;
+
+        const rows = await res.json();
+        if (!active || !Array.isArray(rows)) return;
+
+        const unread = rows.filter((n: any) => !n.isRead).length;
+        setUnreadNotifications(unread);
+      } catch {
+        // ignore initial load failures
+      }
+    };
+
+    loadUnread();
 
     return () => {
-      // messages.off("new_notification");
+      active = false;
     };
-  }, [messages, session?.user?.id]);
+  }, [session?.user?.id]);
+
+  useEffect(() => {
+    const handleRealtimeNotification = () => {
+      setUnreadNotifications((prev) => prev + 1);
+    };
+
+    window.addEventListener(
+      "orbitbyte:newNotification",
+      handleRealtimeNotification as EventListener
+    );
+
+    return () => {
+      window.removeEventListener(
+        "orbitbyte:newNotification",
+        handleRealtimeNotification as EventListener
+      );
+    };
+  }, []);
 
   const clearNotifications = () => setUnreadNotifications(0);
 

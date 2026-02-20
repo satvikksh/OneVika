@@ -3,9 +3,11 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/lib/authOptions";
 import { dbConnect } from "@/app/lib/mongodb";
 import mongoose from "mongoose";
+import Notification from "@/app/models/Notification";
+import { emitRealtimeNotification } from "@/app/lib/socketServerEmitter";
+
 
 const { ObjectId } = mongoose.Types;
-
 export async function POST(
   req: NextRequest,
   context: { params: Promise<{ userId: string }> }
@@ -21,10 +23,7 @@ export async function POST(
     const currentUserId = session.user.id;
 
     if (!ObjectId.isValid(targetUserId) || !ObjectId.isValid(currentUserId)) {
-      return NextResponse.json(
-        { error: "Invalid user ID" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Invalid user ID" }, { status: 400 });
     }
 
     if (targetUserId === currentUserId) {
@@ -37,62 +36,70 @@ export async function POST(
     await dbConnect();
     const db = mongoose.connection.db;
 
-    if (!db) {
-      throw new Error("MongoDB not connected");
-    }
+    if (!db) throw new Error("MongoDB not connected");
 
     const targetUserObjectId = new ObjectId(targetUserId);
     const currentUserObjectId = new ObjectId(currentUserId);
 
-    // Check if target user exists
     const targetUser = await db.collection("users").findOne({
-      _id: targetUserObjectId
+      _id: targetUserObjectId,
     });
 
     if (!targetUser) {
-      return NextResponse.json(
-        { error: "User not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // Check if already following
     const existingFollow = await db.collection("follows").findOne({
       followerId: currentUserObjectId,
-      followingId: targetUserObjectId
+      followingId: targetUserObjectId,
     });
 
     if (existingFollow) {
-      // Update status if previously unfollowed
       await db.collection("follows").updateOne(
         { _id: existingFollow._id },
-        { 
-          $set: { 
+        {
+          $set: {
             status: "active",
-            updatedAt: new Date()
-          } 
+            updatedAt: new Date(),
+          },
         }
       );
     } else {
-      // Create new follow record
       await db.collection("follows").insertOne({
         followerId: currentUserObjectId,
         followingId: targetUserObjectId,
         status: "active",
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       });
     }
 
-    // Get updated counts
+    // ✅ Save notification in DB only
+    const notification = await Notification.create({
+      userId: targetUserObjectId,
+      senderId: currentUserObjectId,
+      type: "follow",
+      message: `${session.user.name} started following you`,
+      isRead: false,
+    });
+
+    await emitRealtimeNotification(targetUserId, {
+      _id: notification._id.toString(),
+      message: notification.message,
+      senderId: currentUserId,
+      createdAt: notification.createdAt,
+      type: "follow",
+      isRead: false,
+    });
+
     const followersCount = await db.collection("follows").countDocuments({
       followingId: targetUserObjectId,
-      status: "active"
+      status: "active",
     });
 
     const followingCount = await db.collection("follows").countDocuments({
       followerId: currentUserObjectId,
-      status: "active"
+      status: "active",
     });
 
     return NextResponse.json({
@@ -100,9 +107,9 @@ export async function POST(
       message: "Followed successfully",
       isFollowing: true,
       followersCount,
-      followingCount
+      followingCount,
+      notification, // return notification for frontend emit
     });
-
   } catch (error) {
     console.error("FOLLOW ERROR:", error);
     return NextResponse.json(
@@ -111,6 +118,8 @@ export async function POST(
     );
   }
 }
+
+
 
 export async function DELETE(
   req: NextRequest,
@@ -183,4 +192,6 @@ export async function DELETE(
       { status: 500 }
     );
   }
+  
+
 }
