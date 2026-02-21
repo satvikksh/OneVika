@@ -3,7 +3,7 @@ import http from "http";
 import { Server } from "socket.io";
 import mongoose from "mongoose";
 import admin from "firebase-admin";
-import User from "./app/models/User"; // adjust path if needed
+import User from "./app/models/User.js"; // adjust path if needed
 
 // 🔥 Initialize Firebase Admin
 if (!admin.apps.length) {
