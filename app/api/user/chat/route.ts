@@ -92,14 +92,109 @@ export async function GET() {
       .sort({ name: 1 })
       .toArray();
 
-    const usersWithStatus = users.map((user: any) => ({
-      _id: user._id.toString(),
-      name: user.name,
-      email: user.email,
-      avatar: user.avatar || user.image,
-      isOnline: false,
-      lastSeen: user.lastSeen ? new Date(user.lastSeen).toISOString() : null,
-    }));
+    const conversationByOtherUserId = new Map<
+      string,
+      { conversationId: any; otherUserId: string }
+    >();
+
+    conversations.forEach((conv: any) => {
+      const participants = Array.isArray(conv.participants)
+        ? conv.participants
+        : [];
+
+      const other = participants.find(
+        (p: any) => p?.toString?.() !== session.user?.id
+      );
+      const otherUserId = other?.toString?.();
+      if (!otherUserId) return;
+
+      conversationByOtherUserId.set(otherUserId, {
+        conversationId: conv._id,
+        otherUserId,
+      });
+    });
+
+    const conversationIds = Array.from(
+      new Set(
+        Array.from(conversationByOtherUserId.values()).map((row) =>
+          row.conversationId?.toString?.()
+        )
+      )
+    )
+      .filter(Boolean)
+      .map((id) => new ObjectId(id as string));
+
+    const lastMessageByConversationId = new Map<string, string>();
+    const unreadBySenderId = new Map<string, number>();
+
+    if (conversationIds.length > 0) {
+      const lastMessages = await db
+        .collection("messages")
+        .aggregate([
+          { $match: { conversationId: { $in: conversationIds } } },
+          { $sort: { createdAt: -1 } },
+          {
+            $group: {
+              _id: "$conversationId",
+              lastMessageAt: { $first: "$createdAt" },
+            },
+          },
+        ])
+        .toArray();
+
+      lastMessages.forEach((row: any) => {
+        const key = row?._id?.toString?.();
+        if (!key || !row.lastMessageAt) return;
+        lastMessageByConversationId.set(
+          key,
+          new Date(row.lastMessageAt).toISOString()
+        );
+      });
+
+      const unreadCounts = await db
+        .collection("messages")
+        .aggregate([
+          {
+            $match: {
+              conversationId: { $in: conversationIds },
+              receiverId: currentUserId,
+              read: { $ne: true },
+            },
+          },
+          {
+            $group: {
+              _id: "$senderId",
+              count: { $sum: 1 },
+            },
+          },
+        ])
+        .toArray();
+
+      unreadCounts.forEach((row: any) => {
+        const senderId = row?._id?.toString?.();
+        if (!senderId) return;
+        unreadBySenderId.set(senderId, Number(row.count) || 0);
+      });
+    }
+
+    const usersWithStatus = users.map((user: any) => {
+      const userId = user._id.toString();
+      const conv = conversationByOtherUserId.get(userId);
+      const conversationId = conv?.conversationId?.toString?.();
+
+      return {
+        _id: user._id.toString(),
+        name: user.name,
+        email: user.email,
+        avatar: user.avatar || user.image,
+        isOnline: false,
+        lastSeen: user.lastSeen ? new Date(user.lastSeen).toISOString() : null,
+        unreadCount: unreadBySenderId.get(userId) ?? 0,
+        lastMessageAt: conversationId
+          ? lastMessageByConversationId.get(conversationId) ?? null
+          : null,
+      };
+    });
 
     return NextResponse.json({ users: usersWithStatus });
   } catch (error) {

@@ -31,13 +31,15 @@ export interface Message {
 }
 
 export interface User {
-  lastSeen(lastSeen: unknown): import("react").ReactNode;
-  isOnline: unknown;
-  avatar: string | StaticImport;
+  lastSeen?: string | null;
+  isOnline?: boolean;
+  avatar?: string | StaticImport;
   email?: string | null;
   id: string;
   name?: string;
   image?: string;
+  unreadCount?: number;
+  lastMessageAt?: string | null;
 }
 
 

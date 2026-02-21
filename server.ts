@@ -136,6 +136,41 @@ io.on("connection", (socket) => {
     }
   });
 
+  socket.on(
+    "delete_message",
+    ({
+      messageId,
+      senderId,
+      receiverId,
+    }: {
+      messageId?: string;
+      senderId?: string;
+      receiverId?: string;
+    }) => {
+      if (!messageId) return;
+
+      if (senderId) {
+        io.to(`user_${senderId}`).emit("message_deleted", { messageId });
+      }
+      if (receiverId) {
+        io.to(`user_${receiverId}`).emit("message_deleted", { messageId });
+      }
+
+      if (!senderId && !receiverId) {
+        io.emit("message_deleted", { messageId });
+      }
+    }
+  );
+
+  socket.on(
+    "mark_as_read",
+    ({ messageId, userId }: { messageId?: string; userId?: string }) => {
+      if (!messageId || !userId) return;
+
+      io.emit("message_read", { messageId, userId });
+    }
+  );
+
   socket.on("disconnect", () => {
     console.log("Socket disconnected:", socket.id);
 

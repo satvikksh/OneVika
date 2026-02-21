@@ -174,6 +174,7 @@ export default function ChatPage() {
   } | null>(null);
   const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
   const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null);
+  const [unreadByUser, setUnreadByUser] = useState<Record<string, number>>({});
 
   // Message status tracking - now tracked locally for UI
   const [messageStatus, setMessageStatus] = useState<Record<string, 'sending' | 'sent' | 'delivered' | 'read'>>({});
@@ -416,6 +417,22 @@ export default function ChatPage() {
   }, [users, selectedUser?.id]);
 
   useEffect(() => {
+    if (!users.length) return;
+
+    setUnreadByUser((prev) => {
+      const next = { ...prev };
+      users.forEach((user) => {
+        if (typeof user.unreadCount === "number") {
+          next[user.id] = user.unreadCount;
+        } else if (!(user.id in next)) {
+          next[user.id] = 0;
+        }
+      });
+      return next;
+    });
+  }, [users]);
+
+  useEffect(() => {
     const userIdFromRoute = searchParams.get("userId");
     if (!userIdFromRoute || !session?.user?.id) return;
     if (routeSelectionHandledRef.current) return;
@@ -549,6 +566,8 @@ export default function ChatPage() {
 
     if (unreadIncoming.length === 0) return;
 
+    setUnreadByUser((prev) => ({ ...prev, [selectedUser.id]: 0 }));
+
     unreadIncoming.forEach((m) => markMessageAsRead(m.id));
 
     fetch(`/api/messages/by-user/${selectedUser.id}/read`, {
@@ -557,6 +576,46 @@ export default function ChatPage() {
       console.error("Failed to mark chat as read:", error);
     });
   }, [sortedMessages, selectedUser, currentUserId, markMessageAsRead]);
+
+  useEffect(() => {
+    const handleRealtimeMessage = (event: Event) => {
+      const detail = (event as CustomEvent<Message>).detail;
+      if (!detail || !currentUserId) return;
+      if (detail.receiverId !== currentUserId) return;
+
+      const senderId = detail.senderId;
+      if (!senderId) return;
+
+      const messageTs = new Date(detail.timestamp).toISOString();
+
+      setUsers((prev) =>
+        prev.map((user) =>
+          user.id === senderId
+            ? { ...user, lastMessageAt: messageTs }
+            : user
+        )
+      );
+
+      if (selectedUser?.id === senderId) return;
+
+      setUnreadByUser((prev) => ({
+        ...prev,
+        [senderId]: (prev[senderId] ?? 0) + 1,
+      }));
+    };
+
+    window.addEventListener(
+      "orbitbyte:newMessageNotification",
+      handleRealtimeMessage as EventListener
+    );
+
+    return () => {
+      window.removeEventListener(
+        "orbitbyte:newMessageNotification",
+        handleRealtimeMessage as EventListener
+      );
+    };
+  }, [currentUserId, selectedUser?.id]);
 
   /* -------------------------------- TYPING -------------------------------- */
   const handleTyping = useCallback(() => {
@@ -828,6 +887,8 @@ export default function ChatPage() {
           console.error("Failed to mark chat as read:", error);
         });
       }
+
+      setUnreadByUser((prev) => ({ ...prev, [user.id]: 0 }));
     }
 
     setSelectedUser(user);
@@ -907,17 +968,9 @@ export default function ChatPage() {
 
   /* ---------------------------- GET UNREAD COUNT ---------------------------- */
   const getUnreadCount = useCallback((userId: string) => {
-    if (!currentUserId) return 0;
     if (selectedUser?.id === userId) return 0;
-    
-    const userMessages = socketMessages.filter(msg => 
-      msg.senderId === userId && 
-      msg.receiverId === currentUserId && 
-      msg.status !== 'read' &&
-      msg.read !== true
-    );
-    return userMessages.length;
-  }, [socketMessages, currentUserId, selectedUser?.id]);
+    return unreadByUser[userId] ?? 0;
+  }, [unreadByUser, selectedUser?.id]);
 
   const usersSortedByRecentMessage = useMemo(() => {
     if (!currentUserId) return users;
@@ -944,11 +997,26 @@ export default function ChatPage() {
     });
 
     return [...users].sort((a, b) => {
-      const aTs = latestByUser.get(a.id) ?? 0;
-      const bTs = latestByUser.get(b.id) ?? 0;
-      return bTs - aTs;
+      const aUnread = unreadByUser[a.id] ?? a.unreadCount ?? 0;
+      const bUnread = unreadByUser[b.id] ?? b.unreadCount ?? 0;
+
+      if (aUnread > 0 && bUnread === 0) return -1;
+      if (bUnread > 0 && aUnread === 0) return 1;
+
+      const aInitialTs = a.lastMessageAt
+        ? new Date(a.lastMessageAt).getTime()
+        : 0;
+      const bInitialTs = b.lastMessageAt
+        ? new Date(b.lastMessageAt).getTime()
+        : 0;
+
+      const aTs = Math.max(latestByUser.get(a.id) ?? 0, aInitialTs);
+      const bTs = Math.max(latestByUser.get(b.id) ?? 0, bInitialTs);
+      if (aTs !== bTs) return bTs - aTs;
+
+      return (a.name ?? "").localeCompare(b.name ?? "");
     });
-  }, [users, socketMessages, currentUserId]);
+  }, [users, socketMessages, currentUserId, unreadByUser]);
 
   // Group consecutive messages from same sender
   const groupedMessages = sortedMessages.reduce((acc, msg, idx) => {
