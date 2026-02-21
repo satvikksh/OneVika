@@ -1,11 +1,29 @@
 import express from "express";
 import http from "http";
 import { Server } from "socket.io";
+import mongoose from "mongoose";
+import admin from "firebase-admin";
+import User from "./app/models/User"; // adjust path if needed
+
+// 🔥 Initialize Firebase Admin
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert({
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+    }),
+  });
+}
+
+// 🔥 Connect MongoDB
+mongoose.connect(process.env.MONGO_URI as string).then(() => {
+  console.log("MongoDB connected");
+});
 
 const app = express();
 const httpServer = http.createServer(app);
 
-// Health check (REQUIRED)
 app.get("/", (_req, res) => {
   res.status(200).send("Socket server running");
 });
@@ -28,67 +46,61 @@ io.on("connection", (socket) => {
 
   if (userId) {
     socket.join(`user_${userId}`);
+
     if (!activeUsers.has(userId)) {
       activeUsers.set(userId, new Set());
     }
+
     activeUsers.get(userId)?.add(socket.id);
+
     io.emit("user_status", { userId, isOnline: true });
     io.emit("online_users", Array.from(activeUsers.keys()));
   }
 
-  socket.on("join", (joinUserId: string) => {
-    if (typeof joinUserId === "string" && joinUserId.trim()) {
-      socket.join(`user_${joinUserId}`);
+  // 🔥 SEND MESSAGE
+  socket.on("send_message", async (message) => {
+    try {
+      // Send real-time socket message
+      io.to(`user_${message.receiverId}`).emit("receive_message", message);
+      io.to(`user_${message.senderId}`).emit("receive_message", message);
+
+      // 🔥 SEND PUSH NOTIFICATION
+      const receiver = await User.findById(message.receiverId);
+
+      if (receiver?.fcmToken) {
+        await admin.messaging().send({
+          token: receiver.fcmToken,
+          notification: {
+            title: "New Message",
+            body: message.content,
+          },
+          webpush: {
+            notification: {
+              icon: "https://orbitbyte.vercel.app/icons/icon-192.png",
+            },
+          },
+        });
+
+        console.log("Push notification sent");
+      }
+
+    } catch (error) {
+      console.error("Push Error:", error);
     }
   });
-
-  socket.on("send_message", (message) => {
-    io.to(`user_${message.receiverId}`).emit("receive_message", message);
-    io.to(`user_${message.senderId}`).emit("receive_message", message);
-  });
-
-  socket.on(
-    "mark_as_read",
-    ({ messageId, userId: readerId }: { messageId: string; userId: string }) => {
-      if (!messageId || !readerId) return;
-      io.emit("message_read", { messageId, userId: readerId });
-    }
-  );
-
-  socket.on(
-    "delete_message",
-    ({
-      messageId,
-      senderId,
-      receiverId,
-    }: {
-      messageId: string;
-      senderId: string;
-      receiverId: string;
-    }) => {
-      if (!messageId || !senderId || !receiverId) return;
-      io.to(`user_${senderId}`).emit("message_deleted", { messageId });
-      io.to(`user_${receiverId}`).emit("message_deleted", { messageId });
-    }
-  );
-
-  socket.on(
-    "sendNotification",
-    ({ userId: targetUserId, data }: { userId: string; data: any }) => {
-      if (!targetUserId || !data) return;
-      io.to(`user_${targetUserId}`).emit("receiveNotification", data);
-    }
-  );
 
   socket.on("disconnect", () => {
     console.log("Socket disconnected:", socket.id);
+
     if (userId && activeUsers.has(userId)) {
       const userSockets = activeUsers.get(userId);
       userSockets?.delete(socket.id);
+
       if (!userSockets || userSockets.size === 0) {
         activeUsers.delete(userId);
         io.emit("user_status", { userId, isOnline: false });
       }
+
       io.emit("online_users", Array.from(activeUsers.keys()));
     }
   });
