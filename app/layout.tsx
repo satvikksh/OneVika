@@ -43,12 +43,27 @@ export default async function RootLayout({
   }
 
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <Script id="theme-init" strategy="beforeInteractive">
+          {`
+            (function () {
+              try {
+                var savedTheme = localStorage.getItem("theme");
+                var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+                var shouldUseDark = savedTheme ? savedTheme === "dark" : prefersDark;
+                document.documentElement.classList.toggle("dark", shouldUseDark);
+              } catch (e) {}
+            })();
+          `}
+        </Script>
+        <link rel="manifest" href="/manifest.json" />
+<meta name="theme-color" content="#7c3aed" />
+<link rel="icon" href="/icons/icon-192.png" />
+      </head>
       <body
         className={`${inter.className} antialiased`}
         style={{
-          backgroundColor: theme.background,
-          color: theme.text,
           ["--card-color" as any]: theme.card,
           ["--accent-color" as any]: theme.accent,
           ["--radius" as any]: theme.radius,

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useTheme } from "../theme-provider";
 import {
   Settings,
   User,
@@ -101,6 +102,8 @@ type NotificationsState = {
 type NotificationType = keyof NotificationsState;
 
 export default function SettingsPage() {
+  const { theme: globalTheme, setTheme: setGlobalTheme } = useTheme();
+
   // User Profile
   const [profile, setProfile] = useState({
     name: "Satvik Kushwaha",
@@ -275,12 +278,21 @@ export default function SettingsPage() {
   // Handle theme change
   const handleThemeChange = (mode: "light" | "dark" | "auto") => {
     setTheme((prev) => ({ ...prev, mode }));
-    if (mode === "dark") {
-      document.documentElement.classList.add("dark");
-    } else if (mode === "light") {
-      document.documentElement.classList.remove("dark");
+
+    if (mode === "auto") {
+      const prefersDark = window.matchMedia(
+        "(prefers-color-scheme: dark)"
+      ).matches;
+      setGlobalTheme(prefersDark ? "dark" : "light");
+      return;
     }
+
+    setGlobalTheme(mode);
   };
+
+  useEffect(() => {
+    setTheme((prev) => ({ ...prev, mode: globalTheme }));
+  }, [globalTheme]);
 
   // Handle notification toggle
   const toggleNotification = (
@@ -341,6 +353,7 @@ export default function SettingsPage() {
       highContrast: false,
       showAnimations: true,
     });
+    setGlobalTheme("dark");
     // ... reset other states as needed
     setShowResetConfirm(false);
   };
@@ -399,7 +412,12 @@ export default function SettingsPage() {
         // Validate and restore settings
         if (settings.profile) setProfile(settings.profile);
         if (settings.feed) setFeed(settings.feed);
-        if (settings.theme) setTheme(settings.theme);
+        if (settings.theme) {
+          setTheme(settings.theme);
+          if (settings.theme.mode === "light" || settings.theme.mode === "dark") {
+            setGlobalTheme(settings.theme.mode);
+          }
+        }
         if (settings.notifications) setNotifications(settings.notifications);
         if (settings.privacy) setPrivacy(settings.privacy);
         if (settings.account) setAccount(settings.account);

@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { useSession, signOut } from "next-auth/react";
+import { useTheme } from "../theme-provider";
 
 // Types
 interface UserSearchResult {
@@ -73,8 +74,8 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
   const router = useRouter();
   const { data: session } = useSession();
   const { avatar, loading } = useUserAvatar();
+  const { theme, toggleTheme } = useTheme();
 
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
@@ -287,21 +288,6 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Theme init
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const saved = localStorage.getItem("theme") as "dark" | "light" | null;
-    const prefersDark = window.matchMedia(
-      "(prefers-color-scheme: dark)"
-    ).matches;
-
-    const resolvedTheme = saved ?? (prefersDark ? "dark" : "light");
-
-    setTheme(resolvedTheme);
-    document.documentElement.classList.toggle("dark", resolvedTheme === "dark");
-  }, []);
-
   // Close dropdowns on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -326,12 +312,9 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
   }, []);
 
   const handleThemeToggle = useCallback(() => {
-    const next = theme === "dark" ? "light" : "dark";
-    setTheme(next);
-    document.documentElement.classList.toggle("dark", next === "dark");
-    localStorage.setItem("theme", next);
+    toggleTheme();
     toggleMode?.();
-  }, [theme, toggleMode]);
+  }, [toggleMode, toggleTheme]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();

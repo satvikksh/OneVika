@@ -7,29 +7,36 @@ type Theme = "light" | "dark";
 
 interface ThemeContextValue {
   theme: Theme;
+  setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
+const STORAGE_KEY = "theme";
+
+function resolveInitialTheme(): Theme {
+  if (typeof window === "undefined") return "light";
+
+  const saved = localStorage.getItem(STORAGE_KEY) as Theme | null;
+  if (saved === "light" || saved === "dark") return saved;
+
+  return window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
+}
 
 /* ------------------------------------------------------------------ */
 /* PROVIDER */
 /* ------------------------------------------------------------------ */
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>("light"); // safe default
+  const [theme, setTheme] = useState<Theme>("light");
 
   /* ---------------- INITIAL LOAD ---------------- */
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const saved = localStorage.getItem("theme") as Theme | null;
-    const prefersDark = window.matchMedia(
-      "(prefers-color-scheme: dark)"
-    ).matches;
-
-    const resolvedTheme: Theme =
-      saved ?? (prefersDark ? "dark" : "light");
+    const resolvedTheme = resolveInitialTheme();
 
     setTheme(resolvedTheme);
     document.documentElement.classList.toggle(
@@ -43,7 +50,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     if (typeof window === "undefined") return;
 
     document.documentElement.classList.toggle("dark", theme === "dark");
-    localStorage.setItem("theme", theme);
+    localStorage.setItem(STORAGE_KEY, theme);
   }, [theme]);
 
   /* ---------------- TOGGLE ---------------- */
@@ -52,7 +59,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   );

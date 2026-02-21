@@ -1,9 +1,16 @@
 import type { NextConfig } from "next";
+import withPWAInit from "next-pwa";
+
+const withPWA = withPWAInit({
+  dest: "public",
+  register: true,
+  skipWaiting: true,
+  disable: process.env.NODE_ENV === "development", // disable in dev mode
+});
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  /* Existing Config */
 
-  // 1. Existing Image Configuration
   images: {
     remotePatterns: [
       {
@@ -13,19 +20,15 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-   turbopack: {},
 
-  // 2. Prevent server-side processing of heavy AI libraries
-  // This fixes issues where Next.js tries to bundle binary files meant for the browser
+  turbopack: {},
+
   serverExternalPackages: [
-    '@tensorflow/tfjs', 
-    '@tensorflow-models/face-landmarks-detection',
-    '@mediapipe/face_mesh' 
+    "@tensorflow/tfjs",
+    "@tensorflow-models/face-landmarks-detection",
+    "@mediapipe/face_mesh",
   ],
 
-  // 3. Webpack Fallbacks for Browser Compatibility
-  // TensorFlow often tries to import Node.js modules (fs, path) which don't exist in the browser.
-  // We tell Webpack to ignore them on the client side.
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.resolve.fallback = {
@@ -40,4 +43,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withPWA(nextConfig);

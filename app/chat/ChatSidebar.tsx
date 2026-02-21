@@ -326,7 +326,7 @@ export default function ChatSidebar({
                         {unreadCount > 99 ? '99+' : unreadCount}
                       </span>
                     )}
-                sho  </button>
+                </button>
                 );
               })
             )}
