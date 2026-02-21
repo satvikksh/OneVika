@@ -20,7 +20,8 @@ export interface IUser extends Document {
   password?: string;
   provider: "credentials" | "google";
   image?: string;
-   fcmToken?: string;
+  fcmToken?: string;
+  fcmTokens?: string[];
 
   isPrivate: boolean;
   cover?: string;
@@ -138,9 +139,13 @@ const UserSchema = new Schema<IUser>(
       default: null,
     },
     fcmToken: {
-  type: String,
-  default: null,
-},
+      type: String,
+      default: null,
+    },
+    fcmTokens: {
+      type: [String],
+      default: [],
+    },
   },
   { timestamps: true }
 );

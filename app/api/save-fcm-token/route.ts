@@ -16,8 +16,10 @@ export async function POST(req: NextRequest) {
     }
 
     const { token } = await req.json();
+    const normalizedToken =
+      typeof token === "string" ? token.trim() : "";
 
-    if (!token) {
+    if (!normalizedToken) {
       return NextResponse.json(
         { error: "Token required" },
         { status: 400 }
@@ -28,7 +30,10 @@ export async function POST(req: NextRequest) {
 
     await User.findByIdAndUpdate(
       session.user.id,
-      { fcmToken: token },
+      {
+        $set: { fcmToken: normalizedToken },
+        $addToSet: { fcmTokens: normalizedToken },
+      },
       { new: true }
     );
 

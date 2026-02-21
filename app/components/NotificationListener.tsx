@@ -24,29 +24,32 @@ export default function NotificationListener() {
   };
 
   useEffect(() => {
-  const setupPush = async () => {
-    const permission = await Notification.requestPermission();
+    const setupPush = async () => {
+      if (typeof window === "undefined") return;
+      if (!("Notification" in window)) return;
+      if (!("serviceWorker" in navigator)) return;
 
-    if (permission === "granted") {
+      const permission =
+        Notification.permission === "granted"
+          ? "granted"
+          : await Notification.requestPermission();
+
+      if (permission !== "granted") return;
+
       const token = await requestFCMToken();
+      if (!token) return;
 
-      if (token) {
-        console.log("FCM Token:", token);
+      await fetch("/api/save-fcm-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+    };
 
-        // Send token to backend & save in DB
-        await fetch("/api/save-fcm-token", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token }),
-        });
-      }
+    if (session?.user?.id) {
+      setupPush();
     }
-  };
-
-  if (session?.user?.id) {
-    setupPush();
-  }
-}, [session]);
+  }, [session?.user?.id]);
 
   useEffect(() => {
     if (!session?.user?.id) return;

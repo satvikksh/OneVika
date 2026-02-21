@@ -19,11 +19,18 @@ export const messaging =
   typeof window !== "undefined" ? getMessaging(app) : null;
 
 export const requestFCMToken = async () => {
-  if (!messaging) return null;
+  if (!messaging || typeof window === "undefined") return null;
+  if (!("serviceWorker" in navigator)) return null;
+  if (!("Notification" in window)) return null;
 
   try {
+    const registration = await navigator.serviceWorker.register(
+      "/firebase-messaging-sw.js"
+    );
+
     const token = await getToken(messaging, {
       vapidKey: "BN6E38PGc6fvgaxX4IKBdxqF8Its2bW3u0NXmXcBh3eeLlccx19Xd8sZrNYC9LWyGY1_zZrOAFL65v820Ryfod8",
+      serviceWorkerRegistration: registration,
     });
 
     return token;

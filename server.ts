@@ -65,25 +65,72 @@ io.on("connection", (socket) => {
       io.to(`user_${message.senderId}`).emit("receive_message", message);
 
       // 🔥 SEND PUSH NOTIFICATION
-      const receiver = await User.findById(message.receiverId);
+      const receiver = await User.findById(message.receiverId).select(
+        "fcmToken fcmTokens"
+      );
 
-      if (receiver?.fcmToken) {
-        await admin.messaging().send({
-          token: receiver.fcmToken,
+      const tokens = Array.from(
+        new Set(
+          [
+            ...(Array.isArray(receiver?.fcmTokens) ? receiver.fcmTokens : []),
+            receiver?.fcmToken,
+          ].filter((token): token is string => Boolean(token))
+        )
+      );
+
+      if (tokens.length > 0) {
+        const response = await admin.messaging().sendEachForMulticast({
+          tokens,
           notification: {
             title: "New Message",
             body: message.content,
           },
           webpush: {
+            headers: {
+              Urgency: "high",
+            },
             notification: {
               icon: "https://orbitbyte.vercel.app/icons/icon-192.png",
+              badge: "https://orbitbyte.vercel.app/icons/icon-192.png",
+              tag: `chat_${message.senderId}`,
+              renotify: true,
             },
+            fcmOptions: {
+              link: "https://orbitbyte.vercel.app/chat",
+            },
+          },
+          data: {
+            type: "message",
+            senderId: String(message.senderId ?? ""),
+            receiverId: String(message.receiverId ?? ""),
+            url: "/chat",
           },
         });
 
-        console.log("Push notification sent");
-      }
+        const invalidTokens = response.responses
+          .map((result, index) => ({ result, token: tokens[index] }))
+          .filter(
+            ({ result }) =>
+              !result.success &&
+              (result.error?.code === "messaging/invalid-registration-token" ||
+                result.error?.code ===
+                  "messaging/registration-token-not-registered")
+          )
+          .map(({ token }) => token);
 
+        if (invalidTokens.length > 0 && receiver?._id) {
+          await User.findByIdAndUpdate(receiver._id, {
+            $pull: { fcmTokens: { $in: invalidTokens } },
+            ...(invalidTokens.includes(receiver.fcmToken)
+              ? { $set: { fcmToken: null } }
+              : {}),
+          });
+        }
+
+        console.log(
+          `Push notifications sent: ${response.successCount}/${tokens.length}`
+        );
+      }
     } catch (error) {
       console.error("Push Error:", error);
     }
