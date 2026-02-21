@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { getSocket } from "@/app/lib/socket";
+import { requestFCMToken } from "@/app/lib/firebase";
 
 export default function NotificationListener() {
   const { data: session } = useSession();
@@ -21,6 +22,31 @@ export default function NotificationListener() {
       })
     );
   };
+
+  useEffect(() => {
+  const setupPush = async () => {
+    const permission = await Notification.requestPermission();
+
+    if (permission === "granted") {
+      const token = await requestFCMToken();
+
+      if (token) {
+        console.log("FCM Token:", token);
+
+        // Send token to backend & save in DB
+        await fetch("/api/save-fcm-token", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token }),
+        });
+      }
+    }
+  };
+
+  if (session?.user?.id) {
+    setupPush();
+  }
+}, [session]);
 
   useEffect(() => {
     if (!session?.user?.id) return;
