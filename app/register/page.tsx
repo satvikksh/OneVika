@@ -6,6 +6,14 @@ import { Sparkles, Mail, User, Lock, Eye, EyeOff } from "lucide-react";
 import { signIn } from "next-auth/react";
 import { FcGoogle } from "react-icons/fc";
 
+type SecurityKey = "favoritePet" | "favoriteColor" | "nickname";
+
+const SECURITY_QUESTIONS: { key: SecurityKey; label: string }[] = [
+  { key: "favoritePet", label: "What is your favorite pet?" },
+  { key: "favoriteColor", label: "What is your favorite color?" },
+  { key: "nickname", label: "What is your nickname?" },
+];
+
 export default function SignupPage() {
   const [showPass, setShowPass] = useState(false);
   const router = useRouter();
@@ -15,20 +23,37 @@ export default function SignupPage() {
     email: "",
     password: "",
   });
+  const [securityQuestion, setSecurityQuestion] = useState<SecurityKey | "">("");
+  const [securityAnswer, setSecurityAnswer] = useState("");
+  const [error, setError] = useState("");
 
   // 🔹 Normal email/password signup
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setError("");
+
+    if (!securityQuestion || !securityAnswer.trim()) {
+      setError("Please select 1 security question and enter the answer.");
+      return;
+    }
 
     const req = await fetch("/api/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      body: JSON.stringify({
+        ...form,
+        securityQuestion,
+        securityAnswer: securityAnswer.trim(),
+      }),
     });
 
     if (req.status === 201) {
       router.push("/login");
+      return;
     }
+
+    const data = await req.json().catch(() => null);
+    setError(data?.error || "Signup failed");
   }
 
   // 🔹 Google signup/login (same thing)
@@ -89,6 +114,36 @@ export default function SignupPage() {
               {showPass ? <EyeOff /> : <Eye />}
             </button>
           </div>
+
+          <div className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+            Security Question
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-3">
+            <select
+              required
+              className="bg-transparent outline-none"
+              value={securityQuestion}
+              onChange={(e) => setSecurityQuestion(e.target.value as SecurityKey)}
+            >
+              <option value="">Select security question</option>
+              {SECURITY_QUESTIONS.map((question) => (
+                <option key={question.key} value={question.key}>
+                  {question.label}
+                </option>
+              ))}
+            </select>
+
+            <input
+              required
+              placeholder="Enter answer"
+              className="bg-transparent outline-none"
+              value={securityAnswer}
+              onChange={(e) => setSecurityAnswer(e.target.value)}
+            />
+          </div>
+
+          {error && <p className="text-sm text-red-600">{error}</p>}
 
           <button
             type="submit"

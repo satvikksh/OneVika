@@ -18,6 +18,9 @@ export interface IUser extends Document {
   name: string;
   email: string;
   password?: string;
+  favoritePet?: string;
+  favoriteColor?: string;
+  nickname?: string;
   provider: "credentials" | "google";
   image?: string;
   fcmToken?: string;
@@ -66,6 +69,21 @@ const UserSchema = new Schema<IUser>(
     password: {
       type: String,
       required: false,
+    },
+    favoritePet: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    favoriteColor: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    nickname: {
+      type: String,
+      default: "",
+      trim: true,
     },
 
     provider: {

@@ -6,10 +6,22 @@ import { dbConnect } from "../../lib/mongodb";
 export async function POST(req: Request) {
   try {
     await dbConnect();
-    const { name, email, password } = await req.json();
+    const { name, email, password, securityQuestion, securityAnswer } =
+      await req.json();
+    const validQuestions = new Set(["favoritePet", "favoriteColor", "nickname"]);
 
-    if (!name || !email || !password) {
+    if (
+      !name ||
+      !email ||
+      !password ||
+      !securityQuestion ||
+      !securityAnswer
+    ) {
       return NextResponse.json({ error: "All fields required" }, { status: 400 });
+    }
+
+    if (!validQuestions.has(String(securityQuestion))) {
+      return NextResponse.json({ error: "Invalid security question" }, { status: 400 });
     }
 
     // Check existing user
@@ -29,6 +41,18 @@ export async function POST(req: Request) {
       name,
       email,
       password: hashedPassword,
+      favoritePet:
+        securityQuestion === "favoritePet"
+          ? String(securityAnswer).trim().toLowerCase()
+          : "",
+      favoriteColor:
+        securityQuestion === "favoriteColor"
+          ? String(securityAnswer).trim().toLowerCase()
+          : "",
+      nickname:
+        securityQuestion === "nickname"
+          ? String(securityAnswer).trim().toLowerCase()
+          : "",
     });
 
     return NextResponse.json(
