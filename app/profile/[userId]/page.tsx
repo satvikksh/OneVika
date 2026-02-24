@@ -31,6 +31,7 @@ import {
   Trash2,
   Briefcase,
   GraduationCap,
+  Settings,
 } from "lucide-react";
 import { useSocket } from "../../context/SocketContext";
 import { useSession } from "next-auth/react";
@@ -483,11 +484,11 @@ export default function UserProfilePage() {
 
             {isCurrentUser && !isEditingProfile && (
               <button
-                onClick={startEditingProfile}
+                onClick={() => router.push("/settings")}
                 className="px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-xl transition-colors flex items-center gap-2"
               >
-                <Edit size={16} />
-                Edit Profile
+                <Settings size={16} />
+                Settings
               </button>
             )}
           </div>
@@ -633,7 +634,7 @@ export default function UserProfilePage() {
                 // ----- INLINE PROFILE EDIT FORM -----
                 <div className="space-y-4">
                   <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-                    Edit Profile
+                    Profile Details
                   </h3>
                   <div className="space-y-3">
                     <input

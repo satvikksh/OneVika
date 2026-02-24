@@ -36,14 +36,17 @@ export default function LoginPage() {
     const res = await signIn("credentials", {
       email,
       password,
-      redirect: true,        // 🔥 FIX
-      callbackUrl: "/",  // 🔥 FIX
+      redirect: false,
+      callbackUrl: "/",
     });
 
     if (res?.error) {
       setLoading(false);
       setError("Invalid email or password");
+      return;
     }
+
+    router.push(res?.url || "/");
   };
 
   /* ✅ Google login already correct */
@@ -51,9 +54,19 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
 
-    await signIn("google", {
+    const res = await signIn("google", {
+      redirect: false,
       callbackUrl: "/",
+      prompt: "select_account",
     });
+
+    if (res?.error) {
+      setLoading(false);
+      setError("Google login failed. Please try again.");
+      return;
+    }
+
+    router.push(res?.url || "/");
   };
 
   return (

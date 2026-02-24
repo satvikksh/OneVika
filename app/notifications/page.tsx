@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 
 export default function NotificationsPage() {
   const { data: session } = useSession();
+  const router = useRouter();
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -13,9 +15,7 @@ export default function NotificationsPage() {
 
     const fetchNotifications = async () => {
       try {
-        const res = await fetch(
-          `/api/notifications?userId=${session.user.id}`
-        );
+        const res = await fetch(`/api/notifications`, { cache: "no-store" });
         const data = await res.json();
 
         if (Array.isArray(data)) {
@@ -35,27 +35,80 @@ export default function NotificationsPage() {
     fetchNotifications();
   }, [session]);
 
+  const getSenderId = (notification: any) => {
+    const sender = notification?.senderId;
+    if (!sender) return "";
+    if (typeof sender === "string") return sender;
+    return sender?._id || sender?.id || "";
+  };
+
+  const resolveNotificationUrl = (notification: any) => {
+    const senderId = getSenderId(notification);
+
+    if (notification?.type === "follow" && senderId) {
+      return `/profile/${senderId}`;
+    }
+
+    if (notification?.type === "story") {
+      return "/feed";
+    }
+
+    if (notification?.type === "thought") {
+      return "/neural-nexus";
+    }
+
+    if (notification?.type === "message") {
+      return senderId ? `/chat?userId=${senderId}` : "/chat";
+    }
+
+    return "/notifications";
+  };
+
+  const handleNotificationClick = async (notification: any) => {
+    const targetUrl = resolveNotificationUrl(notification);
+
+    try {
+      await fetch(`/api/notifications/${notification._id}`, {
+        method: "DELETE",
+      });
+
+      setNotifications((prev) => prev.filter((n) => n._id !== notification._id));
+      window.dispatchEvent(
+        new CustomEvent("orbitbyte:notificationRemoved", { detail: { count: 1 } })
+      );
+    } catch {
+      // still navigate even if delete fails
+    }
+
+    if (targetUrl !== "/notifications") {
+      router.push(targetUrl);
+    }
+  };
+
   return (
     <div className="max-w-xl mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Notifications</h1>
+      <h1 className="text-2xl font-bold mb-4 text-black dark:text-white">Notifications</h1>
 
       {loading ? (
-        <p>Loading...</p>
+        <p className="text-gray-700 dark:text-gray-300">Loading...</p>
       ) : notifications.length === 0 ? (
-        <p>No notifications yet</p>
+        <p className="text-gray-700 dark:text-gray-300">No notifications yet</p>
       ) : (
         notifications.map((n) => (
-          <div
+          <button
             key={n._id}
+            onClick={() => handleNotificationClick(n)}
             className={`p-3 mb-3 rounded-lg shadow ${
-              n.isRead ? "bg-gray-100" : "bg-blue-50"
-            }`}
+              n.isRead
+                ? "bg-gray-100 dark:bg-gray-800"
+                : "bg-blue-50 dark:bg-blue-950/40"
+            } text-left w-full hover:opacity-90 transition-opacity border border-gray-200 dark:border-gray-700`}
           >
-            <p className="font-medium">{n.message}</p>
-            <p className="text-xs text-gray-500">
+            <p className="font-medium text-black dark:text-white">{n.message}</p>
+            <p className="text-xs text-gray-600 dark:text-gray-300">
               {new Date(n.createdAt).toLocaleString()}
             </p>
-          </div>
+          </button>
         ))
       )}
     </div>

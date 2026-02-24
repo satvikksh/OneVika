@@ -3,7 +3,7 @@ import { dbConnect } from '../../../lib/mongodb';
 import Story from '../../../models/Story';
 import Notification from '../../../models/Notification';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '../../../lib/auth';
+import { authOptions } from '../../../lib/authOptions';
 import cloudinary from '../../../lib/cloudinary';
 import mongoose from "mongoose";
 import { emitRealtimeNotification } from '../../../lib/socketServerEmitter';
@@ -75,11 +75,12 @@ export async function POST(req: Request) {
 
       if (followers.length > 0) {
         const createdAt = new Date();
+        const storyMessage = `${session.user.name ?? "Someone"} added a new story`;
         const notifications = followers.map((followerId) => ({
           userId: new mongoose.Types.ObjectId(followerId),
           senderId: new mongoose.Types.ObjectId(session.user.id),
           type: "story" as const,
-          message: `${session.user.name ?? "Someone"} added a new thought`,
+          message: storyMessage,
           isRead: false,
           createdAt,
           updatedAt: createdAt,
@@ -90,8 +91,10 @@ export async function POST(req: Request) {
         await Promise.all(
           followers.map((followerId) =>
             emitRealtimeNotification(followerId, {
-              message: `${session.user.name ?? "Someone"} added a new thought`,
+              title: "New Story",
+              message: storyMessage,
               senderId: session.user.id,
+              url: "/feed",
               createdAt,
               type: "story",
               isRead: false,

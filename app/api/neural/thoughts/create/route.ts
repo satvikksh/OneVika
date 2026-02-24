@@ -53,8 +53,10 @@ export async function POST(req: Request) {
       await Promise.all(
         followers.map((followerId) =>
           emitRealtimeNotification(followerId, {
+            title: "New Thought",
             message,
             senderId: session.user.id,
+            url: "/neural-nexus",
             createdAt,
             type: "thought",
             isRead: false,

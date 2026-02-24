@@ -85,8 +85,10 @@ export async function POST(
 
     await emitRealtimeNotification(targetUserId, {
       _id: notification._id.toString(),
+      title: "New Follower",
       message: notification.message,
       senderId: currentUserId,
+      url: `/profile/${currentUserId}`,
       createdAt: notification.createdAt,
       type: "follow",
       isRead: false,

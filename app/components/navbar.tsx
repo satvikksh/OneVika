@@ -84,7 +84,8 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
   const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
   const [searchResults, setSearchResults] = useState<UserSearchResult[]>([]);
   const [isSearchLoading, setIsSearchLoading] = useState(false);
-  const { unreadNotifications } = useNotifications();
+  const { unreadNotifications, unreadMessages, clearMessages } =
+    useNotifications();
 
   // State to track if chat text area is focused
   const [isChatTextAreaFocused, setIsChatTextAreaFocused] = useState(false);
@@ -385,6 +386,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
   };
 
   const handleChatClick = () => {
+    clearMessages();
     router.push("/chat");
     setIsMobileMenuOpen(false);
   };
@@ -585,9 +587,9 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                 aria-label="Chat"
               >
                 <MessageSquare size={20} />
-                {unreadNotifications > 0 && (
+                {unreadMessages > 0 && (
                   <span className="absolute top-0 right-0 min-w-[18px] h-[18px] px-1 bg-green-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-sm border-2 border-white dark:border-gray-950">
-                    {unreadNotifications}
+                    {unreadMessages}
                   </span>
                 )}
               </button>
@@ -605,7 +607,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
             {showNotifications && session?.user && (
               <div className="relative" ref={notificationsRef}>
                 <button
-                  onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                  onClick={handleNotificationClick}
                   className="p-2.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 relative transition-all hover:scale-105 active:scale-95 text-gray-600 dark:text-gray-300"
                   aria-label="Notifications"
                 >
@@ -889,6 +891,27 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                         className="text-gray-300 dark:text-gray-600"
                       />
                     </button>
+                  )}
+
+                  {session?.user && (
+                    <Link
+                      href="/settings"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className={`flex items-center justify-between px-4 py-3.5 rounded-2xl transition-all ${
+                        pathname === "/settings"
+                          ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400"
+                          : "hover:bg-gray-50 dark:hover:bg-gray-900 text-gray-700 dark:text-gray-300"
+                      }`}
+                    >
+                      <div className="flex items-center gap-4">
+                        <Settings size={18} />
+                        <span className="font-medium">Settings</span>
+                      </div>
+                      <ChevronRight
+                        size={16}
+                        className="text-gray-300 dark:text-gray-600"
+                      />
+                    </Link>
                   )}
                   
                   {navItems.map((item) => (

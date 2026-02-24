@@ -35,6 +35,7 @@ import {
   GraduationCap,
   MessageSquare,
   ChevronRight,
+  Settings,
 } from "lucide-react";
 import { useSocket } from "../context/SocketContext";
 
@@ -246,8 +247,8 @@ if (postsResponse.ok) {
   }, [status, profileUsername, session, router, isRedirecting, pathname]);
 
   // ---------- HANDLERS ----------
-  const handleEditProfile = () => {
-    router.push("/profile/edit");
+  const handleOpenSettings = () => {
+    router.push("/settings");
   };
 
   const handleViewFollowers = () => {
@@ -442,10 +443,13 @@ if (postsResponse.ok) {
             </div>
             {isCurrentUser ? (
               <button
-                onClick={handleEditProfile}
+                onClick={handleOpenSettings}
                 className="px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-xl transition-colors"
               >
-                {/* Edit Profile - hidden, we redirect anyway */}
+                <span className="inline-flex items-center gap-2">
+                  <Settings size={16} />
+                  Settings
+                </span>
               </button>
             ) : (
               <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl">
@@ -540,11 +544,11 @@ if (postsResponse.ok) {
                 <div className="w-full mb-6">
                   {isCurrentUser ? (
                     <button
-                      onClick={handleEditProfile}
+                      onClick={handleOpenSettings}
                       className="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-600 text-white rounded-xl hover:from-blue-700 hover:to-blue-700 transition-all duration-200 font-medium flex items-center justify-center gap-2 active:scale-[0.98]"
                     >
-                      <Edit size={18} />
-                      Edit Profile
+                      <Settings size={18} />
+                      Settings
                     </button>
                   ) : (
                     <div className="flex flex-col gap-3">
@@ -749,10 +753,10 @@ if (postsResponse.ok) {
                 </h2>
                 {isCurrentUser && (
                   <button
-                    onClick={handleEditProfile}
+                    onClick={handleOpenSettings}
                     className="px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-xl transition-colors"
                   >
-                    Edit Bio
+                    Settings
                   </button>
                 )}
               </div>

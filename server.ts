@@ -137,6 +137,120 @@ io.on("connection", (socket) => {
   });
 
   socket.on(
+    "sendNotification",
+    async ({
+      userId: targetUserId,
+      data,
+    }: {
+      userId?: string;
+      data?: {
+        _id?: string;
+        type?: string;
+        title?: string;
+        message?: string;
+        senderId?: string;
+        url?: string;
+        createdAt?: string | Date;
+        isRead?: boolean;
+      };
+    }) => {
+      try {
+        if (!targetUserId || !data?.message) return;
+
+        const payload = {
+          _id: data._id,
+          type: data.type ?? "notification",
+          title: data.title,
+          message: data.message,
+          senderId: data.senderId,
+          createdAt: data.createdAt ?? new Date(),
+          isRead: data.isRead ?? false,
+          url: data.url ?? "/notifications",
+        };
+
+        // Realtime event for active sessions
+        io.to(`user_${targetUserId}`).emit("receiveNotification", payload);
+
+        // Push notification for inactive app / background / offline cases
+        const receiver = await User.findById(targetUserId).select(
+          "fcmToken fcmTokens"
+        );
+
+        const tokens = Array.from(
+          new Set(
+            [
+              ...(Array.isArray(receiver?.fcmTokens) ? receiver.fcmTokens : []),
+              receiver?.fcmToken,
+            ].filter((token): token is string => Boolean(token))
+          )
+        );
+
+        if (tokens.length === 0) return;
+
+        const pushTitle =
+          payload.title ||
+          (payload.type === "follow"
+            ? "New Follower"
+            : payload.type === "story"
+            ? "New Story"
+            : payload.type === "thought"
+            ? "New Thought"
+            : "New Notification");
+
+        const response = await admin.messaging().sendEachForMulticast({
+          tokens,
+          notification: {
+            title: pushTitle,
+            body: payload.message,
+          },
+          webpush: {
+            headers: {
+              Urgency: "high",
+            },
+            notification: {
+              icon: "https://orbitbyte.vercel.app/icons/icon-192.png",
+              badge: "https://orbitbyte.vercel.app/icons/icon-192.png",
+              tag: `${payload.type}_${payload.senderId ?? "system"}`,
+              renotify: true,
+            },
+            fcmOptions: {
+              link: `https://orbitbyte.vercel.app${payload.url ?? "/notifications"}`,
+            },
+          },
+          data: {
+            type: String(payload.type ?? "notification"),
+            senderId: String(payload.senderId ?? ""),
+            receiverId: String(targetUserId),
+            url: String(payload.url ?? "/notifications"),
+          },
+        });
+
+        const invalidTokens = response.responses
+          .map((result, index) => ({ result, token: tokens[index] }))
+          .filter(
+            ({ result }) =>
+              !result.success &&
+              (result.error?.code === "messaging/invalid-registration-token" ||
+                result.error?.code ===
+                  "messaging/registration-token-not-registered")
+          )
+          .map(({ token }) => token);
+
+        if (invalidTokens.length > 0 && receiver?._id) {
+          await User.findByIdAndUpdate(receiver._id, {
+            $pull: { fcmTokens: { $in: invalidTokens } },
+            ...(receiver.fcmToken && invalidTokens.includes(receiver.fcmToken)
+              ? { $set: { fcmToken: null } }
+              : {}),
+          });
+        }
+      } catch (error) {
+        console.error("sendNotification error:", error);
+      }
+    }
+  );
+
+  socket.on(
     "delete_message",
     ({
       messageId,

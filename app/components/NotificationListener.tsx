@@ -103,8 +103,6 @@ export default function NotificationListener() {
           detail: payload,
         })
       );
-
-      broadcastNotification(payload);
     };
 
     window.addEventListener(

@@ -2,9 +2,11 @@ import { io } from "socket.io-client";
 
 type NotificationPayload = {
   _id?: string;
+  title?: string;
   type?: string;
   message: string;
   senderId?: string;
+  url?: string;
   createdAt?: Date | string;
   isRead?: boolean;
 };

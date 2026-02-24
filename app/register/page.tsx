@@ -26,6 +26,7 @@ export default function SignupPage() {
   const [securityQuestion, setSecurityQuestion] = useState<SecurityKey | "">("");
   const [securityAnswer, setSecurityAnswer] = useState("");
   const [error, setError] = useState("");
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   // 🔹 Normal email/password signup
   async function handleSubmit(e: React.FormEvent) {
@@ -58,9 +59,22 @@ export default function SignupPage() {
 
   // 🔹 Google signup/login (same thing)
   const handleGoogleRegister = async () => {
-    await signIn("google", {
-      callbackUrl: "/feed",
+    setError("");
+    setGoogleLoading(true);
+
+    const res = await signIn("google", {
+      redirect: false,
+      callbackUrl: "/",
+      prompt: "select_account",
     });
+
+    if (res?.error) {
+      setGoogleLoading(false);
+      setError("Google signup failed. Please try again.");
+      return;
+    }
+
+    router.push(res?.url || "/");
   };
 
   return (
@@ -164,12 +178,13 @@ export default function SignupPage() {
         <button
           type="button"
           onClick={handleGoogleRegister}
+          disabled={googleLoading}
           className="w-full flex items-center justify-center gap-3 py-3
           bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700
-          rounded-xl font-semibold hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+          rounded-xl font-semibold hover:bg-gray-100 dark:hover:bg-gray-700 transition disabled:opacity-60"
         >
           <FcGoogle className="w-5 h-5" />
-          Continue with Google
+          {googleLoading ? "Connecting..." : "Continue with Google"}
         </button>
 
         <p className="text-center mt-4 text-gray-600 dark:text-gray-400">
