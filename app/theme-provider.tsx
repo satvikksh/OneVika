@@ -30,20 +30,7 @@ function resolveInitialTheme(): Theme {
 /* ------------------------------------------------------------------ */
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>("light");
-
-  /* ---------------- INITIAL LOAD ---------------- */
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const resolvedTheme = resolveInitialTheme();
-
-    setTheme(resolvedTheme);
-    document.documentElement.classList.toggle(
-      "dark",
-      resolvedTheme === "dark"
-    );
-  }, []);
+  const [theme, setTheme] = useState<Theme>(resolveInitialTheme);
 
   /* ---------------- APPLY THEME (SINGLE SOURCE) ---------------- */
   useEffect(() => {

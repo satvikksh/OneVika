@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Message } from "../types/socket";
 import {
   Reply,
@@ -13,21 +13,15 @@ import {
   Edit,
   Bookmark,
   Archive,
-  Clock,
   Share2,
   Download,
   User,
-  Eye,
-  EyeOff,
   CheckCircle,
-  XCircle,
   Link,
-  MoreHorizontal,
   X,
   ChevronRight,
   Check,
   BookOpen,
-  AlertCircle,
   MessageSquare,
 } from "lucide-react";
 
@@ -39,6 +33,18 @@ interface ContextMenuProps {
   isCurrentUser: boolean;
   isMobile?: boolean;
   className?: string;
+}
+
+interface MenuItem {
+  id: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  label: string;
+  description: string;
+  color: string;
+  bgColor: string;
+  action: string;
+  hasSubMenu?: boolean;
+  danger?: boolean;
 }
 
 const ContextMenu: React.FC<ContextMenuProps> = ({
@@ -54,6 +60,13 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
   const [isAnimating, setIsAnimating] = useState(true);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [showSubMenu, setShowSubMenu] = useState<string | null>(null);
+
+  const handleClose = useCallback(() => {
+    setIsAnimating(false);
+    setTimeout(() => {
+      onClose();
+    }, 200);
+  }, [onClose]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent | TouchEvent) => {
@@ -88,14 +101,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
         document.body.style.overflow = '';
       }
     };
-  }, [isMobile]);
-
-  const handleClose = () => {
-    setIsAnimating(false);
-    setTimeout(() => {
-      onClose();
-    }, 200);
-  };
+  }, [isMobile, handleClose]);
 
   const handleAction = (action: string) => {
     onAction(action, message);
@@ -111,7 +117,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
   };
 
   // Base menu items for all users
-  const baseMenuItems = [
+  const baseMenuItems: MenuItem[] = [
     {
       id: "reply",
       icon: Reply,
@@ -143,8 +149,8 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
     {
       id: "pin",
       icon: Pin,
-    //   label: message.isPinned ? "Unpin message" : "Pin message",
-    //   description: message.isPinned ? "Remove from pinned" : "Pin to top",
+      label: "Pin message",
+      description: "Pin this message",
       color: "text-amber-500",
       bgColor: "bg-amber-50 dark:bg-amber-900/20",
       action: "pin"
@@ -152,8 +158,8 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
     {
       id: "star",
       icon: Star,
-    //   label: message.isStarred ? "Unstar message" : "Star message",
-    //   description: message.isStarred ? "Remove from starred" : "Add to starred",
+      label: "Star message",
+      description: "Add to favorites",
       color: "text-yellow-500",
       bgColor: "bg-yellow-50 dark:bg-yellow-900/20",
       action: "star"
@@ -188,7 +194,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
   ];
 
   // Current user specific items
-  const currentUserItems = [
+  const currentUserItems: MenuItem[] = [
     {
       id: "edit",
       icon: Edit,
@@ -211,7 +217,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
   ];
 
   // Other user specific items
-  const otherUserItems = [
+  const otherUserItems: MenuItem[] = [
     {
       id: "report",
       icon: Flag,
@@ -234,7 +240,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
   ];
 
   // Additional utility items
-  const utilityItems = [
+  const utilityItems: MenuItem[] = [
     {
       id: "select",
       icon: CheckCircle,
@@ -407,9 +413,15 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
                 {menuItems.map((item) => (
                   <button
                     key={item.id}
-                    onClick={() => item.hasSubMenu ? setShowSubMenu(item.id) : handleAction(item.action)}
+                    onClick={() =>
+                      item.hasSubMenu
+                        ? setShowSubMenu(item.id)
+                        : item.action === "select"
+                          ? toggleSelect(item.id)
+                          : handleAction(item.action)
+                    }
                     className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors active:scale-98 ${
-                      item.action ? 'hover:text-red-600 dark:hover:text-red-400' : ''
+                      item.danger ? 'hover:text-red-600 dark:hover:text-red-400' : ''
                     }`}
                   >
                     <div className="flex items-center gap-3">
@@ -418,7 +430,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
                       </div>
                       <div className="text-left">
                         <span className={`block text-sm font-medium ${
-                          item.action ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white'
+                          item.danger ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white'
                         }`}>
                           {item.label}
                         </span>
@@ -568,9 +580,15 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
             {menuItems.map((item) => (
               <button
                 key={item.id}
-                onClick={() => item.hasSubMenu ? setShowSubMenu(item.id) : handleAction(item.action)}
+                onClick={() =>
+                  item.hasSubMenu
+                    ? setShowSubMenu(item.id)
+                    : item.action === "select"
+                      ? toggleSelect(item.id)
+                      : handleAction(item.action)
+                }
                 className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-left group ${
-                  item.action ? 'hover:text-red-600 dark:hover:text-red-400' : ''
+                  item.danger ? 'hover:text-red-600 dark:hover:text-red-400' : ''
                 }`}
               >
                 <div className="flex items-center gap-3">
@@ -579,7 +597,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
                   </div>
                   <div>
                     <span className={`text-sm font-medium ${
-                      item.action ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white'
+                      item.danger ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white'
                     }`}>
                       {item.label}
                     </span>
@@ -738,7 +756,6 @@ export const QuickContextMenu: React.FC<Omit<ContextMenuProps, 'isMobile'>> = ({
   position,
   onClose,
   onAction,
-  isCurrentUser,
 }) => {
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -797,13 +814,6 @@ export const MessageInfoPanel: React.FC<{
   message: Message;
   onClose: () => void;
 }> = ({ message, onClose }) => {
-  const statusInfo = {
-    sent: { label: "Sent", color: "text-gray-500" },
-    delivered: { label: "Delivered", color: "text-green-500" },
-    read: { label: "Read", color: "text-blue-500" },
-    failed: { label: "Failed", color: "text-red-500" },
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />

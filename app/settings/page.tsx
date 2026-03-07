@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "../theme-provider";
-import { Settings, Save, RotateCcw, Moon, Sun, Bell, Shield, User, Check, AlertCircle } from "lucide-react";
+import { Settings, Save, RotateCcw, Moon, Sun, Bell, Shield, User, Check, AlertCircle, Camera, Trash2 } from "lucide-react";
+import AvatarCropperModal from "../components/AvatarCropperModal";
 
 type SettingsState = {
   profile: {
@@ -12,6 +13,7 @@ type SettingsState = {
     email: string;
     bio: string;
     isPrivate: boolean;
+    avatar: string;
   };
   feed: {
     enableBlinkScroll: boolean;
@@ -38,6 +40,7 @@ const DEFAULT_SETTINGS: SettingsState = {
     email: "",
     bio: "",
     isPrivate: false,
+    avatar: "",
   },
   feed: {
     enableBlinkScroll: true,
@@ -57,7 +60,7 @@ const DEFAULT_SETTINGS: SettingsState = {
 };
 
 export default function SettingsPage() {
-  const { status } = useSession();
+  const { data: session, status } = useSession();
   const router = useRouter();
   const { theme, setTheme } = useTheme();
 
@@ -67,6 +70,11 @@ export default function SettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [showSaved, setShowSaved] = useState(false);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState("");
+  const [removeAvatar, setRemoveAvatar] = useState(false);
+  const [cropSourceUrl, setCropSourceUrl] = useState("");
+  const [showCropper, setShowCropper] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -93,6 +101,7 @@ export default function SettingsPage() {
                 email: user.email ?? "",
                 bio: user.bio ?? "",
                 isPrivate: Boolean(user.isPrivate),
+                avatar: user.avatar ?? user.image ?? "",
               },
             }));
           }
@@ -121,6 +130,25 @@ export default function SettingsPage() {
     void load();
   }, [status]);
 
+  useEffect(() => {
+    if (!avatarFile) {
+      setAvatarPreview("");
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(avatarFile);
+    setAvatarPreview(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [avatarFile]);
+
+  useEffect(() => {
+    return () => {
+      if (cropSourceUrl) {
+        URL.revokeObjectURL(cropSourceUrl);
+      }
+    };
+  }, [cropSourceUrl]);
+
   const saveSettings = async () => {
     setIsSaving(true);
     setSaveError("");
@@ -130,6 +158,10 @@ export default function SettingsPage() {
       formData.append("name", settings.profile.name);
       formData.append("bio", settings.profile.bio);
       formData.append("isPrivate", String(settings.profile.isPrivate));
+      formData.append("removeAvatar", String(removeAvatar));
+      if (avatarFile) {
+        formData.append("file", avatarFile);
+      }
 
       const profileRes = await fetch("/api/user/update", {
         method: "POST",
@@ -149,8 +181,27 @@ export default function SettingsPage() {
         })
       );
 
+      try {
+        const profileRefreshRes = await fetch("/api/user/profile", {
+          cache: "no-store",
+        });
+        if (profileRefreshRes.ok) {
+          const refreshed = await profileRefreshRes.json();
+          const nextAvatar =
+            refreshed?.user?.avatar ?? refreshed?.user?.image ?? "";
+          setSettings((prev) => ({
+            ...prev,
+            profile: { ...prev.profile, avatar: nextAvatar },
+          }));
+        }
+      } catch {
+        // Keep current avatar state on refresh failure.
+      }
+
       setShowSaved(true);
       setTimeout(() => setShowSaved(false), 2500);
+      if (removeAvatar) setRemoveAvatar(false);
+      setAvatarFile(null);
     } catch {
       setSaveError("Failed to save settings. Please try again.");
     } finally {
@@ -188,6 +239,18 @@ export default function SettingsPage() {
     return null;
   }
 
+  const currentAvatar = removeAvatar
+    ? ""
+    : avatarPreview || settings.profile.avatar || session?.user?.image || "";
+
+  const startCrop = (file: File | null) => {
+    if (!file) return;
+    if (cropSourceUrl) URL.revokeObjectURL(cropSourceUrl);
+    const sourceUrl = URL.createObjectURL(file);
+    setCropSourceUrl(sourceUrl);
+    setShowCropper(true);
+  };
+
   return (
     <div className="min-h-screen bg-black text-white p-4 md:p-8">
       <div className="max-w-5xl mx-auto space-y-6">
@@ -216,6 +279,57 @@ export default function SettingsPage() {
           <main className="rounded-2xl border border-white/10 bg-white/5 p-5 md:p-6 space-y-6">
             {activeTab === "profile" && (
               <div className="space-y-4">
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  <p className="text-sm text-white/70 mb-3">Profile Photo</p>
+                  <div className="flex items-center gap-4">
+                    <div className="relative w-24 h-24 rounded-3xl bg-white/10 border border-white/20 overflow-hidden shadow-inner">
+                      {currentAvatar ? (
+                        <img
+                          src={currentAvatar}
+                          alt="Profile avatar preview"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-white/50">
+                          <User size={28} />
+                        </div>
+                      )}
+                      <div className="absolute inset-0 ring-1 ring-white/25 rounded-3xl pointer-events-none" />
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      <label className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 cursor-pointer">
+                        <Camera size={16} />
+                        <span>Change Photo</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0] ?? null;
+                            startCrop(file);
+                            setRemoveAvatar(false);
+                            e.currentTarget.value = "";
+                          }}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAvatarFile(null);
+                          setAvatarPreview("");
+                          setRemoveAvatar(true);
+                        }}
+                        className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-white/15 hover:bg-white/10"
+                      >
+                        <Trash2 size={16} />
+                        Remove Photo
+                      </button>
+                      <p className="text-xs text-white/50">Square frame recommended. JPG/PNG/WEBP.</p>
+                    </div>
+                  </div>
+                </div>
+
                 <label className="block text-sm text-white/70">Name</label>
                 <input
                   value={settings.profile.name}
@@ -303,6 +417,27 @@ export default function SettingsPage() {
           <span>Settings saved</span>
         </div>
       )}
+
+      <AvatarCropperModal
+        isOpen={showCropper}
+        imageSrc={cropSourceUrl}
+        onCancel={() => {
+          setShowCropper(false);
+          if (cropSourceUrl) {
+            URL.revokeObjectURL(cropSourceUrl);
+            setCropSourceUrl("");
+          }
+        }}
+        onApply={(croppedFile) => {
+          setAvatarFile(croppedFile);
+          setRemoveAvatar(false);
+          setShowCropper(false);
+          if (cropSourceUrl) {
+            URL.revokeObjectURL(cropSourceUrl);
+            setCropSourceUrl("");
+          }
+        }}
+      />
     </div>
   );
 }

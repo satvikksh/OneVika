@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Sparkles, Mail, User, Lock, Eye, EyeOff } from "lucide-react";
+import { Sparkles, Mail, User, Lock, Eye, EyeOff, Camera } from "lucide-react";
 import { signIn } from "next-auth/react";
 import { FcGoogle } from "react-icons/fc";
+import AvatarCropperModal from "../components/AvatarCropperModal";
 
 type SecurityKey = "favoritePet" | "favoriteColor" | "nickname";
 
@@ -25,8 +26,36 @@ export default function SignupPage() {
   });
   const [securityQuestion, setSecurityQuestion] = useState<SecurityKey | "">("");
   const [securityAnswer, setSecurityAnswer] = useState("");
+  const [profileFile, setProfileFile] = useState<File | null>(null);
+  const [profilePreview, setProfilePreview] = useState("");
+  const [cropSourceUrl, setCropSourceUrl] = useState("");
+  const [showCropper, setShowCropper] = useState(false);
   const [error, setError] = useState("");
   const [googleLoading, setGoogleLoading] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      if (profilePreview) {
+        URL.revokeObjectURL(profilePreview);
+      }
+    };
+  }, [profilePreview]);
+
+  useEffect(() => {
+    return () => {
+      if (cropSourceUrl) {
+        URL.revokeObjectURL(cropSourceUrl);
+      }
+    };
+  }, [cropSourceUrl]);
+
+  const startCrop = (file: File | null) => {
+    if (!file) return;
+    if (cropSourceUrl) URL.revokeObjectURL(cropSourceUrl);
+    const src = URL.createObjectURL(file);
+    setCropSourceUrl(src);
+    setShowCropper(true);
+  };
 
   // 🔹 Normal email/password signup
   async function handleSubmit(e: React.FormEvent) {
@@ -38,14 +67,22 @@ export default function SignupPage() {
       return;
     }
 
+    if (!profileFile) {
+      setError("Please select a profile picture.");
+      return;
+    }
+
+    const payload = new FormData();
+    payload.append("name", form.name);
+    payload.append("email", form.email);
+    payload.append("password", form.password);
+    payload.append("securityQuestion", securityQuestion);
+    payload.append("securityAnswer", securityAnswer.trim());
+    payload.append("file", profileFile);
+
     const req = await fetch("/api/register", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...form,
-        securityQuestion,
-        securityAnswer: securityAnswer.trim(),
-      }),
+      body: payload,
     });
 
     if (req.status === 201) {
@@ -91,6 +128,35 @@ export default function SignupPage() {
 
         {/* FORM */}
         <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="rounded-2xl border border-gray-300 dark:border-gray-700 p-4 bg-white dark:bg-gray-800">
+            <p className="text-sm font-semibold mb-3">Set Profile Picture</p>
+            <div className="flex items-center gap-4">
+              <div className="w-20 h-20 rounded-2xl overflow-hidden border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700">
+                {profilePreview ? (
+                  <img src={profilePreview} alt="Profile preview" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-gray-500">
+                    <User size={24} />
+                  </div>
+                )}
+              </div>
+              <label className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-blue-600 text-white cursor-pointer hover:bg-blue-700">
+                <Camera size={16} />
+                Choose Photo
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] ?? null;
+                    startCrop(file);
+                    e.currentTarget.value = "";
+                  }}
+                />
+              </label>
+            </div>
+          </div>
+
           {/* Name */}
           <div className="flex items-center gap-3 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-3">
             <User className="w-5 h-5 text-gray-500" />
@@ -194,6 +260,31 @@ export default function SignupPage() {
           </a>
         </p>
       </div>
+
+      <AvatarCropperModal
+        isOpen={showCropper}
+        imageSrc={cropSourceUrl}
+        onCancel={() => {
+          setShowCropper(false);
+          if (cropSourceUrl) {
+            URL.revokeObjectURL(cropSourceUrl);
+            setCropSourceUrl("");
+          }
+        }}
+        onApply={(croppedFile) => {
+          if (profilePreview) {
+            URL.revokeObjectURL(profilePreview);
+          }
+          const nextPreview = URL.createObjectURL(croppedFile);
+          setProfileFile(croppedFile);
+          setProfilePreview(nextPreview);
+          setShowCropper(false);
+          if (cropSourceUrl) {
+            URL.revokeObjectURL(cropSourceUrl);
+            setCropSourceUrl("");
+          }
+        }}
+      />
     </div>
   );
 }

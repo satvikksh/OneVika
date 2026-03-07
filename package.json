@@ -8,7 +8,7 @@
     "dev-next": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "socket": "node --loader ts-node/esm server.ts",
     "build:socket": "tsc -p tsconfig.socket.json",
     "start:socket": "node dist/server.js"

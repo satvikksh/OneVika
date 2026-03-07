@@ -93,6 +93,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
   const [showBottomNav, setShowBottomNav] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
   const [isVisible, setIsVisible] = useState(true);
+  const [mounted, setMounted] = useState(false);
 
   const searchRef = useRef<HTMLDivElement>(null);
   const userDropdownRef = useRef<HTMLDivElement>(null);
@@ -100,6 +101,10 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
   const mobileMenuRef = useRef<HTMLDivElement>(null);
   const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Event listener for chat text area focus
   useEffect(() => {
@@ -600,7 +605,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
               className="p-2.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-all hover:scale-105 active:scale-95 text-gray-600 dark:text-gray-300"
               aria-label="Toggle theme"
             >
-              {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
+              {mounted && theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
             </button>
 
             {/* Notifications */}
@@ -948,13 +953,13 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                     onClick={handleThemeToggle}
                     className="flex flex-col items-center justify-center p-5 rounded-2xl bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 active:scale-95 transition-all"
                   >
-                    {theme === "dark" ? (
+                    {mounted && theme === "dark" ? (
                       <Sun size={24} className="mb-3 text-amber-400" />
                     ) : (
                       <Moon size={24} className="mb-3 text-blue-600" />
                     )}
                     <span className="text-sm font-medium">
-                      {theme === "dark" ? "Light Mode" : "Dark Mode"}
+                      {mounted && theme === "dark" ? "Light Mode" : "Dark Mode"}
                     </span>
                   </button>
 
