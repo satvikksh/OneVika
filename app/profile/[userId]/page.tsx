@@ -74,6 +74,18 @@ interface Post {
   isLiked?: boolean;
 }
 
+interface PremiumStatus {
+  isPremium: boolean;
+  premiumExpiresAt?: string | null;
+  daysRemaining: number;
+  premiumPlan?: string | null;
+  paymentMethod?: {
+    type?: string;
+    brand?: string;
+    last4?: string;
+  } | null;
+}
+
 export default function UserProfilePage() {
   const params = useParams();
   const router = useRouter();
@@ -89,6 +101,10 @@ export default function UserProfilePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [followLoading, setFollowLoading] = useState(false);
+  const [premiumStatus, setPremiumStatus] = useState<PremiumStatus | null>(null);
+  const [premiumLoading, setPremiumLoading] = useState(false);
+  const [premiumActionLoading, setPremiumActionLoading] = useState(false);
+  const [premiumError, setPremiumError] = useState<string | null>(null);
 
   // ---------- POSTS STATE ----------
   const [posts, setPosts] = useState<Post[]>([]);
@@ -187,6 +203,112 @@ export default function UserProfilePage() {
       fetchUserProfile();
     }
   }, [userId]);
+
+  const fetchPremiumStatus = async () => {
+    if (!isCurrentUser) return;
+
+    setPremiumLoading(true);
+    setPremiumError(null);
+    try {
+      const res = await fetch("/api/premium/status", {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to fetch premium status");
+      }
+
+      const data = await res.json();
+      setPremiumStatus(data);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to fetch premium status";
+      setPremiumError(message);
+    } finally {
+      setPremiumLoading(false);
+    }
+  };
+
+  const handleActivatePremium = async () => {
+    setPremiumActionLoading(true);
+    setPremiumError(null);
+
+    try {
+      const res = await fetch("/api/premium/create-checkout-session", {
+        method: "POST",
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Unable to start premium checkout");
+      }
+
+      if (!(window as any).Razorpay) {
+        await new Promise<void>((resolve, reject) => {
+          const script = document.createElement("script");
+          script.src = "https://checkout.razorpay.com/v1/checkout.js";
+          script.async = true;
+          script.onload = () => resolve();
+          script.onerror = () => reject(new Error("Failed to load Razorpay SDK"));
+          document.body.appendChild(script);
+        });
+      }
+
+      const RazorpayCheckout = (window as any).Razorpay;
+      const razorpay = new RazorpayCheckout({
+        key: data.keyId,
+        amount: data.amount,
+        currency: data.currency,
+        name: data.name,
+        description: data.description,
+        order_id: data.orderId,
+        prefill: data.prefill,
+        handler: async (response: {
+          razorpay_order_id: string;
+          razorpay_payment_id: string;
+          razorpay_signature: string;
+        }) => {
+          const activateRes = await fetch("/api/premium/activate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              razorpayOrderId: response.razorpay_order_id,
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpaySignature: response.razorpay_signature,
+            }),
+          });
+
+          if (!activateRes.ok) {
+            const activateData = await activateRes.json().catch(() => ({}));
+            throw new Error(activateData.error || "Payment verification failed");
+          }
+
+          await fetchPremiumStatus();
+          setPremiumActionLoading(false);
+        },
+        modal: {
+          ondismiss: () => {
+            setPremiumActionLoading(false);
+            setPremiumError("Payment was canceled.");
+          },
+        },
+      });
+
+      razorpay.open();
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Unable to start premium checkout";
+      setPremiumError(message);
+      setPremiumActionLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isCurrentUser) return;
+    fetchPremiumStatus();
+  }, [isCurrentUser]);
 
   // ---------- FOLLOW TOGGLE ----------
  const handleFollowToggle = async () => {
@@ -993,23 +1115,40 @@ export default function UserProfilePage() {
                 </h2>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Premium Button */}
                   {isCurrentUser && (
-                    <button
-                      onClick={async () => {
-                        const res = await fetch("/api/premium/activate", {
-                          method: "POST",
-                        });
+                    <div className="md:col-span-2 p-4 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 text-white">
+                      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                        <div>
+                          <p className="font-semibold">Premium Membership</p>
+                          <p className="text-sm text-white/90">
+                            {premiumLoading
+                              ? "Checking premium status..."
+                              : premiumStatus?.isPremium
+                                ? `Active, ${premiumStatus.daysRemaining} day(s) left`
+                                : "Inactive"}
+                          </p>
+                          {premiumStatus?.paymentMethod?.last4 && (
+                            <p className="text-xs text-white/90 mt-1">
+                              Card: {premiumStatus.paymentMethod.brand || "card"} ending in{" "}
+                              {premiumStatus.paymentMethod.last4}
+                            </p>
+                          )}
+                        </div>
 
-                        if (res.ok) {
-                          alert("Premium Activated 🚀");
-                          window.location.reload();
-                        }
-                      }}
-                      className="col-span-half py-3 bg-gradient-to-r from-blue-600 to-cyan-400 text-white rounded-xl font-semibold hover:from-yellow-600 hover:to-orange-600 transition-all duration-200"
-                    >
-                      🚀 Activate Premium
-                    </button>
+                        {!premiumStatus?.isPremium && (
+                          <button
+                            onClick={handleActivatePremium}
+                            disabled={premiumActionLoading || premiumLoading}
+                            className="px-4 py-2 rounded-lg bg-white text-blue-700 font-semibold hover:bg-blue-50 disabled:opacity-70 disabled:cursor-not-allowed transition-colors"
+                          >
+                            {premiumActionLoading ? "Redirecting..." : "Activate Premium"}
+                          </button>
+                        )}
+                      </div>
+                      {premiumError && (
+                        <p className="text-xs text-red-100 mt-3">{premiumError}</p>
+                      )}
+                    </div>
                   )}
 
                   <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-xl">

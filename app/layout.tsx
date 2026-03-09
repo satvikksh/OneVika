@@ -8,6 +8,7 @@ import { getServerSession } from "next-auth";
 import { dbConnect } from "./lib/mongodb";
 import User from "./models/User";
 import NotificationListener from "./components/NotificationListener";
+import { isPremiumActive } from "./lib/premium";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -37,7 +38,7 @@ export default async function RootLayout({
       email: session.user.email,
     });
 
-    if (user?.isPremium && user?.uiTheme) {
+    if (isPremiumActive(user) && user?.uiTheme) {
       theme = user.uiTheme;
     }
   }
@@ -63,11 +64,13 @@ export default async function RootLayout({
       </head>
       <body
         className={`${inter.className} antialiased`}
-        style={{
-          ["--card-color" as any]: theme.card,
-          ["--accent-color" as any]: theme.accent,
-          ["--radius" as any]: theme.radius,
-        }}
+        style={
+          {
+            "--card-color": theme.card,
+            "--accent-color": theme.accent,
+            "--radius": theme.radius,
+          } as React.CSSProperties
+        }
       >
         <Script
           src="https://cdn.metered.ca/sdk/frame/1.4.3/sdk-frame.min.js"

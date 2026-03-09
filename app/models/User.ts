@@ -40,6 +40,20 @@ export interface IUser extends Document {
   // 💎 PREMIUM SYSTEM
   isPremium: boolean;
   premiumExpiresAt?: Date;
+  premiumActivatedAt?: Date;
+  premiumPlan?: "monthly";
+  premiumPaymentProvider?: "stripe" | "razorpay";
+  premiumLastPaymentAt?: Date;
+  premiumLastPaymentIntentId?: string;
+  premiumLastCheckoutSessionId?: string;
+  premiumPaymentMethod?: {
+    type?: string;
+    brand?: string;
+    last4?: string;
+    expMonth?: number;
+    expYear?: number;
+    vpa?: string;
+  } | null;
   uiTheme?: IUITheme | null;
 
   createdAt: Date;
@@ -150,6 +164,32 @@ const UserSchema = new Schema<IUser>(
 
     premiumExpiresAt: {
       type: Date,
+    },
+    premiumActivatedAt: {
+      type: Date,
+    },
+    premiumPlan: {
+      type: String,
+      enum: ["monthly"],
+    },
+    premiumPaymentProvider: {
+      type: String,
+      enum: ["stripe", "razorpay"],
+    },
+    premiumLastPaymentAt: {
+      type: Date,
+    },
+    premiumLastPaymentIntentId: {
+      type: String,
+      default: null,
+    },
+    premiumLastCheckoutSessionId: {
+      type: String,
+      default: null,
+    },
+    premiumPaymentMethod: {
+      type: Object,
+      default: null,
     },
 
     uiTheme: {
