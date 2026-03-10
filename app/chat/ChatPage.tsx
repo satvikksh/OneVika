@@ -175,6 +175,7 @@ export default function ChatPage() {
   const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
   const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null);
   const [unreadByUser, setUnreadByUser] = useState<Record<string, number>>({});
+  const [deletingChatUserId, setDeletingChatUserId] = useState<string | null>(null);
 
   // Message status tracking - now tracked locally for UI
   const [messageStatus, setMessageStatus] = useState<Record<string, 'sending' | 'sent' | 'delivered' | 'read'>>({});
@@ -918,6 +919,72 @@ export default function ChatPage() {
     }
   };
 
+  const handleDeleteChat = useCallback(
+    async (user: User) => {
+      if (!user?.id) return;
+      const confirmed = window.confirm(
+        `Delete chat with ${user.name || "this user"}?\n\nThis will remove the conversation and messages.`
+      );
+      if (!confirmed) return;
+
+      try {
+        setDeletingChatUserId(user.id);
+
+        const response = await fetch(
+          `/api/messages/by-user/${user.id}/conversation`,
+          {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to delete chat");
+        }
+
+        const relatedMessageIds = socketMessages
+          .filter(
+            (msg) =>
+              (msg.senderId === currentUserId && msg.receiverId === user.id) ||
+              (msg.senderId === user.id && msg.receiverId === currentUserId)
+          )
+          .map((msg) => msg.id);
+
+        relatedMessageIds.forEach((id) => removeMessage(id));
+
+        setUsers((prev) => prev.filter((u) => u.id !== user.id));
+        setUnreadByUser((prev) => {
+          const next = { ...prev };
+          delete next[user.id];
+          return next;
+        });
+        loadedMessagesByUserRef.current.delete(user.id);
+
+        if (selectedUser?.id === user.id) {
+          setSelectedUser(null);
+          setReplyTo(null);
+          setContextMenu(null);
+          if (isMobile) {
+            setShowMobileSidebar(true);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to delete chat:", error);
+        alert("Failed to delete chat. Please try again.");
+      } finally {
+        setDeletingChatUserId(null);
+      }
+    },
+    [
+      currentUserId,
+      isMobile,
+      removeMessage,
+      selectedUser?.id,
+      socketMessages,
+    ]
+  );
+
   const toggleMobileSidebar = () => {
     setShowMobileSidebar(!showMobileSidebar);
   };
@@ -1093,6 +1160,8 @@ export default function ChatPage() {
           onlineUsers={onlineUsers}
           typingUsers={typingUsers}
           getUnreadCount={getUnreadCount}
+          onDeleteChat={handleDeleteChat}
+          deletingChatUserId={deletingChatUserId}
           isMobile={isMobile}
           showMobileSidebar={showMobileSidebar}
           onToggleMobileSidebar={toggleMobileSidebar}

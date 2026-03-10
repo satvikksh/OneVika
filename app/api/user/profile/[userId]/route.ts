@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/lib/authOptions";
 import { dbConnect } from "@/app/lib/mongodb";
+import { isPremiumActive } from "@/app/lib/premium";
 import mongoose from "mongoose";
 import Post from "@/app/models/Post";
 
@@ -11,6 +12,9 @@ interface UserProfile {
   _id: mongoose.Types.ObjectId;
   name: string;
   email?: string;
+  isPrivate?: boolean;
+  isPremium?: boolean;
+  premiumExpiresAt?: Date | string | null;
   avatar?: string;
   bio?: string;
   location?: string;
@@ -114,10 +118,30 @@ export async function GET(
       status: "active"
     });
 
-    /* ---------------- FETCH USER POSTS ---------------- */
-const posts = await Post.find({ userId: profileObjectId })
-  .sort({ createdAt: -1 })
-  .lean();
+    // Check if this profile follows current user
+    const followsYou = await db.collection("follows").findOne({
+      followerId: profileObjectId,
+      followingId: currentUserObjectId,
+      status: "active"
+    });
+
+    const isMutualFollow = !!isFollowing && !!followsYou;
+
+    const currentUser = await db.collection("users").findOne(
+      { _id: currentUserObjectId },
+      { projection: { isPremium: 1, premiumExpiresAt: 1 } }
+    );
+    const viewerPremiumActive = isPremiumActive(currentUser as any);
+    const profilePremiumActive = isPremiumActive(userProfile as any);
+
+    const isCurrentUser = profileId === currentUserId;
+    const isPrivateProfile = Boolean(userProfile.isPrivate);
+    const canViewPosts =
+      isCurrentUser ||
+      !isPrivateProfile ||
+      isMutualFollow ||
+      (viewerPremiumActive && isPrivateProfile && !profilePremiumActive);
+    const canMessage = !isCurrentUser && isMutualFollow;
 
     /* ---------------- FORMAT RESPONSE ---------------- */
     const formattedProfile = {
@@ -137,10 +161,17 @@ const posts = await Post.find({ userId: profileObjectId })
         (Date.now() - new Date(userProfile.lastSeen).getTime()) < 5 * 60 * 1000 : false,
       createdAt: userProfile.createdAt.toISOString(),
       updatedAt: userProfile.updatedAt.toISOString(),
+      isPrivate: isPrivateProfile,
+      isPremium: profilePremiumActive,
+      viewerPremiumActive,
       followersCount,
       followingCount,
       isFollowing: !!isFollowing,
-      isCurrentUser: profileId === currentUserId
+      followsYou: !!followsYou,
+      isMutualFollow,
+      canMessage,
+      canViewPosts,
+      isCurrentUser
     };
 
     /* ---------------- CHECK IF CURRENT USER IS BLOCKED ---------------- */
@@ -161,10 +192,17 @@ const posts = await Post.find({ userId: profileObjectId })
       }
     }
 
- return NextResponse.json({
-  ...formattedProfile,
-  posts,
-});
+    const posts = canViewPosts
+      ? await Post.find({ userId: profileObjectId })
+          .sort({ createdAt: -1 })
+          .lean()
+      : [];
+
+    return NextResponse.json({
+      ...formattedProfile,
+      posts,
+      postsHidden: !canViewPosts,
+    });
 
 
   } catch (error) {

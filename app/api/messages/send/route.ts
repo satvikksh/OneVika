@@ -40,6 +40,26 @@ export async function POST(req: NextRequest) {
     const senderObjectId = new ObjectId(session.user.id);
     const receiverObjectId = new ObjectId(receiverId);
 
+    const [iFollowReceiver, receiverFollowsMe] = await Promise.all([
+      db.collection("follows").findOne({
+        followerId: senderObjectId,
+        followingId: receiverObjectId,
+        status: "active",
+      }),
+      db.collection("follows").findOne({
+        followerId: receiverObjectId,
+        followingId: senderObjectId,
+        status: "active",
+      }),
+    ]);
+
+    if (!iFollowReceiver || !receiverFollowsMe) {
+      return NextResponse.json(
+        { error: "Message allowed only for mutual followers" },
+        { status: 403 }
+      );
+    }
+
     let conversation = await db.collection("conversations").findOne({
       participants: { $all: [senderObjectId, receiverObjectId] },
     });

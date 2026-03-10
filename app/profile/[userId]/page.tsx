@@ -42,6 +42,8 @@ interface UserProfile {
   id: string;
   name: string;
   email?: string;
+  isPrivate?: boolean;
+  isPremium?: boolean;
   avatar?: string;
   bio?: string;
   location?: string;
@@ -62,6 +64,10 @@ interface UserProfile {
   followersCount?: number;
   followingCount?: number;
   isFollowing?: boolean;
+  followsYou?: boolean;
+  isMutualFollow?: boolean;
+  canMessage?: boolean;
+  canViewPosts?: boolean;
 }
 
 interface Post {
@@ -171,7 +177,18 @@ export default function UserProfilePage() {
           social: userData.social || {},
           followersCount: userData.followersCount ?? 0,
           followingCount: userData.followingCount ?? 0,
-          isFollowing: data.isFollowing || userData.isFollowing || false,
+          isFollowing: Boolean(data.isFollowing ?? userData.isFollowing),
+          followsYou: Boolean(data.followsYou ?? userData.followsYou),
+          isMutualFollow: Boolean(
+            data.isMutualFollow ?? userData.isMutualFollow
+          ),
+          canMessage: Boolean(data.canMessage ?? userData.canMessage),
+          canViewPosts:
+            data.canViewPosts !== undefined
+              ? Boolean(data.canViewPosts)
+              : Boolean(userData.canViewPosts),
+          isPrivate: Boolean(data.isPrivate ?? userData.isPrivate),
+          isPremium: Boolean(data.isPremium ?? userData.isPremium),
           isActive: userData.isActive ?? true,
           lastSeen: userData.lastSeen,
         });
@@ -324,6 +341,11 @@ export default function UserProfilePage() {
       ? {
           ...prev,
           isFollowing: !wasFollowing,
+          isMutualFollow: !wasFollowing ? Boolean(prev.followsYou) : false,
+          canMessage: !wasFollowing ? Boolean(prev.followsYou) : false,
+          canViewPosts: !wasFollowing
+            ? Boolean(prev.canViewPosts || prev.followsYou || !prev.isPrivate)
+            : Boolean(!prev.isPrivate),
           followersCount: wasFollowing
             ? Math.max(0, (prev.followersCount ?? 0) - 1)
             : (prev.followersCount ?? 0) + 1,
@@ -346,6 +368,22 @@ export default function UserProfilePage() {
         ? {
             ...prev,
             isFollowing: data.isFollowing,
+            followsYou:
+              data.followsYou !== undefined
+                ? Boolean(data.followsYou)
+                : prev.followsYou,
+            isMutualFollow:
+              data.isMutualFollow !== undefined
+                ? Boolean(data.isMutualFollow)
+                : prev.isMutualFollow,
+            canMessage:
+              data.canMessage !== undefined
+                ? Boolean(data.canMessage)
+                : prev.canMessage,
+            canViewPosts:
+              data.isMutualFollow !== undefined
+                ? Boolean(data.isMutualFollow || !prev.isPrivate)
+                : prev.canViewPosts,
             followersCount: data.followersCount,
           }
         : prev
@@ -360,6 +398,11 @@ export default function UserProfilePage() {
         ? {
             ...prev,
             isFollowing: wasFollowing,
+            isMutualFollow: wasFollowing ? Boolean(prev.followsYou) : false,
+            canMessage: wasFollowing ? Boolean(prev.followsYou) : false,
+            canViewPosts: wasFollowing
+              ? Boolean(prev.followsYou || !prev.isPrivate)
+              : Boolean(!prev.isPrivate),
             followersCount: wasFollowing
               ? (prev.followersCount ?? 0) + 1
               : Math.max(0, (prev.followersCount ?? 0) - 1),
@@ -586,6 +629,10 @@ export default function UserProfilePage() {
     );
   }
 
+  const canShowMessageButton = !isCurrentUser && Boolean(user.canMessage);
+  const isPrivatePostsLocked =
+    !isCurrentUser && Boolean(user.isPrivate) && !Boolean(user.canViewPosts);
+
   // ---------- RENDER ----------
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
@@ -722,32 +769,34 @@ export default function UserProfilePage() {
                           ) : user.isFollowing ? (
                             <>
                               <UserCheck size={18} />
-                              Following
+                              {user.isPrivate ? "Requested" : "Following"}
                             </>
                           ) : (
                             <>
                               <UserPlus size={18} />
-                              Follow
+                              {user.isPrivate ? "Send Request" : "Follow"}
                             </>
                           )}
                         </button>
 
-                        <div className="grid grid-cols-2 gap-3">
-                          <button
-                            onClick={handleSendMessage}
-                            className="py-3 bg-gradient-to-r from-blue-600 to-blue-600 text-white rounded-xl hover:from-blue-700 hover:to-blue-700 transition-colors font-medium flex items-center justify-center gap-2"
-                          >
-                            <MessageCircle size={18} />
-                            Message
-                          </button>
-                          <button
-                            onClick={handleStartVideoCall}
-                            className="py-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors font-medium flex items-center justify-center gap-2"
-                          >
-                            <Video size={18} />
-                            Video
-                          </button>
-                        </div>
+                        {canShowMessageButton && (
+                          <div className="grid grid-cols-2 gap-3">
+                            <button
+                              onClick={handleSendMessage}
+                              className="py-3 bg-gradient-to-r from-blue-600 to-blue-600 text-white rounded-xl hover:from-blue-700 hover:to-blue-700 transition-colors font-medium flex items-center justify-center gap-2"
+                            >
+                              <MessageCircle size={18} />
+                              Message
+                            </button>
+                            <button
+                              onClick={handleStartVideoCall}
+                              className="py-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors font-medium flex items-center justify-center gap-2"
+                            >
+                              <Video size={18} />
+                              Video
+                            </button>
+                          </div>
+                        )}
                       </>
                     )}
                   </div>
@@ -1198,7 +1247,19 @@ export default function UserProfilePage() {
               </div>
 
               <div className="space-y-6">
-                {posts.length === 0 ? (
+                {isPrivatePostsLocked ? (
+                  <div className="text-center py-12">
+                    <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                      <Shield className="w-10 h-10 text-gray-400" />
+                    </div>
+                    <h3 className="text-xl font-bold mb-2 dark:text-white">
+                      Private Account
+                    </h3>
+                    <p className="text-gray-500">
+                      Send a follow request. Posts are visible after mutual follow.
+                    </p>
+                  </div>
+                ) : posts.length === 0 ? (
                   <div className="text-center py-12">
                     <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
                       <MessageSquare className="w-10 h-10 text-gray-400" />

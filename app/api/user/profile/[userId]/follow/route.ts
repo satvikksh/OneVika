@@ -104,10 +104,21 @@ export async function POST(
       status: "active",
     });
 
+    const followsYou = await db.collection("follows").findOne({
+      followerId: targetUserObjectId,
+      followingId: currentUserObjectId,
+      status: "active",
+    });
+
+    const isMutualFollow = !!followsYou;
+
     return NextResponse.json({
       success: true,
       message: "Followed successfully",
       isFollowing: true,
+      followsYou: !!followsYou,
+      isMutualFollow,
+      canMessage: isMutualFollow,
       followersCount,
       followingCount,
       notification, // return notification for frontend emit
@@ -179,10 +190,19 @@ export async function DELETE(
       status: "active"
     });
 
+    const followsYou = await db.collection("follows").findOne({
+      followerId: targetUserObjectId,
+      followingId: currentUserObjectId,
+      status: "active",
+    });
+
     return NextResponse.json({
       success: true,
       message: "Unfollowed successfully",
       isFollowing: false,
+      followsYou: !!followsYou,
+      isMutualFollow: false,
+      canMessage: false,
       followersCount,
       followingCount
     });

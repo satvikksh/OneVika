@@ -28,7 +28,6 @@ export async function GET(req: NextRequest) {
     const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const regex = new RegExp(escaped, "i");
     const currentUserId = new ObjectId(session.user.id);
-
     const users = await db
       .collection("users")
       .aggregate([

@@ -11,10 +11,8 @@ import {
   Menu,
   Users,
   MessageSquare,
-  Phone,
-  Video,
-  Info,
-  MoreVertical
+  MoreVertical,
+  Trash2
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 
@@ -29,6 +27,8 @@ interface ChatSidebarProps {
   onlineUsers: string[];
   typingUsers: Set<string>;
   getUnreadCount: (userId: string) => number;
+  onDeleteChat: (user: User) => void;
+  deletingChatUserId?: string | null;
   isMobile?: boolean;
   showMobileSidebar: boolean;
   onBackToSidebar?: () => void;
@@ -62,6 +62,8 @@ export default function ChatSidebar({
   onlineUsers,
   typingUsers,
   getUnreadCount,
+  onDeleteChat,
+  deletingChatUserId = null,
   isMobile = false,
   showMobileSidebar = true,
   onBackToSidebar,
@@ -69,6 +71,7 @@ export default function ChatSidebar({
 }: ChatSidebarProps) {
   const { data: session } = useSession();
   const [isSearching, setIsSearching] = useState(false);
+  const [activeMenuUserId, setActiveMenuUserId] = useState<string | null>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
 
   // Close sidebar when clicking outside on mobile
@@ -79,6 +82,7 @@ export default function ChatSidebar({
       if (sidebarRef.current && !sidebarRef.current.contains(event.target as Node)) {
         onToggleMobileSidebar?.();
       }
+      setActiveMenuUserId(null);
     };
 
     document.addEventListener('mousedown', handleClickOutside);
@@ -113,6 +117,7 @@ export default function ChatSidebar({
   const suggestedUsers = searchQuery.trim() ? filteredUsers.slice(0, 5) : [];
 
   const handleUserSelect = (user: User) => {
+    setActiveMenuUserId(null);
     onSelectUser(user);
     if (isMobile) {
       onToggleMobileSidebar?.();
@@ -265,15 +270,18 @@ export default function ChatSidebar({
                 const isOnline = onlineUsers.includes(user.id) || Boolean(user.isOnline);
 
                 return (
-                  <button
+                  <div
                     key={user.id}
-                    onClick={() => handleUserSelect(user)}
-                    className={`w-full flex items-center gap-3 p-4 transition-all duration-200 active:scale-98 ${
+                    className={`relative w-full transition-all duration-200 ${
                       isSelected
                         ? "bg-blue-100 dark:bg-blue-900/30"
                         : "hover:bg-gray-100 dark:hover:bg-gray-800"
                     }`}
                   >
+                    <button
+                      onClick={() => handleUserSelect(user)}
+                      className="w-full flex items-center gap-3 p-4 pr-14 active:scale-98"
+                    >
                     <div className="relative flex-shrink-0">
                       <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-blue-500 ring-2 ring-white dark:ring-gray-900">
                         {user.avatar ? (
@@ -326,7 +334,38 @@ export default function ChatSidebar({
                         {unreadCount > 99 ? '99+' : unreadCount}
                       </span>
                     )}
-                </button>
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveMenuUserId((prev) => (prev === user.id ? null : user.id));
+                      }}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700"
+                      aria-label="Chat options"
+                    >
+                      <MoreVertical size={16} />
+                    </button>
+                    {activeMenuUserId === user.id && (
+                      <div className="absolute right-3 top-11 z-20 min-w-36 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg overflow-hidden">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveMenuUserId(null);
+                            onDeleteChat(user);
+                          }}
+                          disabled={deletingChatUserId === user.id}
+                          className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-60 flex items-center gap-2"
+                        >
+                          {deletingChatUserId === user.id ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : (
+                            <Trash2 size={14} />
+                          )}
+                          Delete chat
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 );
               })
             )}
@@ -414,15 +453,18 @@ export default function ChatSidebar({
             const isOnline = onlineUsers.includes(user.id) || Boolean(user.isOnline);
 
             return (
-              <button
+              <div
                 key={user.id}
-                onClick={() => handleUserSelect(user)}
-                className={`w-full flex items-center gap-3 p-4 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800 ${
+                className={`relative w-full transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800 ${
                   isSelected
                     ? "bg-blue-100 dark:bg-blue-900/30 border-r-4 border-blue-500"
                     : ""
                 }`}
               >
+                <button
+                  onClick={() => handleUserSelect(user)}
+                  className="w-full flex items-center gap-3 p-4 pr-14"
+                >
                 <div className="relative flex-shrink-0">
                   <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-blue-500 ring-2 ring-white dark:ring-gray-900">
                     {user.avatar ? (
@@ -475,7 +517,38 @@ export default function ChatSidebar({
                     {unreadCount > 99 ? '99+' : unreadCount}
                   </span>
                 )}
-              </button>
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveMenuUserId((prev) => (prev === user.id ? null : user.id));
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700"
+                  aria-label="Chat options"
+                >
+                  <MoreVertical size={16} />
+                </button>
+                {activeMenuUserId === user.id && (
+                  <div className="absolute right-3 top-11 z-20 min-w-36 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg overflow-hidden">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveMenuUserId(null);
+                        onDeleteChat(user);
+                      }}
+                      disabled={deletingChatUserId === user.id}
+                      className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-60 flex items-center gap-2"
+                    >
+                      {deletingChatUserId === user.id ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <Trash2 size={14} />
+                      )}
+                      Delete chat
+                    </button>
+                  </div>
+                )}
+              </div>
             );
           })
         )}
