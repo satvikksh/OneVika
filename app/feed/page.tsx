@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { useTheme } from "../theme-provider";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 // import { useSettings } from "../components/settings-provider";
 
 
@@ -91,6 +91,22 @@ interface EditPostModalProps {
   postId: string;
   currentContent: string;
   onPostUpdated: (postId: string, newContent: string) => void;
+}
+
+interface ShareChatUser {
+  _id: string;
+  name: string;
+  email?: string;
+  avatar?: string;
+  image?: string;
+  unreadCount?: number;
+  lastMessageAt?: string | null;
+}
+
+interface SharePostModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  post: PostType | null;
 }
 
 // --- EDIT POST MODAL COMPONENT ---
@@ -631,6 +647,263 @@ function CommentsModal({
   );
 }
 
+function SharePostModal({ isOpen, onClose, post }: SharePostModalProps) {
+  const router = useRouter();
+  const [users, setUsers] = useState<ShareChatUser[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sendingToUserId, setSendingToUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setUsers([]);
+      setError(null);
+      setSearchQuery("");
+      setSendingToUserId(null);
+      return;
+    }
+
+    const fetchUsers = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await fetch("/api/user/chat", { cache: "no-store" });
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data?.error || "Failed to load chats");
+        }
+
+        setUsers(Array.isArray(data?.users) ? data.users : []);
+      } catch (fetchError) {
+        console.error("Failed to load share targets:", fetchError);
+        setError("Unable to load chat users");
+        setUsers([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUsers();
+  }, [isOpen]);
+
+  const shareUrl = post ? `${window.location.origin}/feed?postId=${post._id}` : "";
+  const shareText = post
+    ? post.content?.trim()
+      ? `${post.content.trim()}\n${shareUrl}`
+      : shareUrl
+    : "";
+
+  const filteredUsers = users.filter((user) => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return true;
+    return (
+      user.name?.toLowerCase().includes(query) ||
+      user.email?.toLowerCase().includes(query)
+    );
+  });
+
+  const handleCopyLink = async () => {
+    if (!shareUrl) return;
+    await navigator.clipboard.writeText(shareUrl);
+  };
+
+  const handleSystemShare = async () => {
+    if (!post) return;
+
+    if (navigator.share) {
+      await navigator.share({
+        title: post.images?.some((url) => /\.(mp4|webm|mov)$/i.test(url))
+          ? "Check out this video"
+          : "Check out this post",
+        text: post.content || "Shared from feed",
+        url: shareUrl,
+      });
+      return;
+    }
+
+    await handleCopyLink();
+  };
+
+  const handleSendToChat = async (userId: string) => {
+    if (!post) return;
+
+    try {
+      setSendingToUserId(userId);
+
+      const primaryMediaUrl = post.images?.[0];
+      const hasMedia = Boolean(primaryMediaUrl);
+      const isSharedVideo = Boolean(primaryMediaUrl && /\.(mp4|webm|mov)$/i.test(primaryMediaUrl));
+
+      const response = await fetch("/api/messages/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: hasMedia ? (post.content?.trim() || "") : shareText,
+          receiverId: userId,
+          attachments: hasMedia
+            ? [
+                {
+                  url: primaryMediaUrl,
+                  type: isSharedVideo ? "video" : "image",
+                  fileName: isSharedVideo ? "Shared feed video" : "Shared feed image",
+                  targetUrl: shareUrl,
+                  source: "feed",
+                },
+              ]
+            : [],
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.error || "Failed to share to chat");
+      }
+
+      onClose();
+      router.push(`/chat?userId=${userId}`);
+    } catch (sendError) {
+      console.error("Failed to share post to chat:", sendError);
+      setError(sendError instanceof Error ? sendError.message : "Failed to share to chat");
+    } finally {
+      setSendingToUserId(null);
+    }
+  };
+
+  if (!isOpen || !post) return null;
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white dark:bg-gray-900"
+      >
+        <div className="flex items-center justify-between border-b p-5 dark:border-gray-800">
+          <div>
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Share post</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Send directly to mutual chat users
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-full p-2 hover:bg-gray-100 dark:hover:bg-gray-800"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="border-b p-4 dark:border-gray-800">
+          <div className="mb-3 rounded-2xl bg-gray-50 p-3 dark:bg-gray-800">
+            <p className="line-clamp-2 text-sm text-gray-700 dark:text-gray-200">
+              {post.content || "Shared from feed"}
+            </p>
+            <p className="mt-2 truncate text-xs text-blue-600 dark:text-blue-400">
+              {shareUrl}
+            </p>
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              onClick={handleCopyLink}
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gray-100 px-4 py-3 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+            >
+              <Copy size={16} />
+              Copy link
+            </button>
+            <button
+              onClick={handleSystemShare}
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+            >
+              <Share2 size={16} />
+              Share outside
+            </button>
+          </div>
+        </div>
+
+        <div className="p-4">
+          <input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search chat users"
+            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800"
+          />
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 pb-4">
+          {loading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((item) => (
+                <div key={item} className="flex items-center gap-3 rounded-xl p-3">
+                  <div className="h-11 w-11 rounded-full bg-gray-200 dark:bg-gray-800" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3 w-28 rounded bg-gray-200 dark:bg-gray-800" />
+                    <div className="h-2 w-20 rounded bg-gray-200 dark:bg-gray-800" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : error ? (
+            <div className="py-10 text-center">
+              <p className="text-sm text-red-500">{error}</p>
+            </div>
+          ) : filteredUsers.length === 0 ? (
+            <div className="py-10 text-center">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                No chat users available for sharing
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {filteredUsers.map((user) => (
+                <div
+                  key={user._id}
+                  className="flex items-center gap-3 rounded-2xl px-3 py-3 hover:bg-gray-50 dark:hover:bg-gray-800"
+                >
+                  <div className="h-11 w-11 overflow-hidden rounded-full bg-gradient-to-r from-blue-500 to-blue-500">
+                    {user.avatar || user.image ? (
+                      <Image
+                        src={user.avatar || user.image || ""}
+                        alt={user.name}
+                        width={44}
+                        height={44}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center font-bold text-white">
+                        {user.name?.[0]?.toUpperCase() || "U"}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">
+                      {user.name}
+                    </p>
+                    <p className="truncate text-xs text-gray-500 dark:text-gray-400">
+                      {user.email || "Direct chat"}
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => handleSendToChat(user._id)}
+                    disabled={sendingToUserId === user._id}
+                    className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {sendingToUserId === user._id ? "Sending..." : "Send"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
 // --- ANIMATION VARIANTS (INSTANT SCROLL) ---
 const variants: Variants = {
   enter: (direction: number) => ({
@@ -670,7 +943,9 @@ export default function FeedPage() {
   const { theme } = useTheme();
   const isDark = theme === "dark";
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data: session, status } = useSession();
+  const routePostId = searchParams.get("postId");
 
   const [posts, setPosts] = useState<PostType[]>(() => feedPageCache?.posts ?? []);
   const [loadingPosts, setLoadingPosts] = useState(false);
@@ -730,6 +1005,13 @@ export default function FeedPage() {
     postUserId: "",
     comments: [],
   });
+  const [shareModal, setShareModal] = useState<{
+    isOpen: boolean;
+    post: PostType | null;
+  }>({
+    isOpen: false,
+    post: null,
+  });
 
   const feedContainerRef = useRef<HTMLDivElement>(null);
   const carouselContainerRef = useRef<HTMLDivElement>(null); // REF FOR CAROUSEL
@@ -746,6 +1028,7 @@ export default function FeedPage() {
   const [carouselIndex, setCarouselIndex] = useState(0);
   const carouselIndexRef = useRef(0);
   const carouselRafRef = useRef<number | null>(null);
+  const routePostHandledRef = useRef(false);
 
   /* ============================
        🔐 REDIRECT (SIDE EFFECT)
@@ -763,6 +1046,10 @@ export default function FeedPage() {
   useEffect(() => {
     postsRef.current = posts;
   }, [posts]);
+
+  useEffect(() => {
+    routePostHandledRef.current = false;
+  }, [routePostId]);
 
   useEffect(() => {
     carouselIndexRef.current = carouselIndex;
@@ -844,6 +1131,17 @@ export default function FeedPage() {
     isVideoPlaying,
     isVideoMuted,
   ]);
+
+  useEffect(() => {
+    if (!routePostId || posts.length === 0 || routePostHandledRef.current) return;
+
+    const matchedIndex = posts.findIndex((post) => post._id === routePostId);
+    if (matchedIndex >= 0) {
+      setCurrentPostIndex(matchedIndex);
+      currentPostIndexRef.current = matchedIndex;
+      routePostHandledRef.current = true;
+    }
+  }, [routePostId, posts]);
 
   /* ============================
        SCROLL CAROUSEL ON INDEX CHANGE
@@ -1320,28 +1618,13 @@ export default function FeedPage() {
   /* ============================
        SHARE POST FUNCTION
   ============================ */
-  const handleShare = async (postId: string) => {
-    const shareUrl = `${window.location.origin}/post/${postId}`;
-    
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: 'Check out this post!',
-          text: 'Look at this amazing content!',
-          url: shareUrl,
-        });
-      } catch (error) {
-        console.log('Error sharing:', error);
-      }
-    } else {
-      // Fallback: copy to clipboard
-      try {
-        await navigator.clipboard.writeText(shareUrl);
-        alert('Link copied to clipboard!');
-      } catch (err) {
-        console.error('Failed to copy:', err);
-      }
-    }
+  const handleShare = (postId: string) => {
+    const selectedPost = posts.find((post) => post._id === postId) || null;
+    setShareModal({
+      isOpen: true,
+      post: selectedPost,
+    });
+    setIsNavbarVisible(true);
   };
 
   const openLikeModal = (postId: string, likeCount: number) => {
@@ -1474,6 +1757,21 @@ export default function FeedPage() {
       carouselRafRef.current = null;
     });
   };
+
+  useEffect(() => {
+    const activePost = posts[currentPostIndex];
+    if (!activePost || typeof window === "undefined") return;
+
+    const url = new URL(window.location.href);
+    if (url.pathname !== "/feed") {
+      url.pathname = "/feed";
+    }
+
+    if (url.searchParams.get("postId") === activePost._id) return;
+
+    url.searchParams.set("postId", activePost._id);
+    window.history.replaceState({}, "", `${url.pathname}?${url.searchParams.toString()}`);
+  }, [currentPostIndex, posts]);
 
   if (loadingPosts && initialLoad) {
     return <FeedSkeleton />;
@@ -2057,6 +2355,12 @@ export default function FeedPage() {
         onCommentDeleted={(commentId) =>
           handleCommentDeleted(commentsModal.postId, commentId)
         }
+      />
+
+      <SharePostModal
+        isOpen={shareModal.isOpen}
+        onClose={() => setShareModal({ isOpen: false, post: null })}
+        post={shareModal.post}
       />
     </>
   );

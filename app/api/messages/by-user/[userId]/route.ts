@@ -7,6 +7,32 @@ import { decryptChatText } from "@/app/lib/chatCrypto";
 
 const { ObjectId } = mongoose.Types;
 
+type StoredAttachment = {
+  url?: string;
+  type?: "image" | "video" | "audio" | "file";
+  mimeType?: string;
+  fileName?: string;
+  size?: number;
+  targetUrl?: string;
+  source?: "feed" | "upload" | "link";
+};
+
+type StoredMessage = {
+  _id: mongoose.Types.ObjectId;
+  text?: string;
+  textCipher?: string;
+  textIv?: string;
+  textTag?: string;
+  senderId: mongoose.Types.ObjectId;
+  receiverId: mongoose.Types.ObjectId;
+  conversationId: mongoose.Types.ObjectId;
+  createdAt: Date;
+  read?: boolean;
+  type?: "text" | "image" | "video" | "audio" | "file";
+  attachments?: StoredAttachment[];
+  replyToId?: mongoose.Types.ObjectId | string;
+};
+
 export async function GET(
   req: NextRequest,
   context: { params: Promise<{ userId: string }> }
@@ -72,16 +98,17 @@ export async function GET(
       .toArray();
 
     /* ---------------- FORMAT RESPONSE ---------------- */
-    const formatted = messages.map((m: any) => {
-      let text = m.text || "";
+    const formatted = messages.map((m) => {
+      const message = m as StoredMessage;
+      let text = message.text || "";
 
       // New encrypted storage path
-      if (!text && m.textCipher && m.textIv && m.textTag) {
+      if (!text && message.textCipher && message.textIv && message.textTag) {
         try {
           text = decryptChatText({
-            textCipher: m.textCipher,
-            textIv: m.textIv,
-            textTag: m.textTag,
+            textCipher: message.textCipher,
+            textIv: message.textIv,
+            textTag: message.textTag,
           });
         } catch (e) {
           console.error("MESSAGE DECRYPT ERROR:", e);
@@ -90,13 +117,29 @@ export async function GET(
       }
 
       return {
-        id: m._id.toString(),
+        id: message._id.toString(),
         text,
-        senderId: m.senderId.toString(),
-        receiverId: m.receiverId.toString(),
-        conversationId: m.conversationId.toString(),
-        timestamp: m.createdAt,
-        read: Boolean(m.read),
+        senderId: message.senderId.toString(),
+        receiverId: message.receiverId.toString(),
+        conversationId: message.conversationId.toString(),
+        timestamp: message.createdAt,
+        read: Boolean(message.read),
+        type:
+          message.type ||
+          (Array.isArray(message.attachments) && message.attachments[0]?.type) ||
+          "text",
+        attachments: Array.isArray(message.attachments)
+          ? message.attachments.map((attachment) => ({
+              url: attachment.url,
+              type: attachment.type || "file",
+              mimeType: attachment.mimeType,
+              fileName: attachment.fileName,
+              size: attachment.size,
+              targetUrl: attachment.targetUrl,
+              source: attachment.source,
+            }))
+          : [],
+        replyToId: message.replyToId?.toString?.() || undefined,
       };
     });
 

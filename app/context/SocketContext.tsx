@@ -12,25 +12,18 @@ import React, {
 import { io } from "socket.io-client";
 import type { Socket } from "socket.io-client";
 import { useSession } from "next-auth/react";
+import { ChatAttachment, Message } from "../types/socket";
 
-interface Message {
-  id: string;
-  content: string;
-  senderId: string;
-  receiverId: string;
-  timestamp: string | Date;
-  read?: boolean;
-  chatId?: string;
-  type?: "text" | "image" | "file";
-  status?: "sending" | "sent" | "delivered" | "read";
-  seenBy?: string[];
-}
+type OutgoingMessageInput = Partial<Message> & {
+  file?: File | null;
+  attachments?: ChatAttachment[];
+};
 
 interface SocketContextType {
   isConnected: boolean;
   onlineUsers: string[];
   messages: Message[];
-  sendMessage: (message: Partial<Message>) => void;
+  sendMessage: (message: OutgoingMessageInput) => void;
   removeMessage: (messageId: string) => void;
   emitMessageDelete: (payload: {
     messageId: string;
@@ -91,36 +84,98 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
   );
 
   const sendMessage = useCallback(
-    (message: Partial<Message>) => {
+    (message: OutgoingMessageInput) => {
       const socket = socketRef.current;
       if (!socket || !userId || !message.receiverId) return;
 
       const messageText = (message.content ?? "").trim();
-      if (!messageText) return;
+      const attachments = Array.isArray(message.attachments)
+        ? message.attachments.filter((attachment) => Boolean(attachment?.url))
+        : [];
+      const pendingFile =
+        typeof File !== "undefined" && message.file instanceof File
+          ? message.file
+          : null;
+
+      if (!messageText && attachments.length === 0 && !pendingFile) return;
 
       const tempMessage: Message = {
         id: message.id ?? crypto.randomUUID(),
         content: messageText,
+        text: messageText,
         senderId: userId,
         receiverId: message.receiverId,
         chatId: message.chatId,
         timestamp: new Date().toISOString(),
         status: "sending",
-        type: "text",
+        type:
+          attachments[0]?.type ??
+          (pendingFile
+            ? pendingFile.type.startsWith("image/")
+              ? "image"
+              : pendingFile.type.startsWith("video/")
+                ? "video"
+                : pendingFile.type.startsWith("audio/")
+                  ? "audio"
+                  : "file"
+            : "text"),
+        attachments:
+          attachments.length > 0
+            ? attachments
+            : pendingFile
+              ? [
+                  {
+                    url: URL.createObjectURL(pendingFile),
+                    type: pendingFile.type.startsWith("image/")
+                      ? "image"
+                      : pendingFile.type.startsWith("video/")
+                        ? "video"
+                        : pendingFile.type.startsWith("audio/")
+                          ? "audio"
+                          : "file",
+                    mimeType: pendingFile.type,
+                    fileName: pendingFile.name,
+                    size: pendingFile.size,
+                    source: "upload",
+                  } satisfies ChatAttachment,
+                ]
+              : [],
+        replyToId: message.replyToId,
       };
 
       upsertMessage(tempMessage);
 
       (async () => {
         try {
-          const res = await fetch("/api/messages/send", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              text: messageText,
-              receiverId: message.receiverId,
-            }),
-          });
+          let res: Response;
+
+          if (pendingFile) {
+            const formData = new FormData();
+            formData.append("receiverId", message.receiverId);
+            if (messageText) {
+              formData.append("text", messageText);
+            }
+            if (message.replyToId) {
+              formData.append("replyToId", message.replyToId);
+            }
+            formData.append("file", pendingFile);
+
+            res = await fetch("/api/messages/send", {
+              method: "POST",
+              body: formData,
+            });
+          } else {
+            res = await fetch("/api/messages/send", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                text: messageText,
+                receiverId: message.receiverId,
+                replyToId: message.replyToId,
+                attachments,
+              }),
+            });
+          }
 
           const data = await res.json();
           if (!res.ok || !data?.message) {
@@ -130,12 +185,17 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
           const savedMessage: Message = {
             id: data.message.id,
             content: data.message.text ?? messageText,
+            text: data.message.text ?? messageText,
             senderId: data.message.senderId ?? userId,
             receiverId: data.message.receiverId ?? message.receiverId,
             chatId: data.message.conversationId,
             timestamp: data.message.timestamp ?? new Date().toISOString(),
             status: "sent",
-            type: "text",
+            type: data.message.type ?? tempMessage.type ?? "text",
+            attachments: Array.isArray(data.message.attachments)
+              ? data.message.attachments
+              : [],
+            replyToId: data.message.replyToId ?? message.replyToId,
           };
 
           // Replace optimistic temp message with saved DB message
@@ -152,6 +212,12 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
           console.error("Failed to persist message:", error);
           // Remove optimistic message if persistence fails
           removeMessage(tempMessage.id);
+        } finally {
+          tempMessage.attachments?.forEach((attachment) => {
+            if (attachment.url.startsWith("blob:")) {
+              URL.revokeObjectURL(attachment.url);
+            }
+          });
         }
       })();
     },

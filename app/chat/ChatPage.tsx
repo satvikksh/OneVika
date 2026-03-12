@@ -9,7 +9,7 @@ import ChatSidebar from "./ChatSidebar";
 import ChatTopBar from "./ChatTopBar";
 import ChatArea from "./ChatArea";
 import ContextMenu from "./ContextMenu";
-import { Users, Loader2, Menu } from "lucide-react";
+import { Users, Menu } from "lucide-react";
 
 /* -------------------------------- SKELETON LOADER -------------------------------- */
 const ChatSkeleton = () => {
@@ -110,7 +110,11 @@ const ChatSkeleton = () => {
 const isValidObjectId = (id?: string) =>
   typeof id === "string" && id.length === 24;
 
-const normalizeUsers = (users: any[]): User[] =>
+type RawChatUser = Partial<User> & {
+  _id?: string | { toString?: () => string };
+};
+
+const normalizeUsers = (users: RawChatUser[]): User[] =>
   users
     .map((u) => {
       const id =
@@ -131,6 +135,15 @@ const getMessageTimestamp = (message: Message) => {
 type ChatPageCache = {
   users: User[];
   selectedUserId: string | null;
+};
+
+type PendingAttachment = {
+  file: File;
+  previewUrl: string;
+  type: "image" | "video" | "audio" | "file";
+  mimeType: string;
+  fileName: string;
+  size: number;
 };
 
 let chatPageCache: ChatPageCache | null = null;
@@ -155,6 +168,7 @@ export default function ChatPage() {
   const [users, setUsers] = useState<User[]>(() => chatPageCache?.users ?? []);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [newMessage, setNewMessage] = useState("");
+  const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment | null>(null);
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
   const [loadingUsers, setLoadingUsers] = useState(true);
@@ -663,12 +677,62 @@ export default function ChatPage() {
     fileInputRef.current?.click();
   };
 
+  const clearPendingAttachment = useCallback(() => {
+    setPendingAttachment((prev) => {
+      if (prev?.previewUrl) {
+        URL.revokeObjectURL(prev.previewUrl);
+      }
+      return null;
+    });
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  }, []);
+
+  const handleFileChange = useCallback((file: File | null) => {
+    if (!file) return;
+
+    setPendingAttachment((prev) => {
+      if (prev?.previewUrl) {
+        URL.revokeObjectURL(prev.previewUrl);
+      }
+
+      const mimeType = file.type || "application/octet-stream";
+      const type = mimeType.startsWith("image/")
+        ? "image"
+        : mimeType.startsWith("video/")
+          ? "video"
+          : mimeType.startsWith("audio/")
+            ? "audio"
+            : "file";
+
+      return {
+        file,
+        previewUrl: URL.createObjectURL(file),
+        type,
+        mimeType,
+        fileName: file.name,
+        size: file.size,
+      };
+    });
+
+    setShowEmojiPicker(false);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (pendingAttachment?.previewUrl) {
+        URL.revokeObjectURL(pendingAttachment.previewUrl);
+      }
+    };
+  }, [pendingAttachment]);
+
   /* ------------------------------ SEND MESSAGE ------------------------------ */
   const handleSendMessage = async (e?: React.FormEvent) => {
     e?.preventDefault();
 
     if (
-      !newMessage.trim() ||
       !selectedUser ||
       !currentUserId ||
       sendingMessage
@@ -677,6 +741,9 @@ export default function ChatPage() {
     }
 
     const messageText = newMessage.trim();
+    if (!messageText && !pendingAttachment) {
+      return;
+    }
     const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
     try {
@@ -687,11 +754,14 @@ export default function ChatPage() {
         content: messageText,
         receiverId: selectedUser.id,
         senderId: currentUserId,
+        replyToId: replyTo?.id,
+        file: pendingAttachment?.file ?? null,
       });
 
       setNewMessage("");
       setReplyTo(null);
       setShowEmojiPicker(false);
+      clearPendingAttachment();
 
       inputRef.current?.focus();
     } finally {
@@ -801,6 +871,32 @@ export default function ChatPage() {
           navigator.vibrate(30);
         }
         break;
+      case "copyLink": {
+        const chatUserId =
+          message.senderId === currentUserId ? message.receiverId : message.senderId;
+        const link = `${window.location.origin}/chat?userId=${chatUserId}#message-${message.id}`;
+        await navigator.clipboard.writeText(link);
+        break;
+      }
+      case "share": {
+        const attachment = message.attachments?.[0];
+        const shareUrl = attachment?.url || window.location.href;
+
+        if (navigator.share) {
+          try {
+            await navigator.share({
+              title: attachment?.fileName || "Chat message",
+              text: message.text || message.content || "Shared from chat",
+              url: shareUrl,
+            });
+          } catch (error) {
+            console.error("Share failed:", error);
+          }
+        } else {
+          await navigator.clipboard.writeText(shareUrl);
+        }
+        break;
+      }
       case "forward":
         alert("Forward functionality coming soon!");
         break;
@@ -860,6 +956,23 @@ export default function ChatPage() {
       case "info":
         alert(`Message Info:\n\nID: ${message.id}\nSent: ${new Date(message.timestamp).toLocaleString()}\nStatus: ${message.status || 'unknown'}`);
         break;
+      case "download": {
+        const attachment = message.attachments?.[0];
+        if (!attachment?.url) break;
+
+        const link = document.createElement("a");
+        link.href = attachment.url;
+        link.download = attachment.fileName || "download";
+        link.target = "_blank";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        break;
+      }
+      case "bookmark":
+      case "archive":
+      case "select":
+        break;
     }
     setContextMenu(null);
   };
@@ -896,6 +1009,7 @@ export default function ChatPage() {
     setReplyTo(null);
     setContextMenu(null);
     setShowEmojiPicker(false);
+    clearPendingAttachment();
     
     if (isMobile) {
       setShowMobileSidebar(false);
@@ -913,6 +1027,7 @@ export default function ChatPage() {
     setReplyTo(null);
     setContextMenu(null);
     setShowEmojiPicker(false);
+    clearPendingAttachment();
     
     if (isMobile) {
       setShowMobileSidebar(true);
@@ -965,6 +1080,7 @@ export default function ChatPage() {
           setSelectedUser(null);
           setReplyTo(null);
           setContextMenu(null);
+          clearPendingAttachment();
           if (isMobile) {
             setShowMobileSidebar(true);
           }
@@ -977,6 +1093,7 @@ export default function ChatPage() {
       }
     },
     [
+      clearPendingAttachment,
       currentUserId,
       isMobile,
       removeMessage,
@@ -1189,6 +1306,9 @@ export default function ChatPage() {
             inputRef={inputRef}
             fileInputRef={fileInputRef}
             handleFileSelect={handleFileSelect}
+            handleFileChange={handleFileChange}
+            pendingAttachment={pendingAttachment}
+            clearPendingAttachment={clearPendingAttachment}
             showEmojiPicker={showEmojiPicker}
             setShowEmojiPicker={setShowEmojiPicker}
             emojiPickerRef={emojiPickerRef}

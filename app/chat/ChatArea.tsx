@@ -2,16 +2,19 @@
 "use client";
 
 import React, { useEffect } from "react";
-import { Message, User } from "../types/socket";
+import { ChatAttachment, Message, User } from "../types/socket";
 import { Session } from "next-auth";
 import {
+  AudioLines,
   Check,
   CheckCheck,
   ChevronDown,
+  FileText,
   Loader2,
   Paperclip,
   Send,
   Smile,
+  X,
 } from "lucide-react";
 
 interface ChatAreaProps {
@@ -27,6 +30,15 @@ interface ChatAreaProps {
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   handleFileSelect: () => void;
+  handleFileChange: (file: File | null) => void;
+  pendingAttachment: {
+    previewUrl: string;
+    type: "image" | "video" | "audio" | "file";
+    mimeType: string;
+    fileName: string;
+    size: number;
+  } | null;
+  clearPendingAttachment: () => void;
   showEmojiPicker: boolean;
   setShowEmojiPicker: (show: boolean) => void;
   emojiPickerRef: React.RefObject<HTMLDivElement | null>;
@@ -52,6 +64,128 @@ interface ChatAreaProps {
   onSendMessage: () => void;
   isConnected?: boolean; // Optional for connection status
 }
+
+const formatFileSize = (size?: number) => {
+  if (!size) return "";
+  const units = ["B", "KB", "MB", "GB"];
+  let value = size;
+  let index = 0;
+  while (value >= 1024 && index < units.length - 1) {
+    value /= 1024;
+    index += 1;
+  }
+  return `${value.toFixed(value >= 10 || index === 0 ? 0 : 1)} ${units[index]}`;
+};
+
+const renderMessageText = (value: string) => {
+  const urlPattern = /(https?:\/\/[^\s]+)/g;
+  const parts = value.split(urlPattern);
+
+  return parts.map((part, index) => {
+    if (/^https?:\/\/[^\s]+$/i.test(part)) {
+      return (
+        <a
+          key={`${part}-${index}`}
+          href={part}
+          target="_blank"
+          rel="noreferrer"
+          className="break-all text-inherit underline underline-offset-2"
+        >
+          {part}
+        </a>
+      );
+    }
+
+    return <span key={`text-${index}`}>{part}</span>;
+  });
+};
+
+const renderAttachment = (attachment?: ChatAttachment) => {
+  if (!attachment?.url) return null;
+  const targetHref = attachment.targetUrl || attachment.url;
+  const isFeedShare = attachment.source === "feed" && Boolean(attachment.targetUrl);
+
+  if (attachment.type === "image") {
+    return (
+      <a
+        href={targetHref}
+        target={isFeedShare ? undefined : "_blank"}
+        rel={isFeedShare ? undefined : "noreferrer"}
+        className="mb-2 block w-full max-w-[280px]"
+      >
+        <img
+          src={attachment.url}
+          alt={attachment.fileName || "Image attachment"}
+          className="block max-h-72 w-full rounded-xl object-cover"
+        />
+      </a>
+    );
+  }
+
+  if (attachment.type === "video") {
+    if (isFeedShare) {
+      return (
+        <a
+          href={targetHref}
+          target={undefined}
+          rel={undefined}
+          className="relative mb-2 block w-full max-w-[280px] overflow-hidden rounded-xl"
+        >
+          <video
+            src={attachment.url}
+            muted
+            playsInline
+            loop
+            autoPlay
+            className="block max-h-72 w-full rounded-xl bg-black object-cover"
+          />
+          <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+            <div className="rounded-full bg-black/60 px-4 py-2 text-sm font-medium text-white">
+              Open in feed
+            </div>
+          </div>
+        </a>
+      );
+    }
+
+    return (
+      <video
+        src={attachment.url}
+        controls
+        className="mb-2 block max-h-72 w-full max-w-[280px] rounded-xl bg-black"
+      />
+    );
+  }
+
+  if (attachment.type === "audio") {
+    return (
+      <div className="mb-2 rounded-xl bg-black/10 px-3 py-3 dark:bg-white/10">
+        <div className="mb-2 flex items-center gap-2 text-sm font-medium">
+          <AudioLines size={16} />
+          <span className="truncate">{attachment.fileName || "Audio file"}</span>
+        </div>
+        <audio src={attachment.url} controls className="w-full" />
+      </div>
+    );
+  }
+
+  return (
+    <a
+      href={attachment.url}
+      target="_blank"
+      rel="noreferrer"
+      className="mb-2 flex w-full max-w-[280px] items-center gap-3 rounded-xl bg-black/10 px-3 py-3 dark:bg-white/10"
+    >
+      <FileText size={18} />
+      <div className="min-w-0">
+        <div className="truncate text-sm font-medium">
+          {attachment.fileName || "Attachment"}
+        </div>
+        <div className="text-xs opacity-75">{formatFileSize(attachment.size)}</div>
+      </div>
+    </a>
+  );
+};
 
 const MessageStatusIndicator = ({ 
   messageId, 
@@ -105,6 +239,9 @@ export default function ChatArea({
   inputRef,
   fileInputRef,
   handleFileSelect,
+  handleFileChange,
+  pendingAttachment,
+  clearPendingAttachment,
   showEmojiPicker,
   setShowEmojiPicker,
   emojiPickerRef,
@@ -181,18 +318,27 @@ export default function ChatArea({
               ) : (
                 messages.map((msg) => {
                   const isCurrentUser = msg.senderId === currentUserId;
+                  const hasAttachment = Boolean(msg.attachments?.[0]?.url);
+                  const hasText = Boolean(msg.text || msg.content);
                   
                   return (
                     <div
                       key={msg.id}
+                      id={`message-${msg.id}`}
                       className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
                       onMouseEnter={() => setHoveredMessageId(msg.id)}
                       onMouseLeave={() => setHoveredMessageId(null)}
                     >
-                      <div className="relative group max-w-[70%] w-fit">
+                      <div
+                        className={`relative group ${
+                          hasAttachment ? "max-w-[320px] w-full" : "max-w-[70%] w-fit"
+                        }`}
+                      >
                         {/* Message Bubble */}
                         <div
-                          className={`rounded-2xl px-4 py-3 ${
+                          className={`rounded-2xl ${
+                            hasAttachment && !hasText ? "px-2 py-2" : "px-4 py-3"
+                          } ${
                             isCurrentUser
                               ? 'bg-blue-600 text-white rounded-br-none'
                               : 'bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-white rounded-bl-none'
@@ -206,7 +352,12 @@ export default function ChatArea({
                             </div>
                           )}
                           
-                        <div>{msg.text || msg.content}</div>
+                        {renderAttachment(msg.attachments?.[0])}
+                        {(msg.text || msg.content) && (
+                          <div className="break-words whitespace-pre-wrap">
+                            {renderMessageText(msg.text || msg.content || "")}
+                          </div>
+                        )}
 
                           
                           {/* Message timestamp and status */}
@@ -303,12 +454,12 @@ export default function ChatArea({
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (file) {
-                      console.log('Selected file:', file);
-                      e.target.value = '';
+                      handleFileChange(file);
                     }
+                    e.target.value = "";
                   }}
                   className="hidden"
-                  accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
+                  accept="*/*"
                 />
                 <button
                   type="button"
@@ -355,6 +506,47 @@ export default function ChatArea({
               {/* Text Area with Send Button on Side */}
               <div className="flex-1 flex items-end space-x-3">
                 <div className="flex-1 relative">
+                  {pendingAttachment && (
+                    <div className="mb-2 rounded-2xl border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800">
+                      <div className="mb-2 flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-gray-900 dark:text-white">
+                            {pendingAttachment.fileName}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            {pendingAttachment.mimeType || pendingAttachment.type} • {formatFileSize(pendingAttachment.size)}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={clearPendingAttachment}
+                          className="rounded-full p-1 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700"
+                          aria-label="Remove attachment"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+
+                      {pendingAttachment.type === "image" && (
+                        <img
+                          src={pendingAttachment.previewUrl}
+                          alt={pendingAttachment.fileName}
+                          className="max-h-40 rounded-xl object-cover"
+                        />
+                      )}
+                      {pendingAttachment.type === "video" && (
+                        <video
+                          src={pendingAttachment.previewUrl}
+                          controls
+                          className="max-h-40 rounded-xl bg-black"
+                        />
+                      )}
+                      {pendingAttachment.type === "audio" && (
+                        <audio src={pendingAttachment.previewUrl} controls className="w-full" />
+                      )}
+                    </div>
+                  )}
+
                   <textarea
                     ref={inputRef}
                     value={newMessage}
@@ -375,7 +567,7 @@ export default function ChatArea({
                 <button
                   type="button"
                   onClick={handleSendClick}
-                  disabled={sendingMessage || !newMessage.trim() || (isConnected !== undefined && !isConnected)}
+                  disabled={sendingMessage || (!newMessage.trim() && !pendingAttachment) || (isConnected !== undefined && !isConnected)}
                   className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg flex items-center justify-center"
                   style={{ minHeight: '44px', minWidth: '44px' }}
                 >

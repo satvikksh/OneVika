@@ -294,6 +294,11 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
   };
 
   const menuItems = getAllMenuItems();
+  const messagePreview =
+    message.text ||
+    message.attachments?.[0]?.fileName ||
+    message.content ||
+    "Media message";
 
   // Forward submenu items
   const forwardSubMenuItems = [
@@ -353,7 +358,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
                     Message Options
                   </h3>
                   <p className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[200px]">
-                    {message.text || "Media message"}
+                    {messagePreview}
                   </p>
                 </div>
               </div>
@@ -547,7 +552,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
             <div className="min-w-0">
               <div className="text-xs text-gray-500 dark:text-gray-400 mb-0.5">Message</div>
               <div className="text-sm text-gray-900 dark:text-white truncate max-w-[220px]">
-                {message.text || "Media message"}
+                {messagePreview}
               </div>
               <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -835,7 +840,9 @@ export const MessageInfoPanel: React.FC<{
           <div className="space-y-4">
             {/* Message preview */}
             <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              <p className="text-gray-900 dark:text-white">{message.text}</p>
+              <p className="text-gray-900 dark:text-white">
+                {message.text || message.attachments?.[0]?.fileName || message.content || "Media message"}
+              </p>
             </div>
             
             {/* Status info */}

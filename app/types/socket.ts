@@ -24,10 +24,20 @@ export interface Message {
   conversationId?: string;
   read?: boolean;
   status?: "sending" | "sent" | "delivered" | "read";
-  type?: "text" | "image" | "file";
-  attachments?: string[];
+  type?: "text" | "image" | "video" | "audio" | "file";
+  attachments?: ChatAttachment[];
   replyToId?: string;
   seenBy?: string[];
+}
+
+export interface ChatAttachment {
+  url: string;
+  type: "image" | "video" | "audio" | "file";
+  mimeType?: string;
+  fileName?: string;
+  size?: number;
+  targetUrl?: string;
+  source?: "feed" | "upload" | "link";
 }
 
 export interface User {
