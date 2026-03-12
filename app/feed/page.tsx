@@ -648,7 +648,6 @@ function CommentsModal({
 }
 
 function SharePostModal({ isOpen, onClose, post }: SharePostModalProps) {
-  const router = useRouter();
   const [users, setUsers] = useState<ShareChatUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -762,7 +761,6 @@ function SharePostModal({ isOpen, onClose, post }: SharePostModalProps) {
       }
 
       onClose();
-      router.push(`/chat?userId=${userId}`);
     } catch (sendError) {
       console.error("Failed to share post to chat:", sendError);
       setError(sendError instanceof Error ? sendError.message : "Failed to share to chat");
@@ -907,18 +905,21 @@ function SharePostModal({ isOpen, onClose, post }: SharePostModalProps) {
 // --- ANIMATION VARIANTS (INSTANT SCROLL) ---
 const variants: Variants = {
   enter: (direction: number) => ({
-    y: direction > 0 ? "100%" : "-100%",
-    opacity: 1,
+    y: direction > 0 ? "18%" : "-18%",
+    opacity: 0.92,
+    scale: 0.985,
   }),
   center: {
     zIndex: 1,
     y: 0,
     opacity: 1,
+    scale: 1,
   },
   exit: (direction: number) => ({
     zIndex: 0,
-    y: direction < 0 ? "100%" : "-100%",
-    opacity: 1,
+    y: direction < 0 ? "18%" : "-18%",
+    opacity: 0.92,
+    scale: 0.985,
   }),
 };
 
@@ -927,8 +928,6 @@ type FeedPageCache = {
   page: number;
   hasMore: boolean;
   currentPostIndex: number;
-  isVideoPlaying: Record<string, boolean>;
-  isVideoMuted: Record<string, boolean>;
 };
 
 let feedPageCache: FeedPageCache | null = null;
@@ -937,6 +936,7 @@ const feedCacheKey = (userId: string) => `orbitbyte:feed-cache:${userId}`;
 const WHEEL_SCROLL_THROTTLE_MS = 120;
 const WHEEL_DELTA_THRESHOLD = 28;
 const SCROLL_UNLOCK_DELAY_MS = 260;
+const FEED_CACHE_WRITE_DELAY_MS = 250;
 
 // --- MAIN FEED PAGE ---
 export default function FeedPage() {
@@ -1029,6 +1029,7 @@ export default function FeedPage() {
   const carouselIndexRef = useRef(0);
   const carouselRafRef = useRef<number | null>(null);
   const routePostHandledRef = useRef(false);
+  const cacheWriteTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   /* ============================
        🔐 REDIRECT (SIDE EFFECT)
@@ -1076,6 +1077,9 @@ export default function FeedPage() {
       if (carouselRafRef.current !== null) {
         window.cancelAnimationFrame(carouselRafRef.current);
       }
+      if (cacheWriteTimeoutRef.current) {
+        clearTimeout(cacheWriteTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -1095,8 +1099,6 @@ export default function FeedPage() {
       setPage(parsed.page ?? 1);
       setHasMore(typeof parsed.hasMore === "boolean" ? parsed.hasMore : true);
       setCurrentPostIndex(parsed.currentPostIndex ?? 0);
-      setIsVideoPlaying(parsed.isVideoPlaying ?? {});
-      setIsVideoMuted(parsed.isVideoMuted ?? {});
       setInitialLoad(false);
     } catch (error) {
       console.warn("Failed to restore feed cache:", error);
@@ -1106,30 +1108,38 @@ export default function FeedPage() {
   useEffect(() => {
     if (!session?.user?.id || posts.length === 0) return;
 
-    const snapshot: FeedPageCache = {
-      posts,
-      page,
-      hasMore,
-      currentPostIndex,
-      isVideoPlaying,
-      isVideoMuted,
-    };
-
-    feedPageCache = snapshot;
-
-    try {
-      sessionStorage.setItem(feedCacheKey(session.user.id), JSON.stringify(snapshot));
-    } catch {
-      // ignore storage quota issues
+    if (cacheWriteTimeoutRef.current) {
+      clearTimeout(cacheWriteTimeoutRef.current);
     }
+
+    cacheWriteTimeoutRef.current = setTimeout(() => {
+      const snapshot: FeedPageCache = {
+        posts,
+        page,
+        hasMore,
+        currentPostIndex,
+      };
+
+      feedPageCache = snapshot;
+
+      try {
+        sessionStorage.setItem(feedCacheKey(session.user.id), JSON.stringify(snapshot));
+      } catch {
+        // ignore storage quota issues
+      }
+    }, FEED_CACHE_WRITE_DELAY_MS);
+
+    return () => {
+      if (cacheWriteTimeoutRef.current) {
+        clearTimeout(cacheWriteTimeoutRef.current);
+      }
+    };
   }, [
     session?.user?.id,
     posts,
     page,
     hasMore,
     currentPostIndex,
-    isVideoPlaying,
-    isVideoMuted,
   ]);
 
   useEffect(() => {
@@ -1194,26 +1204,10 @@ export default function FeedPage() {
           return;
         }
 
-        const postsWithComments = await Promise.all(
-          data.map(async (post: PostType) => {
-            try {
-              const commentsRes = await fetch(
-                `/api/posts/${post._id}/comments`
-              );
-              if (commentsRes.ok) {
-                const comments = await commentsRes.json();
-                return { ...post, comments: comments || [] };
-              }
-              return { ...post, comments: [] };
-            } catch (error) {
-              console.error(
-                `Error fetching comments for post ${post._id}:`,
-                error
-              );
-              return { ...post, comments: [] };
-            }
-          })
-        );
+        const postsWithComments = (data as PostType[]).map((post) => ({
+          ...post,
+          comments: Array.isArray(post.comments) ? post.comments : [],
+        }));
 
         if (isInitialLoad) {
           // SHUFFLE POSTS ON INITIAL LOAD
@@ -1773,6 +1767,38 @@ export default function FeedPage() {
     window.history.replaceState({}, "", `${url.pathname}?${url.searchParams.toString()}`);
   }, [currentPostIndex, posts]);
 
+  const currentPost = posts[currentPostIndex];
+  const mediaCount = currentPost?.images?.length || 0;
+  const isTextOnly = mediaCount === 0;
+  const isCarousel = mediaCount > 1;
+  const nextPost = posts[currentPostIndex + 1];
+  const previousPost = posts[currentPostIndex - 1];
+
+  useEffect(() => {
+    const nearbyPosts = [previousPost, currentPost, nextPost].filter(Boolean) as PostType[];
+
+    nearbyPosts.forEach((post) => {
+      post.images?.forEach((src) => {
+        if (isVideo(src)) {
+          const link = document.createElement("link");
+          link.rel = "preload";
+          link.as = "video";
+          link.href = src;
+          document.head.appendChild(link);
+
+          window.setTimeout(() => {
+            if (document.head.contains(link)) {
+              document.head.removeChild(link);
+            }
+          }, 4000);
+        } else if (src) {
+          const img = new window.Image();
+          img.src = src;
+        }
+      });
+    });
+  }, [currentPostIndex, currentPost, nextPost, previousPost]);
+
   if (loadingPosts && initialLoad) {
     return <FeedSkeleton />;
   }
@@ -1780,11 +1806,6 @@ export default function FeedPage() {
   if (status === "loading") {
     return <FeedSkeleton />;
   }
-
-  const currentPost = posts[currentPostIndex];
-  const mediaCount = currentPost?.images?.length || 0;
-  const isTextOnly = mediaCount === 0;
-  const isCarousel = mediaCount > 1;
 
   // Check if current media is video
   const currentMediaIsVideo = currentPost?.images 
@@ -1821,10 +1842,11 @@ export default function FeedPage() {
               animate="center"
               exit="exit"
               transition={{
-                y: { type: "tween", ease: "easeOut", duration: 0.3 }, 
-                opacity: { duration: 0.2 },
+                y: { type: "spring", stiffness: 280, damping: 30, mass: 0.85 },
+                opacity: { duration: 0.16 },
+                scale: { duration: 0.18 },
               }}
-              className="absolute inset-0 flex flex-col"
+              className="absolute inset-0 flex flex-col will-change-transform"
             >
               {/* ==================================================
                                 MEDIA CONTENT AREA

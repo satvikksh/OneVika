@@ -131,7 +131,7 @@ export default function Home() {
 
         {/* Footer */}
         <footer className="text-center pt-6">
-          <p className="text-xs text-stone-600">Designed for calm.</p>
+          <p className="text-xs text-stone-600">Designed by Satvik's Group.</p>
         </footer>
 
         <RoomModal

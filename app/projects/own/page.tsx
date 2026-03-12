@@ -1,0 +1,79 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
+import { Loader2 } from "lucide-react";
+import { EmptyProjects, ProjectCard, ProjectsShell, type ProjectItem } from "../project-ui";
+
+export default function OwnProjectsPage() {
+  const { data: session, status } = useSession();
+  const [projects, setProjects] = useState<ProjectItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchOwnProjects = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch("/api/projects?scope=own", { cache: "no-store" });
+        const payload = (await response.json()) as {
+          projects?: ProjectItem[];
+          error?: string;
+        };
+
+        if (!response.ok) {
+          throw new Error(payload.error || "Failed to load own projects");
+        }
+
+        setProjects(Array.isArray(payload.projects) ? payload.projects : []);
+      } catch (fetchError) {
+        console.error("Failed to load own projects:", fetchError);
+        setError(fetchError instanceof Error ? fetchError.message : "Failed to load own projects");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (status === "authenticated") {
+      fetchOwnProjects();
+    } else if (status === "unauthenticated") {
+      setLoading(false);
+    }
+  }, [status]);
+
+  if (status === "loading" || loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950">
+        <Loader2 className="h-8 w-8 animate-spin text-cyan-300" />
+      </div>
+    );
+  }
+
+  return (
+    <ProjectsShell
+      eyebrow="Own Projects"
+      title="Your personal project board"
+      description="Everything created by your account appears here."
+    >
+      {!session ? (
+        <EmptyProjects
+          title="Sign in to view your projects"
+          description="Your project list is available after login."
+        />
+      ) : error ? (
+        <EmptyProjects title="Unable to load projects" description={error} />
+      ) : projects.length === 0 ? (
+        <EmptyProjects
+          title="No own projects yet"
+          description="Go to Add Project and publish your first one."
+        />
+      ) : (
+        <section className="grid gap-6 lg:grid-cols-2">
+          {projects.map((project) => (
+            <ProjectCard key={project.id} project={project} showAuthor={false} />
+          ))}
+        </section>
+      )}
+    </ProjectsShell>
+  );
+}
