@@ -52,7 +52,7 @@ export async function GET(req: Request) {
     return NextResponse.json(
       posts.map((post) => ({
         ...post,
-        userId: formatPostAuthor(post.userId),
+        userId: formatPostAuthor(post.userId as unknown as PopulatedAuthor),
       }))
     );
 
@@ -101,7 +101,7 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         ...populatedPost.toObject(),
-        userId: formatPostAuthor(populatedPost.userId),
+        userId: formatPostAuthor(populatedPost.userId as unknown as PopulatedAuthor),
       },
       { status: 201 }
     );
