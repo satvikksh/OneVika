@@ -2,19 +2,17 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { User } from "../types/socket";
-import Image from "next/image";
 import { 
   Search, 
   User as UserIcon, 
   Loader2, 
   ArrowLeft,
   Menu,
-  Users,
   MessageSquare,
   MoreVertical,
   Trash2
 } from "lucide-react";
-import { useSession } from "next-auth/react";
+import { PremiumAvatar, PremiumName } from "../components/premium-ui";
 
 interface ChatSidebarProps {
   users: User[];
@@ -35,22 +33,6 @@ interface ChatSidebarProps {
   onToggleMobileSidebar?: () => void;
 }
 
-const formatTime = (ts?: string) => {
-  if (!ts) return "Just now";
-  try {
-    const date = new Date(ts);
-    const now = new Date();
-    const diffInMinutes = (now.getTime() - date.getTime()) / (1000 * 60);
-    
-    if (diffInMinutes < 1) return "Just now";
-    if (diffInMinutes < 60) return `${Math.floor(diffInMinutes)}m`;
-    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h`;
-    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-  } catch {
-    return "Just now";
-  }
-};
-
 export default function ChatSidebar({
   users,
   selectedUser,
@@ -66,10 +48,8 @@ export default function ChatSidebar({
   deletingChatUserId = null,
   isMobile = false,
   showMobileSidebar = true,
-  onBackToSidebar,
   onToggleMobileSidebar,
 }: ChatSidebarProps) {
-  const { data: session } = useSession();
   const [isSearching, setIsSearching] = useState(false);
   const [activeMenuUserId, setActiveMenuUserId] = useState<string | null>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
@@ -209,7 +189,13 @@ export default function ChatSidebar({
                           }}
                           className="w-full px-3 py-2 text-left text-sm text-gray-800 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
                         >
-                          {user.name || user.email || "Unknown user"}
+                          <PremiumName
+                            name={user.name || user.email || "Unknown user"}
+                            isPremium={Boolean(user.isPremium)}
+                            badgeLabel="Premium"
+                            badgeClassName="px-1.5 py-0.5 text-[9px]"
+                            textClassName="text-inherit"
+                          />
                         </button>
                       ))
                     ) : (
@@ -283,23 +269,13 @@ export default function ChatSidebar({
                       className="w-full flex items-center gap-3 p-4 pr-14 active:scale-98"
                     >
                     <div className="relative flex-shrink-0">
-                      <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-blue-500 ring-2 ring-white dark:ring-gray-900">
-                        {user.avatar ? (
-                          <Image
-                            src={user.avatar}
-                            alt={user.name || "User"}
-                            width={48}
-                            height={48}
-                            className="object-cover w-full h-full"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <span className="text-white font-bold text-lg">
-                              {user.name?.charAt(0)?.toUpperCase() || "U"}
-                            </span>
-                          </div>
-                        )}
-                      </div>
+                      <PremiumAvatar
+                        src={typeof user.avatar === "string" ? user.avatar : null}
+                        alt={user.name || "User"}
+                        fallback={user.name || "U"}
+                        size={48}
+                        isPremium={Boolean(user.isPremium)}
+                      />
                       {isOnline && (
                         <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white dark:border-gray-900 rounded-full" />
                       )}
@@ -307,9 +283,14 @@ export default function ChatSidebar({
 
                     <div className="flex-1 text-left min-w-0">
                       <div className="flex justify-between items-center mb-0.5">
-                        <p className="font-semibold text-gray-900 dark:text-white truncate">
-                          {user.name || "Unknown"}
-                        </p>
+                        <PremiumName
+                          name={user.name || "Unknown"}
+                          isPremium={Boolean(user.isPremium)}
+                          badgeLabel="Premium"
+                          badgeClassName="px-1.5 py-0.5 text-[9px]"
+                          textClassName="font-semibold text-gray-900 dark:text-white"
+                          className="min-w-0"
+                        />
                         {user.lastSeen && (
                           <span className="text-xs text-gray-500 flex-shrink-0 ml-2">
                             {/* {formatTime(user.lastSeen)} */}
@@ -466,23 +447,13 @@ export default function ChatSidebar({
                   className="w-full flex items-center gap-3 p-4 pr-14"
                 >
                 <div className="relative flex-shrink-0">
-                  <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-blue-500 ring-2 ring-white dark:ring-gray-900">
-                    {user.avatar ? (
-                      <Image
-                        src={user.avatar}
-                        alt={user.name || "User"}
-                        width={48}
-                        height={48}
-                        className="object-cover w-full h-full"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <span className="text-white font-bold text-lg">
-                          {user.name?.charAt(0)?.toUpperCase() || "U"}
-                        </span>
-                      </div>
-                    )}
-                  </div>
+                  <PremiumAvatar
+                    src={typeof user.avatar === "string" ? user.avatar : null}
+                    alt={user.name || "User"}
+                    fallback={user.name || "U"}
+                    size={48}
+                    isPremium={Boolean(user.isPremium)}
+                  />
                   {isOnline && (
                     <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white dark:border-gray-900 rounded-full" />
                   )}
@@ -490,9 +461,14 @@ export default function ChatSidebar({
 
                 <div className="flex-1 text-left min-w-0">
                   <div className="flex justify-between items-center mb-0.5">
-                    <p className="font-semibold text-gray-900 dark:text-white truncate">
-                      {user.name || "Unknown"}
-                    </p>
+                    <PremiumName
+                      name={user.name || "Unknown"}
+                      isPremium={Boolean(user.isPremium)}
+                      badgeLabel="Premium"
+                      badgeClassName="px-1.5 py-0.5 text-[9px]"
+                      textClassName="font-semibold text-gray-900 dark:text-white"
+                      className="min-w-0"
+                    />
                     {user.lastSeen && (
                       <span className="text-xs text-gray-500 flex-shrink-0 ml-2">
                         {/* {formatTime(user.lastSeen)} */}

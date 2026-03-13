@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/lib/authOptions";
 import { dbConnect } from "@/app/lib/mongodb";
+import { isPremiumActive } from "@/app/lib/premium";
 import Post from "@/app/models/Post";
 import mongoose from "mongoose";
 
@@ -57,8 +58,8 @@ export async function POST(
 
     // Fetch the updated post with populated data
     const updatedPost = await Post.findById(params.id)
-      .populate('userId', 'name email image avatar')
-      .populate('comments.user', 'name email image avatar');
+      .populate('userId', 'name email image avatar isPremium premiumExpiresAt')
+      .populate('comments.user', 'name email image avatar isPremium premiumExpiresAt');
 
     if (!updatedPost) {
       return NextResponse.json({ error: "Post not found after update" }, { status: 404 });
@@ -80,6 +81,8 @@ export async function POST(
         name: (addedComment.user as any)?.name || 'Unknown User',
         email: (addedComment.user as any)?.email || 'unknown@example.com',
         image: (addedComment.user as any)?.image || (addedComment.user as any)?.avatar,
+        avatar: (addedComment.user as any)?.avatar || (addedComment.user as any)?.image,
+        isPremium: isPremiumActive((addedComment.user as any) || {}),
       },
       createdAt: addedComment.createdAt ? addedComment.createdAt.toISOString() : new Date().toISOString(),
     };
@@ -105,8 +108,8 @@ export async function GET(
     await dbConnect();
 
     const post = await Post.findById(params.id)
-      .populate('userId', 'name email image avatar')
-      .populate('comments.user', 'name email image avatar');
+      .populate('userId', 'name email image avatar isPremium premiumExpiresAt')
+      .populate('comments.user', 'name email image avatar isPremium premiumExpiresAt');
 
     if (!post) {
       return NextResponse.json({ error: "Post not found" }, { status: 404 });
@@ -121,6 +124,8 @@ export async function GET(
         name: (comment.user as any)?.name || 'Unknown User',
         email: (comment.user as any)?.email || 'unknown@example.com',
         image: (comment.user as any)?.image || (comment.user as any)?.avatar,
+        avatar: (comment.user as any)?.avatar || (comment.user as any)?.image,
+        isPremium: isPremiumActive((comment.user as any) || {}),
       },
       createdAt: comment.createdAt ? comment.createdAt.toISOString() : new Date().toISOString(),
     }));

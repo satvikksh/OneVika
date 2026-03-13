@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/lib/authOptions";
 import { dbConnect } from "@/app/lib/mongodb";
+import { isPremiumActive } from "@/app/lib/premium";
 import Post from "@/app/models/Post";
 import User from "@/app/models/User";
 import { Types } from "mongoose";
@@ -39,7 +40,7 @@ export async function GET(
     // Fetch user details for each like
     const users = await User.find(
       { _id: { $in: post.likes } },
-      { _id: 1, name: 1, email: 1, image: 1, avatar: 1 }
+      { _id: 1, name: 1, email: 1, image: 1, avatar: 1, isPremium: 1, premiumExpiresAt: 1 }
     );
 
     // Format users for response
@@ -48,7 +49,8 @@ export async function GET(
       name: user.name,
       email: user.email,
       image: user.image,
-      avatar: user.avatar
+      avatar: user.avatar,
+      isPremium: isPremiumActive(user),
     }));
 
     return NextResponse.json(formattedUsers);

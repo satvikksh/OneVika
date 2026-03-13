@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import {
@@ -18,10 +18,8 @@ import {
   User,
   Shield,
   GlobeIcon,
-  Users,
   UserPlus,
   UserCheck,
-  ChevronRight,
   Edit,
   X,
   Save,
@@ -32,6 +30,7 @@ import {
   Briefcase,
   GraduationCap,
   Settings,
+  Crown,
 } from "lucide-react";
 import { useSocket } from "../../context/SocketContext";
 import { useSession } from "next-auth/react";
@@ -90,6 +89,46 @@ interface PremiumStatus {
     brand?: string;
     last4?: string;
   } | null;
+}
+
+interface ApiPost {
+  _id?: string;
+  id?: string;
+  content?: string;
+  image?: string;
+  likes?: unknown[] | number;
+  comments?: unknown[] | number;
+  timestamp?: string;
+  createdAt?: string;
+  isLiked?: boolean;
+}
+
+interface RazorpayPaymentResponse {
+  razorpay_payment_id: string;
+  razorpay_order_id: string;
+  razorpay_signature: string;
+}
+
+interface RazorpayCheckoutOptions {
+  key: string;
+  amount: number;
+  currency: string;
+  name: string;
+  description: string;
+  order_id: string;
+  prefill?: Record<string, string>;
+  handler: (response: RazorpayPaymentResponse) => Promise<void>;
+  modal?: {
+    ondismiss?: () => void;
+  };
+}
+
+declare global {
+  interface Window {
+    Razorpay?: new (options: RazorpayCheckoutOptions) => {
+      open: () => void;
+    };
+  }
 }
 
 export default function UserProfilePage() {
@@ -158,7 +197,7 @@ export default function UserProfilePage() {
 
         const data = await response.json();
         const userData = data.user || data;
-        const postsData = Array.isArray(data.posts) ? data.posts : [];
+        const postsData: ApiPost[] = Array.isArray(data.posts) ? data.posts : [];
 
         // ---- Normalize user ----
         setUser({
@@ -194,7 +233,7 @@ export default function UserProfilePage() {
         });
 
         // ---- Normalize posts ----
-        const normalizedPosts = postsData.map((post: any) => ({
+        const normalizedPosts = postsData.map((post) => ({
           id: post._id || post.id,
           content: post.content,
           image: post.image,
@@ -221,7 +260,7 @@ export default function UserProfilePage() {
     }
   }, [userId]);
 
-  const fetchPremiumStatus = async () => {
+  const fetchPremiumStatus = useCallback(async () => {
     if (!isCurrentUser) return;
 
     setPremiumLoading(true);
@@ -246,7 +285,7 @@ export default function UserProfilePage() {
     } finally {
       setPremiumLoading(false);
     }
-  };
+  }, [isCurrentUser]);
 
   const handleActivatePremium = async () => {
     setPremiumActionLoading(true);
@@ -262,7 +301,7 @@ export default function UserProfilePage() {
         throw new Error(data.error || "Unable to start premium checkout");
       }
 
-      if (!(window as any).Razorpay) {
+      if (!window.Razorpay) {
         await new Promise<void>((resolve, reject) => {
           const script = document.createElement("script");
           script.src = "https://checkout.razorpay.com/v1/checkout.js";
@@ -273,7 +312,10 @@ export default function UserProfilePage() {
         });
       }
 
-      const RazorpayCheckout = (window as any).Razorpay;
+      const RazorpayCheckout = window.Razorpay;
+      if (!RazorpayCheckout) {
+        throw new Error("Razorpay SDK unavailable");
+      }
       const razorpay = new RazorpayCheckout({
         key: data.keyId,
         amount: data.amount,
@@ -282,11 +324,7 @@ export default function UserProfilePage() {
         description: data.description,
         order_id: data.orderId,
         prefill: data.prefill,
-        handler: async (response: {
-          razorpay_order_id: string;
-          razorpay_payment_id: string;
-          razorpay_signature: string;
-        }) => {
+        handler: async (response: RazorpayPaymentResponse) => {
           const activateRes = await fetch("/api/premium/activate", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -325,7 +363,7 @@ export default function UserProfilePage() {
   useEffect(() => {
     if (!isCurrentUser) return;
     fetchPremiumStatus();
-  }, [isCurrentUser]);
+  }, [fetchPremiumStatus, isCurrentUser]);
 
   // ---------- FOLLOW TOGGLE ----------
  const handleFollowToggle = async () => {
@@ -607,8 +645,8 @@ export default function UserProfilePage() {
             {error || "User not found"}
           </h2>
           <p className="text-gray-600 dark:text-gray-400 mb-8">
-            The user profile you're looking for doesn't exist or you don't have
-            permission to view it.
+            The user profile you&apos;re looking for doesn&apos;t exist or you don&apos;t
+            have permission to view it.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <button
@@ -632,17 +670,88 @@ export default function UserProfilePage() {
   const canShowMessageButton = !isCurrentUser && Boolean(user.canMessage);
   const isPrivatePostsLocked =
     !isCurrentUser && Boolean(user.isPrivate) && !Boolean(user.canViewPosts);
+  const isPremiumProfile = Boolean(user.isPremium || premiumStatus?.isPremium);
+
+  const pageClass = isPremiumProfile
+    ? "min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(250,204,21,0.16),_transparent_24%),radial-gradient(circle_at_top_right,_rgba(226,232,240,0.14),_transparent_30%),linear-gradient(180deg,_#1c1917_0%,_#2b2418_32%,_#0f172a_100%)]"
+    : "min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800";
+  const headerClass = isPremiumProfile
+    ? "sticky top-0 z-10 border-b border-amber-300/20 bg-gradient-to-r from-stone-950/90 via-amber-950/70 to-slate-900/90 backdrop-blur-sm"
+    : "sticky top-0 z-10 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800";
+  const cardClass = isPremiumProfile
+    ? "rounded-2xl border border-amber-200/15 bg-gradient-to-br from-[#2e2615] via-[#1f1b16] to-[#111827] shadow-[0_18px_60px_rgba(245,158,11,0.12)]"
+    : "bg-white dark:bg-gray-900 rounded-2xl shadow-lg";
+  const badgeClass =
+    "inline-flex items-center gap-1.5 rounded-full border border-amber-300/30 bg-gradient-to-r from-amber-300/20 via-yellow-100/15 to-slate-200/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-amber-200";
+  const nameClass = isPremiumProfile
+    ? "bg-gradient-to-r from-yellow-200 via-amber-300 to-slate-200 bg-clip-text text-transparent"
+    : "text-gray-900 dark:text-white";
+  const avatarRingClass = isPremiumProfile
+    ? "bg-[conic-gradient(from_180deg_at_50%_50%,#fde68a_0deg,#f59e0b_90deg,#f8fafc_180deg,#fbbf24_270deg,#fde68a_360deg)] p-1.5 shadow-[0_0_40px_rgba(251,191,36,0.35)]"
+    : "bg-gradient-to-br from-blue-500 to-blue-500 ring-4 ring-white dark:ring-gray-900 shadow-xl";
+  const titleClass = isPremiumProfile
+    ? "text-slate-50"
+    : "text-gray-900 dark:text-white";
+  const bodyTextClass = isPremiumProfile
+    ? "text-slate-200"
+    : "text-gray-700 dark:text-gray-300";
+  const mutedTextClass = isPremiumProfile
+    ? "text-slate-300"
+    : "text-gray-500 dark:text-gray-400";
+  const metaTextClass = isPremiumProfile
+    ? "text-slate-200"
+    : "text-gray-600 dark:text-gray-300";
+  const dividerClass = isPremiumProfile
+    ? "bg-white/10"
+    : "bg-gray-200 dark:bg-gray-700";
+  const subtleButtonClass = isPremiumProfile
+    ? "border border-white/10 bg-white/5 text-slate-100 hover:bg-white/10"
+    : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700";
+  const inputClass = isPremiumProfile
+    ? "w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-slate-50 placeholder:text-slate-400 focus:border-amber-300/40 focus:outline-none"
+    : "w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-800 dark:text-white";
+  const sectionDividerClass = isPremiumProfile
+    ? "border-white/10"
+    : "border-gray-200 dark:border-gray-700";
+  const infoPanelClass = isPremiumProfile
+    ? "flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-3"
+    : "flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-xl";
+  const statValueClass = isPremiumProfile
+    ? "text-2xl font-bold text-slate-50 group-hover:text-amber-300 transition-colors"
+    : "text-2xl font-bold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors";
+  const statLabelClass = isPremiumProfile
+    ? "text-sm text-slate-300 group-hover:text-slate-100 transition-colors"
+    : "text-sm text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300 transition-colors";
+  const postsTabClass = isPremiumProfile
+    ? "px-6 py-3 flex items-center gap-2 font-medium text-amber-200 border-b-2 border-amber-300"
+    : "px-6 py-3 flex items-center gap-2 font-medium text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400";
+  const emptyStateIconWrapClass = isPremiumProfile
+    ? "w-20 h-20 mx-auto mb-6 rounded-full border border-white/10 bg-white/5 flex items-center justify-center"
+    : "w-20 h-20 mx-auto mb-6 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center";
+  const postCardClass = isPremiumProfile
+    ? "rounded-2xl border border-white/10 bg-white/[0.04] p-6"
+    : "bg-gray-50 dark:bg-gray-800 rounded-2xl p-6 border border-gray-200 dark:border-gray-700";
+  const premiumMembershipClass = isPremiumProfile
+    ? "md:col-span-2 rounded-xl border border-amber-200/20 bg-gradient-to-r from-[#5f4a0f] via-[#76601a] to-[#4a5568] p-4 text-amber-50 shadow-[0_10px_30px_rgba(245,158,11,0.18)]"
+    : "md:col-span-2 p-4 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 text-white";
+  const premiumMembershipButtonClass = isPremiumProfile
+    ? "rounded-lg bg-white px-4 py-2 font-semibold text-stone-900 transition-colors hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-70"
+    : "px-4 py-2 rounded-lg bg-white text-blue-700 font-semibold hover:bg-blue-50 disabled:opacity-70 disabled:cursor-not-allowed transition-colors";
 
   // ---------- RENDER ----------
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+    <div className={pageClass}>
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800">
+      <div className={headerClass}>
         <div className="max-w-6xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
             <button
               onClick={() => router.back()}
-              className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors group"
+              className={`flex items-center gap-2 transition-colors group ${
+                isPremiumProfile
+                  ? "text-amber-100/80 hover:text-white"
+                  : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+              }`}
             >
               <ArrowLeft
                 size={20}
@@ -654,7 +763,11 @@ export default function UserProfilePage() {
             {isCurrentUser && !isEditingProfile && (
               <button
                 onClick={() => router.push("/settings")}
-                className="px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-xl transition-colors flex items-center gap-2"
+                className={`px-4 py-2 text-sm font-medium rounded-xl transition-colors flex items-center gap-2 ${
+                  isPremiumProfile
+                    ? "text-amber-100 hover:text-white hover:bg-white/10"
+                    : "text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30"
+                }`}
               >
                 <Settings size={16} />
                 Settings
@@ -670,28 +783,36 @@ export default function UserProfilePage() {
           {/* ---------- LEFT COLUMN (Profile Card, Contact Info) ---------- */}
           <div className="lg:w-1/3">
             {/* Profile Card */}
-            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg p-6 mb-6">
+            <div className={`${cardClass} p-6 mb-6`}>
               {!isEditingProfile ? (
                 // ----- NORMAL PROFILE VIEW -----
                 <div className="flex flex-col items-center">
                   {/* Avatar */}
                   <div className="relative mb-6">
-                    <div className="w-40 h-40 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-blue-500 ring-4 ring-white dark:ring-gray-900 shadow-xl">
-                      {user.avatar ? (
-                        <Image
-                          src={user.avatar}
-                          alt={user.name}
-                          width={160}
-                          height={160}
-                          className="object-cover w-full h-full"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <span className="text-white font-bold text-5xl">
-                            {user.name.charAt(0).toUpperCase()}
-                          </span>
-                        </div>
-                      )}
+                    <div className={`w-40 h-40 rounded-full ${avatarRingClass}`}>
+                      <div
+                        className={`h-full w-full overflow-hidden rounded-full ring-4 ${
+                          isPremiumProfile
+                            ? "bg-gradient-to-br from-stone-950 via-amber-950 to-slate-500 ring-amber-50/70"
+                            : "bg-gradient-to-br from-blue-500 to-blue-500 ring-white/70 dark:ring-gray-900"
+                        }`}
+                      >
+                        {user.avatar ? (
+                          <Image
+                            src={user.avatar}
+                            alt={user.name}
+                            width={160}
+                            height={160}
+                            className="object-cover w-full h-full"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <span className="text-white font-bold text-5xl">
+                              {user.name.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <div
                       className={`absolute bottom-4 right-4 w-6 h-6 rounded-full border-4 border-white dark:border-gray-900 ${
@@ -700,9 +821,15 @@ export default function UserProfilePage() {
                     />
                   </div>
 
-                  <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2 text-center">
-                    {user.name}
-                  </h1>
+                  <div className="mb-2 flex flex-wrap items-center justify-center gap-2 text-center">
+                    <h1 className={`text-3xl font-bold ${nameClass}`}>{user.name}</h1>
+                    {isPremiumProfile && (
+                      <span className={badgeClass}>
+                        <Crown className="h-3.5 w-3.5" />
+                        Premium
+                      </span>
+                    )}
+                  </div>
 
                   <div className="flex items-center gap-2 mb-6">
                     <div
@@ -710,7 +837,7 @@ export default function UserProfilePage() {
                         isUserOnline ? "bg-green-500" : "bg-gray-400"
                       }`}
                     />
-                    <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                    <span className={`text-sm font-medium ${metaTextClass}`}>
                       {isUserOnline
                         ? "Online"
                         : `Last seen ${formatLastSeen(user.lastSeen)}`}
@@ -719,8 +846,14 @@ export default function UserProfilePage() {
 
                   {/* Status */}
                   {user.status && (
-                    <p className="text-gray-600 dark:text-gray-400 text-center mb-6 px-4 py-2 bg-gray-100 dark:bg-gray-800 rounded-xl">
-                      "{user.status}"
+                    <p
+                      className={`text-center mb-6 px-4 py-2 rounded-xl ${
+                        isPremiumProfile
+                          ? "bg-white/5 text-amber-50/90 border border-amber-200/10"
+                          : "text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800"
+                      }`}
+                    >
+                      &quot;{user.status}&quot;
                     </p>
                   )}
 
@@ -730,22 +863,22 @@ export default function UserProfilePage() {
                       onClick={handleViewFollowers}
                       className="flex flex-col items-center group cursor-pointer"
                     >
-                      <span className="text-2xl font-bold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                      <span className={statValueClass}>
                         {user.followersCount || 0}
                       </span>
-                      <span className="text-sm text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300 transition-colors">
+                      <span className={statLabelClass}>
                         Followers
                       </span>
                     </button>
-                    <div className="w-px bg-gray-200 dark:bg-gray-700"></div>
+                    <div className={`w-px ${dividerClass}`}></div>
                     <button
                       onClick={handleViewFollowing}
                       className="flex flex-col items-center group cursor-pointer"
                     >
-                      <span className="text-2xl font-bold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                      <span className={statValueClass}>
                         {user.followingCount || 0}
                       </span>
-                      <span className="text-sm text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300 transition-colors">
+                      <span className={statLabelClass}>
                         Following
                       </span>
                     </button>
@@ -753,6 +886,19 @@ export default function UserProfilePage() {
 
                   {/* Action Buttons */}
                   <div className="flex flex-col gap-3 w-full">
+                    {isCurrentUser && (
+                      <button
+                        onClick={startEditingProfile}
+                        className={`w-full rounded-xl py-3 font-medium transition-colors flex items-center justify-center gap-2 ${
+                          isPremiumProfile
+                            ? "bg-white/5 text-amber-100 border border-white/10 hover:bg-white/10"
+                            : "bg-blue-600 text-white hover:bg-blue-700"
+                        }`}
+                      >
+                        <Edit size={18} />
+                        Edit Profile
+                      </button>
+                    )}
                     {!isCurrentUser && (
                       <>
                         <button
@@ -760,8 +906,10 @@ export default function UserProfilePage() {
                           disabled={followLoading}
                           className={`w-full py-3 rounded-xl transition-all duration-200 font-medium flex items-center justify-center gap-2 active:scale-[0.98] ${
                             user.isFollowing
-                              ? "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
-                              : "bg-gradient-to-r from-blue-600 to-blue-600 text-white hover:from-blue-700 hover:to-blue-700"
+                              ? subtleButtonClass
+                              : isPremiumProfile
+                                ? "bg-gradient-to-r from-amber-400 via-yellow-300 to-slate-200 text-stone-950 hover:from-amber-300 hover:via-yellow-200 hover:to-slate-100"
+                                : "bg-gradient-to-r from-blue-600 to-blue-600 text-white hover:from-blue-700 hover:to-blue-700"
                           }`}
                         >
                           {followLoading ? (
@@ -783,14 +931,18 @@ export default function UserProfilePage() {
                           <div className="grid grid-cols-2 gap-3">
                             <button
                               onClick={handleSendMessage}
-                              className="py-3 bg-gradient-to-r from-blue-600 to-blue-600 text-white rounded-xl hover:from-blue-700 hover:to-blue-700 transition-colors font-medium flex items-center justify-center gap-2"
+                              className={`py-3 rounded-xl transition-colors font-medium flex items-center justify-center gap-2 ${
+                                isPremiumProfile
+                                  ? "bg-gradient-to-r from-amber-400 via-yellow-300 to-slate-200 text-stone-950 hover:from-amber-300 hover:via-yellow-200 hover:to-slate-100"
+                                  : "bg-gradient-to-r from-blue-600 to-blue-600 text-white hover:from-blue-700 hover:to-blue-700"
+                              }`}
                             >
                               <MessageCircle size={18} />
                               Message
                             </button>
                             <button
                               onClick={handleStartVideoCall}
-                              className="py-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors font-medium flex items-center justify-center gap-2"
+                              className={`py-3 rounded-xl transition-colors font-medium flex items-center justify-center gap-2 ${subtleButtonClass}`}
                             >
                               <Video size={18} />
                               Video
@@ -804,7 +956,7 @@ export default function UserProfilePage() {
               ) : (
                 // ----- INLINE PROFILE EDIT FORM -----
                 <div className="space-y-4">
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                  <h3 className={`text-xl font-bold mb-4 ${titleClass}`}>
                     Profile Details
                   </h3>
                   <div className="space-y-3">
@@ -814,7 +966,7 @@ export default function UserProfilePage() {
                       value={editForm.name}
                       onChange={handleProfileInputChange}
                       placeholder="Name"
-                      className="w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-800 dark:text-white"
+                      className={inputClass}
                     />
                     <textarea
                       name="bio"
@@ -822,7 +974,7 @@ export default function UserProfilePage() {
                       onChange={handleProfileInputChange}
                       placeholder="Bio"
                       rows={3}
-                      className="w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-800 dark:text-white"
+                      className={inputClass}
                     />
                     <input
                       type="text"
@@ -830,7 +982,7 @@ export default function UserProfilePage() {
                       value={editForm.status}
                       onChange={handleProfileInputChange}
                       placeholder="Status"
-                      className="w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-800 dark:text-white"
+                      className={inputClass}
                     />
                     <input
                       type="text"
@@ -838,7 +990,7 @@ export default function UserProfilePage() {
                       value={editForm.location}
                       onChange={handleProfileInputChange}
                       placeholder="Location"
-                      className="w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-800 dark:text-white"
+                      className={inputClass}
                     />
                     <input
                       type="tel"
@@ -846,7 +998,7 @@ export default function UserProfilePage() {
                       value={editForm.phone}
                       onChange={handleProfileInputChange}
                       placeholder="Phone"
-                      className="w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-800 dark:text-white"
+                      className={inputClass}
                     />
                     <input
                       type="url"
@@ -854,7 +1006,7 @@ export default function UserProfilePage() {
                       value={editForm.website}
                       onChange={handleProfileInputChange}
                       placeholder="Website"
-                      className="w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-800 dark:text-white"
+                      className={inputClass}
                     />
                     <input
                       type="text"
@@ -862,7 +1014,7 @@ export default function UserProfilePage() {
                       value={editForm.profession}
                       onChange={handleProfileInputChange}
                       placeholder="Profession"
-                      className="w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-800 dark:text-white"
+                      className={inputClass}
                     />
                     <input
                       type="text"
@@ -870,10 +1022,10 @@ export default function UserProfilePage() {
                       value={editForm.education}
                       onChange={handleProfileInputChange}
                       placeholder="Education"
-                      className="w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-800 dark:text-white"
+                      className={inputClass}
                     />
-                    <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
-                      <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    <div className={`pt-2 border-t ${sectionDividerClass}`}>
+                      <p className={`text-sm font-medium mb-2 ${bodyTextClass}`}>
                         Social Links
                       </p>
                       <input
@@ -882,7 +1034,7 @@ export default function UserProfilePage() {
                         value={editForm.social.instagram}
                         onChange={handleProfileInputChange}
                         placeholder="Instagram URL"
-                        className="w-full px-4 py-2 mb-2 border rounded-lg bg-white dark:bg-gray-800 dark:text-white"
+                        className={`${inputClass} mb-2`}
                       />
                       <input
                         type="url"
@@ -890,7 +1042,7 @@ export default function UserProfilePage() {
                         value={editForm.social.twitter}
                         onChange={handleProfileInputChange}
                         placeholder="Twitter URL"
-                        className="w-full px-4 py-2 mb-2 border rounded-lg bg-white dark:bg-gray-800 dark:text-white"
+                        className={`${inputClass} mb-2`}
                       />
                       <input
                         type="url"
@@ -898,7 +1050,7 @@ export default function UserProfilePage() {
                         value={editForm.social.linkedin}
                         onChange={handleProfileInputChange}
                         placeholder="LinkedIn URL"
-                        className="w-full px-4 py-2 mb-2 border rounded-lg bg-white dark:bg-gray-800 dark:text-white"
+                        className={`${inputClass} mb-2`}
                       />
                       <input
                         type="url"
@@ -906,7 +1058,7 @@ export default function UserProfilePage() {
                         value={editForm.social.github}
                         onChange={handleProfileInputChange}
                         placeholder="GitHub URL"
-                        className="w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-800 dark:text-white"
+                        className={inputClass}
                       />
                     </div>
                   </div>
@@ -932,8 +1084,8 @@ export default function UserProfilePage() {
 
             {/* Contact Information (read‑only while editing profile) */}
             {!isEditingProfile && (
-              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg p-6">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+              <div className={`${cardClass} p-6`}>
+                <h2 className={`text-xl font-bold mb-4 ${titleClass}`}>
                   Contact Information
                 </h2>
                 <div className="space-y-4">
@@ -946,10 +1098,10 @@ export default function UserProfilePage() {
                         />
                       </div>
                       <div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                        <p className={`text-sm ${mutedTextClass}`}>
                           Email
                         </p>
-                        <p className="text-gray-900 dark:text-white break-all">
+                        <p className={`${titleClass} break-all`}>
                           {user.email}
                         </p>
                       </div>
@@ -964,10 +1116,10 @@ export default function UserProfilePage() {
                         />
                       </div>
                       <div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                        <p className={`text-sm ${mutedTextClass}`}>
                           Phone
                         </p>
-                        <p className="text-gray-900 dark:text-white">
+                        <p className={titleClass}>
                           {user.phone}
                         </p>
                       </div>
@@ -982,10 +1134,10 @@ export default function UserProfilePage() {
                         />
                       </div>
                       <div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                        <p className={`text-sm ${mutedTextClass}`}>
                           Location
                         </p>
-                        <p className="text-gray-900 dark:text-white">
+                        <p className={titleClass}>
                           {user.location}
                         </p>
                       </div>
@@ -1000,10 +1152,10 @@ export default function UserProfilePage() {
                         />
                       </div>
                       <div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                        <p className={`text-sm ${mutedTextClass}`}>
                           Member Since
                         </p>
-                        <p className="text-gray-900 dark:text-white">
+                        <p className={titleClass}>
                           {formatDate(user.joinedDate)}
                         </p>
                       </div>
@@ -1018,10 +1170,10 @@ export default function UserProfilePage() {
                         />
                       </div>
                       <div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                        <p className={`text-sm ${mutedTextClass}`}>
                           Profession
                         </p>
-                        <p className="text-gray-900 dark:text-white">
+                        <p className={titleClass}>
                           {user.profession}
                         </p>
                       </div>
@@ -1036,10 +1188,10 @@ export default function UserProfilePage() {
                         />
                       </div>
                       <div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                        <p className={`text-sm ${mutedTextClass}`}>
                           Education
                         </p>
-                        <p className="text-gray-900 dark:text-white">
+                        <p className={titleClass}>
                           {user.education}
                         </p>
                       </div>
@@ -1054,16 +1206,16 @@ export default function UserProfilePage() {
           <div className="lg:w-2/3">
             {/* Bio Section (only if not editing) */}
             {!isEditingProfile && (
-              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg p-6 mb-6">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+              <div className={`${cardClass} p-6 mb-6`}>
+                <h2 className={`text-xl font-bold mb-4 ${titleClass}`}>
                   About
                 </h2>
                 {user.bio ? (
-                  <p className="text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-line">
+                  <p className={`leading-relaxed whitespace-pre-line ${bodyTextClass}`}>
                     {user.bio}
                   </p>
                 ) : (
-                  <p className="text-gray-500 dark:text-gray-400 italic">
+                  <p className={`italic ${mutedTextClass}`}>
                     {isCurrentUser
                       ? "You haven't added a bio yet. Add one to tell others about yourself!"
                       : "This user hasn't added a bio yet."}
@@ -1076,8 +1228,8 @@ export default function UserProfilePage() {
             {!isEditingProfile &&
               user.social &&
               Object.values(user.social).some((val) => val) && (
-                <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg p-6 mb-6">
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                <div className={`${cardClass} p-6 mb-6`}>
+                  <h2 className={`text-xl font-bold mb-4 ${titleClass}`}>
                     Social Links
                   </h2>
                   <div className="flex flex-wrap gap-3">
@@ -1131,7 +1283,7 @@ export default function UserProfilePage() {
 
             {/* Website (only if not editing) */}
             {!isEditingProfile && user.website && (
-              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg p-6 mb-6">
+              <div className={`${cardClass} p-6 mb-6`}>
                 <div className="flex items-center gap-3">
                   <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl flex-shrink-0">
                     <Globe
@@ -1140,14 +1292,18 @@ export default function UserProfilePage() {
                     />
                   </div>
                   <div className="flex-1">
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                    <p className={`text-sm ${mutedTextClass}`}>
                       Website
                     </p>
                     <a
                       href={user.website}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 hover:underline font-medium"
+                      className={`font-medium hover:underline ${
+                        isPremiumProfile
+                          ? "text-amber-200 hover:text-amber-100"
+                          : "text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+                      }`}
                     >
                       {user.website.replace(/^https?:\/\//, "")}
                     </a>
@@ -1158,14 +1314,14 @@ export default function UserProfilePage() {
 
             {/* Additional Info (only if not editing) */}
             {!isEditingProfile && (
-              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg p-6 mb-6">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+              <div className={`${cardClass} p-6 mb-6`}>
+                <h2 className={`text-xl font-bold mb-4 ${titleClass}`}>
                   Additional Information
                 </h2>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {isCurrentUser && (
-                    <div className="md:col-span-2 p-4 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 text-white">
+                    <div className={premiumMembershipClass}>
                       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                         <div>
                           <p className="font-semibold">Premium Membership</p>
@@ -1188,7 +1344,7 @@ export default function UserProfilePage() {
                           <button
                             onClick={handleActivatePremium}
                             disabled={premiumActionLoading || premiumLoading}
-                            className="px-4 py-2 rounded-lg bg-white text-blue-700 font-semibold hover:bg-blue-50 disabled:opacity-70 disabled:cursor-not-allowed transition-colors"
+                            className={premiumMembershipButtonClass}
                           >
                             {premiumActionLoading ? "Redirecting..." : "Activate Premium"}
                           </button>
@@ -1200,7 +1356,7 @@ export default function UserProfilePage() {
                     </div>
                   )}
 
-                  <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-xl">
+                  <div className={infoPanelClass}>
                     <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
                       <Shield
                         size={18}
@@ -1208,16 +1364,16 @@ export default function UserProfilePage() {
                       />
                     </div>
                     <div>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                      <p className={`text-sm ${mutedTextClass}`}>
                         Account Status
                       </p>
-                      <p className="text-gray-900 dark:text-white font-medium">
+                      <p className={`font-medium ${titleClass}`}>
                         {user.isActive ? "Active" : "Inactive"}
                       </p>
                     </div>
                   </div>
                   {user.lastSeen && !isUserOnline && (
-                    <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-xl">
+                    <div className={infoPanelClass}>
                       <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
                         <Calendar
                           size={18}
@@ -1225,10 +1381,10 @@ export default function UserProfilePage() {
                         />
                       </div>
                       <div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                        <p className={`text-sm ${mutedTextClass}`}>
                           Last Seen
                         </p>
-                        <p className="text-gray-900 dark:text-white font-medium">
+                        <p className={`font-medium ${titleClass}`}>
                           {formatLastSeen(user.lastSeen)}
                         </p>
                       </div>
@@ -1239,9 +1395,9 @@ export default function UserProfilePage() {
             )}
 
             {/* ---------- POSTS SECTION ---------- */}
-            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg p-6">
-              <div className="flex justify-center mb-6 border-b border-gray-200 dark:border-gray-800">
-                <button className="px-6 py-3 flex items-center gap-2 font-medium text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400">
+            <div className={`${cardClass} p-6`}>
+              <div className={`flex justify-center mb-6 border-b ${isPremiumProfile ? "border-white/10" : "border-gray-200 dark:border-gray-800"}`}>
+                <button className={postsTabClass}>
                   <Grid3x3 className="w-5 h-5" /> <span>Posts</span>
                 </button>
               </div>
@@ -1249,25 +1405,25 @@ export default function UserProfilePage() {
               <div className="space-y-6">
                 {isPrivatePostsLocked ? (
                   <div className="text-center py-12">
-                    <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                    <div className={emptyStateIconWrapClass}>
                       <Shield className="w-10 h-10 text-gray-400" />
                     </div>
-                    <h3 className="text-xl font-bold mb-2 dark:text-white">
+                    <h3 className={`text-xl font-bold mb-2 ${titleClass}`}>
                       Private Account
                     </h3>
-                    <p className="text-gray-500">
+                    <p className={mutedTextClass}>
                       Send a follow request. Posts are visible after mutual follow.
                     </p>
                   </div>
                 ) : posts.length === 0 ? (
                   <div className="text-center py-12">
-                    <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                    <div className={emptyStateIconWrapClass}>
                       <MessageSquare className="w-10 h-10 text-gray-400" />
                     </div>
-                    <h3 className="text-xl font-bold mb-2 dark:text-white">
+                    <h3 className={`text-xl font-bold mb-2 ${titleClass}`}>
                       No Posts Yet
                     </h3>
-                    <p className="text-gray-500">
+                    <p className={mutedTextClass}>
                       {isCurrentUser
                         ? "Share your first moment with the world!"
                         : "This user hasn't posted anything yet."}
@@ -1277,7 +1433,7 @@ export default function UserProfilePage() {
                   posts.map((post) => (
                     <div
                       key={post.id}
-                      className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-6 border border-gray-200 dark:border-gray-700"
+                      className={postCardClass}
                     >
                       {/* Post actions (only for own posts) */}
                       {isCurrentUser && (
@@ -1311,7 +1467,11 @@ export default function UserProfilePage() {
                           <textarea
                             value={editPostText}
                             onChange={(e) => setEditPostText(e.target.value)}
-                            className="w-full p-3 border rounded-lg bg-white dark:bg-gray-900 dark:text-white dark:border-gray-600"
+                            className={`w-full rounded-lg border p-3 ${
+                              isPremiumProfile
+                                ? "border-white/10 bg-white/5 text-slate-50 placeholder:text-slate-400"
+                                : "bg-white dark:bg-gray-900 dark:text-white dark:border-gray-600"
+                            }`}
                             rows={3}
                           />
                           <div className="flex gap-2">
@@ -1331,7 +1491,7 @@ export default function UserProfilePage() {
                         </div>
                       ) : (
                         <>
-                          <p className="text-gray-800 dark:text-gray-200 mb-4 whitespace-pre-wrap">
+                          <p className={`mb-4 whitespace-pre-wrap ${bodyTextClass}`}>
                             {post.content}
                           </p>
                           {post.image && (
@@ -1345,7 +1505,7 @@ export default function UserProfilePage() {
                               />
                             </div>
                           )}
-                          <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400 pt-4 border-t border-gray-200 dark:border-gray-700">
+                          <div className={`flex items-center gap-4 pt-4 text-sm ${mutedTextClass} border-t ${sectionDividerClass}`}>
                             <button
                               onClick={() => toggleLike(post.id)}
                               className={`flex items-center gap-1 hover:text-red-500 transition-colors ${

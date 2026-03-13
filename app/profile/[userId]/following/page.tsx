@@ -2,14 +2,15 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Image from 'next/image';
-import { ArrowLeft, Users, UserPlus, UserCheck, UserMinus } from 'lucide-react';
+import { ArrowLeft, UserPlus, UserCheck, UserMinus } from 'lucide-react';
 import { useSession } from 'next-auth/react';
+import { PremiumAvatar, PremiumName } from '@/app/components/premium-ui';
 
 interface Following {
   id: string;
   name: string;
   avatar?: string;
+  isPremium?: boolean;
   isFollowing: boolean;
 }
 
@@ -219,28 +220,22 @@ export default function FollowingPage() {
                     onClick={() => handleViewProfile(user.id)}
                   >
                     <div className="relative">
-                      <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-blue-500 ring-2 ring-white dark:ring-gray-900">
-                        {user.avatar ? (
-                          <Image
-                            src={user.avatar}
-                            alt={user.name}
-                            width={48}
-                            height={48}
-                            className="object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <span className="text-white font-bold text-lg">
-                              {user.name.charAt(0).toUpperCase()}
-                            </span>
-                          </div>
-                        )}
-                      </div>
+                      <PremiumAvatar
+                        src={user.avatar}
+                        alt={user.name}
+                        fallback={user.name}
+                        size={48}
+                        isPremium={Boolean(user.isPremium)}
+                      />
                     </div>
                     <div className="min-w-0">
-                      <h3 className="font-semibold text-gray-900 dark:text-white truncate">
-                        {user.name}
-                      </h3>
+                      <PremiumName
+                        name={user.name}
+                        isPremium={Boolean(user.isPremium)}
+                        badgeLabel="Premium"
+                        badgeClassName="px-1.5 py-0.5 text-[9px]"
+                        textClassName="font-semibold text-gray-900 dark:text-white"
+                      />
                     </div>
                   </div>
 

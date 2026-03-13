@@ -26,6 +26,8 @@ import {
 import { useTheme } from "../theme-provider";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useUserAvatar } from "../hooks/useUserAvatar";
+import { PremiumAvatar, PremiumName } from "../components/premium-ui";
 // import { useSettings } from "../components/settings-provider";
 
 
@@ -49,6 +51,7 @@ interface UserType {
   email: string;
   image?: string;
   avatar?: string;
+  isPremium?: boolean;
 }
 
 interface CommentType {
@@ -99,6 +102,7 @@ interface ShareChatUser {
   email?: string;
   avatar?: string;
   image?: string;
+  isPremium?: boolean;
   unreadCount?: number;
   lastMessageAt?: string | null;
 }
@@ -375,24 +379,24 @@ function LikeUserModal({
                 >
                   <button
                     onClick={() => handleUserAvatarClick(user._id)}
-                    className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-blue-500 flex items-center justify-center overflow-hidden cursor-pointer hover:opacity-90 transition-opacity"
+                    className="cursor-pointer hover:opacity-90 transition-opacity"
                   >
-                    {user.image || user.avatar ? (
-                      <Image
-                        src={user.image || user.avatar || ""}
-                        alt={user.name}
-                        width={40}
-                        height={40}
-                        className="rounded-full w-full h-full object-cover"
-                      />
-                    ) : (
-                      <span className="text-white font-bold">
-                        {user.name?.[0]?.toUpperCase() || "U"}
-                      </span>
-                    )}
+                    <PremiumAvatar
+                      src={user.image || user.avatar || null}
+                      alt={user.name}
+                      fallback={user.name}
+                      size={40}
+                      isPremium={Boolean(user.isPremium)}
+                    />
                   </button>
                   <div className="flex-1">
-                    <p className="font-semibold">{user.name}</p>
+                    <PremiumName
+                      name={user.name}
+                      isPremium={Boolean(user.isPremium)}
+                      badgeLabel="Premium"
+                      badgeClassName="px-1.5 py-0.5 text-[9px]"
+                      textClassName="font-semibold text-gray-900 dark:text-white"
+                    />
                     <p className="text-sm text-gray-500">{user.email}</p>
                   </div>
                   <button
@@ -422,6 +426,8 @@ function CommentsModal({
   onCommentDeleted,
 }: CommentsModalProps) {
   const { data: session } = useSession();
+  const { avatar: currentUserAvatar, isPremium: currentUserIsPremium } =
+    useUserAvatar();
   const router = useRouter();
   const [newComment, setNewComment] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -540,31 +546,27 @@ function CommentsModal({
                 <div key={comment._id} className="flex gap-3">
                   <button
                     onClick={() => handleUserAvatarClick(comment.userId?._id)}
-                    className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-blue-500 flex items-center justify-center overflow-hidden flex-shrink-0 cursor-pointer hover:opacity-90 transition-opacity"
+                    className="flex-shrink-0 cursor-pointer hover:opacity-90 transition-opacity"
                   >
-                    {comment.userId?.image || comment.userId?.avatar ? (
-                      <Image
-                        src={
-                          comment.userId.image || comment.userId.avatar || ""
-                        }
-                        alt={comment.userId.name}
-                        width={40}
-                        height={40}
-                        className="rounded-full w-full h-full object-cover"
-                      />
-                    ) : (
-                      <span className="text-white font-bold">
-                        {comment.userId?.name?.[0]?.toUpperCase() || "U"}
-                      </span>
-                    )}
+                    <PremiumAvatar
+                      src={comment.userId?.image || comment.userId?.avatar || null}
+                      alt={comment.userId?.name || "User"}
+                      fallback={comment.userId?.name || "U"}
+                      size={40}
+                      isPremium={Boolean(comment.userId?.isPremium)}
+                    />
                   </button>
                   <div className="flex-1 min-w-0">
                     <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-3">
                       <div className="flex items-center justify-between mb-2">
                         <div>
-                          <p className="font-semibold text-sm">
-                            {comment.userId?.name}
-                          </p>
+                          <PremiumName
+                            name={comment.userId?.name}
+                            isPremium={Boolean(comment.userId?.isPremium)}
+                            badgeLabel="Premium"
+                            badgeClassName="px-1.5 py-0.5 text-[9px]"
+                            textClassName="text-sm font-semibold text-gray-900 dark:text-white"
+                          />
                           <p className="text-xs text-gray-500">
                             {new Date(comment.createdAt).toLocaleDateString(
                               "en-US",
@@ -604,21 +606,15 @@ function CommentsModal({
               onClick={() =>
                 session?.user?.id && handleUserAvatarClick(session.user.id)
               }
-              className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-blue-500 flex items-center justify-center overflow-hidden flex-shrink-0 cursor-pointer hover:opacity-90 transition-opacity"
+              className="flex-shrink-0 cursor-pointer hover:opacity-90 transition-opacity"
             >
-              {session?.user?.image || session?.user?.avatar ? (
-                <Image
-                  src={session.user.image || session.user.avatar || ""}
-                  alt={session.user.name || ""}
-                  width={40}
-                  height={40}
-                  className="rounded-full w-full h-full object-cover"
-                />
-              ) : (
-                <span className="text-white font-bold">
-                  {session?.user?.name?.[0]?.toUpperCase() || "Y"}
-                </span>
-              )}
+              <PremiumAvatar
+                src={currentUserAvatar || session?.user?.image || session?.user?.avatar || null}
+                alt={session?.user?.name || "You"}
+                fallback={session?.user?.name || "Y"}
+                size={40}
+                isPremium={currentUserIsPremium}
+              />
             </button>
             <div className="flex-1">
               <div className="relative">
@@ -860,26 +856,22 @@ function SharePostModal({ isOpen, onClose, post }: SharePostModalProps) {
                   key={user._id}
                   className="flex items-center gap-3 rounded-2xl px-3 py-3 hover:bg-gray-50 dark:hover:bg-gray-800"
                 >
-                  <div className="h-11 w-11 overflow-hidden rounded-full bg-gradient-to-r from-blue-500 to-blue-500">
-                    {user.avatar || user.image ? (
-                      <Image
-                        src={user.avatar || user.image || ""}
-                        alt={user.name}
-                        width={44}
-                        height={44}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-full items-center justify-center font-bold text-white">
-                        {user.name?.[0]?.toUpperCase() || "U"}
-                      </div>
-                    )}
-                  </div>
+                  <PremiumAvatar
+                    src={user.avatar || user.image || null}
+                    alt={user.name}
+                    fallback={user.name}
+                    size={44}
+                    isPremium={Boolean(user.isPremium)}
+                  />
 
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">
-                      {user.name}
-                    </p>
+                    <PremiumName
+                      name={user.name}
+                      isPremium={Boolean(user.isPremium)}
+                      badgeLabel="Premium"
+                      badgeClassName="px-1.5 py-0.5 text-[9px]"
+                      textClassName="truncate text-sm font-semibold text-gray-900 dark:text-white"
+                    />
                     <p className="truncate text-xs text-gray-500 dark:text-gray-400">
                       {user.email || "Direct chat"}
                     </p>
@@ -2080,33 +2072,30 @@ export default function FeedPage() {
                       onClick={() =>
                         handleUserAvatarClick(currentPost.userId?._id)
                       }
-                      className="w-9 h-9 rounded-full bg-gradient-to-r from-blue-500 to-blue-500 flex items-center justify-center overflow-hidden cursor-pointer hover:opacity-90 transition-opacity pointer-events-auto shadow-md"
+                      className="cursor-pointer hover:opacity-90 transition-opacity pointer-events-auto shadow-md"
                     >
-                      {currentPost.userId?.image ||
-                      currentPost.userId?.avatar ? (
-                        <Image
-                          src={
-                            currentPost.userId.image ||
-                            currentPost.userId.avatar ||
-                            ""
-                          }
-                          alt={currentPost.userId.name}
-                          width={40}
-                          height={40}
-                          className="rounded-full w-full h-full object-cover"
-                        />
-                      ) : (
-                        <span className="text-white font-bold text-base">
-                          {currentPost.userId?.name?.[0]?.toUpperCase() || "U"}
-                        </span>
-                      )}
+                      <PremiumAvatar
+                        src={
+                          currentPost.userId?.image ||
+                          currentPost.userId?.avatar ||
+                          null
+                        }
+                        alt={currentPost.userId?.name || "User"}
+                        fallback={currentPost.userId?.name || "U"}
+                        size={36}
+                        isPremium={Boolean(currentPost.userId?.isPremium)}
+                      />
                     </button>
                     <div className="flex-1">
                       <div className="flex items-center justify-between">
                         <div>
-                          <h3 className="font-bold text-white text-sm drop-shadow-md">
-                            {currentPost.userId?.name}
-                          </h3>
+                          <PremiumName
+                            name={currentPost.userId?.name}
+                            isPremium={Boolean(currentPost.userId?.isPremium)}
+                            badgeLabel="Premium"
+                            badgeClassName="px-1.5 py-0.5 text-[9px]"
+                            textClassName="text-sm font-bold text-white drop-shadow-md"
+                          />
                           <p className="text-xs text-gray-300 drop-shadow-md">
                             {new Date(currentPost.createdAt).toLocaleDateString(
                               "en-US",

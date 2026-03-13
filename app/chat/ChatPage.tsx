@@ -474,6 +474,7 @@ export default function ChatPage() {
           name: data.name ?? "Unknown",
           email: data.email ?? "",
           avatar: data.avatar ?? "",
+          isPremium: Boolean(data.isPremium),
           isOnline: false,
           lastSeen: data.lastSeen ?? null,
         } as User;

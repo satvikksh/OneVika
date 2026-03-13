@@ -2,14 +2,15 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Image from 'next/image';
 import { ArrowLeft, Users, UserPlus, UserCheck } from 'lucide-react';
 import { useSession } from 'next-auth/react';
+import { PremiumAvatar, PremiumName } from '@/app/components/premium-ui';
 
 interface Follower {
   id: string;
   name: string;
   avatar?: string;
+  isPremium?: boolean;
   isFollowing: boolean;
 }
 
@@ -162,7 +163,7 @@ export default function FollowersPage() {
               No followers yet
             </h2>
             <p className="text-gray-600 dark:text-gray-400">
-              When someone follows this user, they'll appear here.
+              When someone follows this user, they&apos;ll appear here.
             </p>
           </div>
         ) : (
@@ -178,28 +179,22 @@ export default function FollowersPage() {
                     onClick={() => handleViewProfile(follower.id)}
                   >
                     <div className="relative">
-                      <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-blue-500 ring-2 ring-white dark:ring-gray-900">
-                        {follower.avatar ? (
-                          <Image
-                            src={follower.avatar}
-                            alt={follower.name}
-                            width={48}
-                            height={48}
-                            className="object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <span className="text-white font-bold text-lg">
-                              {follower.name.charAt(0).toUpperCase()}
-                            </span>
-                          </div>
-                        )}
-                      </div>
+                      <PremiumAvatar
+                        src={follower.avatar}
+                        alt={follower.name}
+                        fallback={follower.name}
+                        size={48}
+                        isPremium={Boolean(follower.isPremium)}
+                      />
                     </div>
                     <div className="min-w-0">
-                      <h3 className="font-semibold text-gray-900 dark:text-white truncate">
-                        {follower.name}
-                      </h3>
+                      <PremiumName
+                        name={follower.name}
+                        isPremium={Boolean(follower.isPremium)}
+                        badgeLabel="Premium"
+                        badgeClassName="px-1.5 py-0.5 text-[9px]"
+                        textClassName="font-semibold text-gray-900 dark:text-white"
+                      />
                     </div>
                   </div>
 

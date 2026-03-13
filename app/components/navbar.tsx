@@ -19,19 +19,17 @@ import {
   Home,
   BookOpen,
   Zap,
-  Users,
   PlaySquare,
   Image as ImageIcon,
   User,
-  HelpCircle,
   MessageSquare,
   BarChart,
-  TrendingUp,
   PenSquare, // Added post icon
 } from "lucide-react";
 import Image from "next/image";
 import { useSession, signOut } from "next-auth/react";
 import { useTheme } from "../theme-provider";
+import { PremiumAvatar, PremiumName } from "./premium-ui";
 
 // Types
 interface UserSearchResult {
@@ -39,6 +37,7 @@ interface UserSearchResult {
   id: string;
   name: string;
   avatar?: string | null;
+  isPremium?: boolean;
 }
 
 interface NavItem {
@@ -46,15 +45,6 @@ interface NavItem {
   label: string;
   icon: React.ReactNode;
   badge?: string;
-}
-
-interface Notification {
-  id: number;
-  title: string;
-  description: string;
-  time: string;
-  read: boolean;
-  icon: React.ReactNode;
 }
 
 interface SimpleNavbarProps {
@@ -73,7 +63,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
   const pathname = usePathname();
   const router = useRouter();
   const { data: session } = useSession();
-  const { avatar, loading } = useUserAvatar();
+  const { avatar, isPremium } = useUserAvatar();
   const { theme, toggleTheme } = useTheme();
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -254,21 +244,13 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
       path: "/profile",
       label: "Profile",
       icon: session?.user ? (
-        <div className="relative w-6 h-6">
-          {!loading && avatar ? (
-            <Image
-              src={avatar}
-              alt="User Avatar"
-              width={24}
-              height={24}
-              className="rounded-full object-cover"
-            />
-          ) : (
-            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-blue-500 flex items-center justify-center">
-              <User size={12} className="text-white" />
-            </div>
-          )}
-        </div>
+        <PremiumAvatar
+          src={avatar}
+          alt={session.user.name || "User Avatar"}
+          fallback={session.user.name || "U"}
+          size={24}
+          isPremium={isPremium}
+        />
       ) : (
         <User size={24} />
       ),
@@ -537,23 +519,21 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                             onClick={() => selectSearchUser(user._id)}
                             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 text-left transition-colors group/item"
                           >
-                            <div className="w-8 h-8 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-blue-500 flex items-center justify-center text-white text-xs font-semibold">
-                              {user.avatar ? (
-                                <Image
-                                  src={user.avatar}
-                                  alt={user.name}
-                                  width={32}
-                                  height={32}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <span>{user.name?.[0]?.toUpperCase() ?? "U"}</span>
-                              )}
-                            </div>
+                            <PremiumAvatar
+                              src={user.avatar}
+                              alt={user.name}
+                              fallback={user.name}
+                              size={32}
+                              isPremium={Boolean(user.isPremium)}
+                            />
                             <div className="flex-1 min-w-0">
-                              <div className="font-medium text-sm text-gray-900 dark:text-white truncate">
-                                {user.name}
-                              </div>
+                              <PremiumName
+                                name={user.name}
+                                isPremium={Boolean(user.isPremium)}
+                                badgeLabel="Premium"
+                                badgeClassName="px-1.5 py-0.5 text-[9px]"
+                                textClassName="font-medium text-sm text-gray-900 dark:text-white"
+                              />
                               <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">
                                 ID: {user.id}
                               </div>
@@ -690,23 +670,20 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
               <div className="relative ml-2" ref={userDropdownRef}>
                 <button
                   onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)}
-                  className="flex items-center gap-2 p-1 pl-1 pr-3 rounded-full border border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all hover:shadow-sm group"
+                  className={`flex items-center gap-2 rounded-full border p-1 pl-1 pr-3 transition-all hover:shadow-sm group ${
+                    isPremium
+                      ? "border-amber-200/40 bg-gradient-to-r from-amber-50/70 via-white to-slate-50/70 hover:bg-amber-50 dark:border-amber-300/20 dark:bg-stone-950/70 dark:hover:bg-stone-900"
+                      : "border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800"
+                  }`}
                   aria-label="User menu"
                 >
-                  <div className="relative w-8 h-8 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-blue-500 ring-2 ring-white dark:ring-gray-900">
-                    {!loading && avatar ? (
-                      <Image
-                        src={avatar}
-                        alt="User Avatar"
-                        fill
-                        className="object-cover"
-                      />
-                    ) : (
-                      <span className="flex items-center justify-center w-full h-full text-white font-bold text-xs">
-                        {session?.user?.name?.[0]?.toUpperCase() ?? "U"}
-                      </span>
-                    )}
-                  </div>
+                  <PremiumAvatar
+                    src={avatar}
+                    alt={session?.user?.name || "User Avatar"}
+                    fallback={session?.user?.name || "U"}
+                    size={32}
+                    isPremium={isPremium}
+                  />
                   <ChevronDown
                     className={`text-gray-400 transition-transform duration-300 ${
                       isUserDropdownOpen ? "rotate-180" : ""
@@ -717,27 +694,31 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
 
                 {isUserDropdownOpen && (
                   <div className="absolute right-0 mt-3 w-72 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-800 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
-                    <div className="p-5 border-b border-gray-100 dark:border-gray-800 bg-gradient-to-br from-blue-500/5 to-pink-500/5">
+                    <div
+                      className={`border-b p-5 ${
+                        isPremium
+                          ? "border-amber-200/20 bg-gradient-to-br from-amber-100/60 via-slate-50 to-stone-100/60 dark:from-amber-950/25 dark:via-slate-900/60 dark:to-stone-950/40"
+                          : "border-gray-100 bg-gradient-to-br from-blue-500/5 to-pink-500/5 dark:border-gray-800"
+                      }`}
+                    >
                       <div className="flex items-center gap-4">
-                        <div className="relative w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-teal-500 shadow-md">
-                          {!loading && avatar ? (
-                            <Image
-                              src={avatar}
-                              alt="User Avatar"
-                              fill
-                              className="object-cover"
-                            />
-                          ) : (
-                            <span className="flex items-center justify-center w-full h-full text-white font-bold text-lg">
-                              {session?.user?.name?.[0]?.toUpperCase() ?? "U"}
-                            </span>
-                          )}
-                        </div>
+                        <PremiumAvatar
+                          src={avatar}
+                          alt={session?.user?.name || "User Avatar"}
+                          fallback={session?.user?.name || "U"}
+                          size={48}
+                          isPremium={isPremium}
+                          className="shadow-md"
+                        />
 
                         <div className="overflow-hidden">
-                          <p className="font-bold text-gray-900 dark:text-white truncate">
-                            {session.user.name || "User"}
-                          </p>
+                          <PremiumName
+                            name={session.user.name || "User"}
+                            isPremium={isPremium}
+                            badgeLabel="Premium"
+                            badgeClassName="px-1.5 py-0.5 text-[9px]"
+                            textClassName="font-bold text-gray-900 dark:text-white"
+                          />
                           <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
                             {session.user.email || "No email"}
                           </p>
@@ -850,23 +831,21 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                             onClick={() => selectSearchUser(user._id)}
                             className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                           >
-                            <div className="w-8 h-8 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-blue-500 flex items-center justify-center text-white text-xs font-semibold">
-                              {user.avatar ? (
-                                <Image
-                                  src={user.avatar}
-                                  alt={user.name}
-                                  width={32}
-                                  height={32}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <span>{user.name?.[0]?.toUpperCase() ?? "U"}</span>
-                              )}
-                            </div>
+                            <PremiumAvatar
+                              src={user.avatar}
+                              alt={user.name}
+                              fallback={user.name}
+                              size={32}
+                              isPremium={Boolean(user.isPremium)}
+                            />
                             <div className="min-w-0">
-                              <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                                {user.name || "Unknown user"}
-                              </div>
+                              <PremiumName
+                                name={user.name || "Unknown user"}
+                                isPremium={Boolean(user.isPremium)}
+                                badgeLabel="Premium"
+                                badgeClassName="px-1.5 py-0.5 text-[9px]"
+                                textClassName="text-sm font-medium text-gray-900 dark:text-white"
+                              />
                             </div>
                           </button>
                         ))}

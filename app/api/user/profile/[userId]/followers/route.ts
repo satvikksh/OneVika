@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/lib/authOptions";
 import { dbConnect } from "@/app/lib/mongodb";
+import { isPremiumActive } from "@/app/lib/premium";
 import mongoose from "mongoose";
 
 const { ObjectId } = mongoose.Types;
@@ -82,6 +83,9 @@ export async function GET(
             id: "$user._id",
             name: "$user.name",
             avatar: "$user.avatar",
+            image: "$user.image",
+            isPremium: "$user.isPremium",
+            premiumExpiresAt: "$user.premiumExpiresAt",
             isFollowing: { $gt: [{ $size: "$isFollowing" }, 0] }
           }
         }
@@ -92,7 +96,8 @@ export async function GET(
     const formattedFollowers = followers.map(follower => ({
       id: follower.id.toString(),
       name: follower.name,
-      avatar: follower.avatar,
+      avatar: follower.avatar || follower.image,
+      isPremium: isPremiumActive(follower),
       isFollowing: follower.isFollowing
     }));
 

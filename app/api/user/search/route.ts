@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/lib/authOptions";
 import { dbConnect } from "@/app/lib/mongodb";
+import { isPremiumActive } from "@/app/lib/premium";
 import mongoose from "mongoose";
 
 const { ObjectId } = mongoose.Types;
@@ -52,6 +53,8 @@ export async function GET(req: NextRequest) {
             name: 1,
             avatar: 1,
             image: 1,
+            isPremium: 1,
+            premiumExpiresAt: 1,
             idStr: 1,
           },
         },
@@ -64,6 +67,7 @@ export async function GET(req: NextRequest) {
         _id: u._id.toString(),
         name: u.name ?? "Unknown",
         avatar: u.avatar || u.image || null,
+        isPremium: isPremiumActive(u),
         id: u.idStr ?? u._id.toString(),
       })),
     });

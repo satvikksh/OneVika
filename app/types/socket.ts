@@ -43,6 +43,7 @@ export interface ChatAttachment {
 export interface User {
   lastSeen?: string | null;
   isOnline?: boolean;
+  isPremium?: boolean;
   avatar?: string | StaticImport;
   email?: string | null;
   id: string;

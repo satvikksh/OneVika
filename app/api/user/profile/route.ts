@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { dbConnect } from "../../../lib/mongodb";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../../lib/authOptions";
+import { isPremiumActive } from "../../../lib/premium";
 
 export async function GET() {
   await dbConnect();
@@ -35,6 +36,7 @@ export async function GET() {
   return NextResponse.json({
     user: {
       ...user,
+      isPremium: isPremiumActive(user as { isPremium?: boolean; premiumExpiresAt?: Date | string | null }),
       followersCount,
       followingCount,
     },

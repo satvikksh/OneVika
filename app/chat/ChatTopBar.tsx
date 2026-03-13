@@ -2,7 +2,6 @@
 
 import React from "react";
 import { User } from "../types/socket";
-import Image from "next/image";
 import {
   ArrowLeft,
   Phone,
@@ -17,6 +16,7 @@ import { useSocket } from "../context/SocketContext";
 import { useRouter } from "next/navigation";
 import { useAudioCall } from "../hooks/useAudioCall";
 import AudioCallModal from "../components/AudioCallModal";
+import { PremiumAvatar, PremiumName } from "../components/premium-ui";
 
 interface ChatTopBarProps {
   selectedUser: User | null;
@@ -33,9 +33,7 @@ export default function ChatTopBar({
   onBack,
   typingUsers,
   isMobile = false,
-  isNavbarHidden = false,
   onToggleSidebar,
-  showMobileSidebar = false,
 }: ChatTopBarProps) {
   const { data: session } = useSession();
   const router = useRouter();
@@ -64,11 +62,6 @@ const {
       // Navigate to the user's profile page
       router.push(`/profile/${selectedUser.id}`);
     }
-  };
-
-  const handleStartCall = () => {
-    if (!selectedUser) return;
-    startCall();
   };
 
   if (!selectedUser) {
@@ -122,7 +115,11 @@ const {
   return (
     <>
       <header
-        className={`fixed top-16 ${positionClasses} z-40 bg-white dark:bg-black border-b border-gray-200 dark:border-gray-800 h-16 transition-all duration-300 translate-y-0`}
+        className={`fixed top-16 ${positionClasses} z-40 h-16 border-b transition-all duration-300 translate-y-0 ${
+          selectedUser.isPremium
+            ? "border-amber-300/20 bg-gradient-to-r from-stone-950/95 via-amber-950/70 to-slate-950/95 text-slate-50"
+            : "bg-white dark:bg-black border-gray-200 dark:border-gray-800"
+        }`}
       >
         <div className="h-full px-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -150,24 +147,16 @@ const {
               <div className="relative flex-shrink-0">
                 <button
                   onClick={handleUserProfileClick}
-                  className="relative w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-blue-700 ring-2 ring-white dark:ring-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 active:scale-95 transition-transform"
+                  className="relative rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 active:scale-95 transition-transform"
                   aria-label="View user profile"
                 >
-                  {selectedUser.avatar ? (
-                    <Image
-                      src={selectedUser.avatar}
-                      alt={selectedUser.name}
-                      width={40}
-                      height={40}
-                      className="object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <span className="text-white font-bold text-lg">
-                        {selectedUser.name.charAt(0).toUpperCase()}
-                      </span>
-                    </div>
-                  )}
+                  <PremiumAvatar
+                    src={typeof selectedUser.avatar === "string" ? selectedUser.avatar : null}
+                    alt={selectedUser.name || "User"}
+                    fallback={selectedUser.name || "U"}
+                    size={40}
+                    isPremium={Boolean(selectedUser.isPremium)}
+                  />
                 </button>
                 {isUserOnline && (
                   <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white dark:border-gray-900" />
@@ -178,10 +167,24 @@ const {
                 className="text-left focus:outline-none hover:opacity-80 transition-opacity"
                 aria-label="View user profile"
               >
-                <h3 className="font-bold text-gray-900 dark:text-white text-sm sm:text-base hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                  {selectedUser.name}
-                </h3>
-                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+                <PremiumName
+                  name={selectedUser.name}
+                  isPremium={Boolean(selectedUser.isPremium)}
+                  badgeLabel="Premium"
+                  badgeClassName="px-1.5 py-0.5 text-[9px]"
+                  textClassName={`text-sm font-bold sm:text-base transition-colors ${
+                    selectedUser.isPremium
+                      ? "text-slate-50 hover:text-amber-200"
+                      : "text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400"
+                  }`}
+                />
+                <p
+                  className={`text-xs sm:text-sm ${
+                    selectedUser.isPremium
+                      ? "text-slate-300"
+                      : "text-gray-500 dark:text-gray-400"
+                  }`}
+                >
                   {typingUsers.has(selectedUser.id) ? (
                     <span className="text-blue-600 dark:text-blue-400 italic">
                       typing...
