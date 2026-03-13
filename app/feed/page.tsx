@@ -966,10 +966,10 @@ export default function FeedPage() {
 
   // Video controls
   const [isVideoPlaying, setIsVideoPlaying] = useState<Record<string, boolean>>(
-    () => feedPageCache?.isVideoPlaying ?? {}
+    () => ({})
   );
   const [isVideoMuted, setIsVideoMuted] = useState<Record<string, boolean>>(
-    () => feedPageCache?.isVideoMuted ?? {}
+    () => ({})
   );
   const [doubleTapLike, setDoubleTapLike] = useState<string | null>(null);
   const [isDesktop, setIsDesktop] = useState(false);
