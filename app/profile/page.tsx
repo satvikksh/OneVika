@@ -38,6 +38,7 @@ import {
   Settings,
 } from "lucide-react";
 import { useSocket } from "../context/SocketContext";
+import ProfilePostMedia from "../components/ProfilePostMedia";
 
 interface UserProfile {
   id: string;
@@ -75,7 +76,7 @@ interface UserProfile {
 interface Post {
   id: string;
   content: string;
-  image?: string;
+  media: string[];
   likes?: number;
   comments?: number;
   timestamp?: string;
@@ -190,7 +191,11 @@ if (postsResponse.ok) {
           return {
             id: typeof post._id === "string" ? post._id : post.id,
             content: String(content),
-            image: post.image,
+            media: Array.isArray(post.images)
+              ? post.images
+              : post.image
+                ? [post.image]
+                : [],
             likes: resolveCount(post.likes),
             comments: resolveCount(post.comments),
             timestamp: post.timestamp || post.createdAt,
@@ -972,20 +977,12 @@ if (postsResponse.ok) {
                         </div>
                       ) : (
                         <>
-                          <p className="text-gray-800 dark:text-gray-200 mb-4 whitespace-pre-wrap">
-                            {post.content}
-                          </p>
-                          {post.image && (
-                            <div className="rounded-xl overflow-hidden mb-4">
-                              <Image
-                                src={post.image}
-                                alt="Post"
-                                width={600}
-                                height={350}
-                                className="w-full h-auto object-cover"
-                              />
-                            </div>
+                          {post.content?.trim() && (
+                            <p className="text-gray-800 dark:text-gray-200 mb-4 whitespace-pre-wrap">
+                              {post.content}
+                            </p>
                           )}
+                          <ProfilePostMedia media={post.media} altPrefix="Profile post media" />
                           <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400 pt-4 border-t border-gray-200 dark:border-gray-700">
                             <button
                               onClick={() => toggleLike(post.id)}

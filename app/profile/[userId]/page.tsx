@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { useSocket } from "../../context/SocketContext";
 import { useSession } from "next-auth/react";
+import ProfilePostMedia from "../../components/ProfilePostMedia";
 
 
 // ---------- INTERFACES ----------
@@ -72,7 +73,7 @@ interface UserProfile {
 interface Post {
   id: string;
   content: string;
-  image?: string;
+  media: string[];
   likes?: number;
   comments?: number;
   timestamp?: string;
@@ -95,6 +96,7 @@ interface ApiPost {
   _id?: string;
   id?: string;
   content?: string;
+  images?: string[];
   image?: string;
   likes?: unknown[] | number;
   comments?: unknown[] | number;
@@ -236,7 +238,11 @@ export default function UserProfilePage() {
         const normalizedPosts = postsData.map((post) => ({
           id: post._id || post.id,
           content: post.content,
-          image: post.image,
+          media: Array.isArray(post.images)
+            ? post.images
+            : post.image
+              ? [post.image]
+              : [],
           likes: Array.isArray(post.likes)
             ? post.likes.length
             : post.likes || 0,
@@ -612,6 +618,21 @@ export default function UserProfilePage() {
     return `${Math.floor(diffHours / 24)}d ago`;
   };
 
+  const isVideoMediaUrl = (url?: string) =>
+    Boolean(url && /\.(mp4|webm|ogg|mov|m4v|avi|mkv)(?:$|[?#])/i.test(url));
+
+  const getPostPreviewText = (content?: string) => {
+    const normalized = content?.replace(/\s+/g, " ").trim() || "";
+
+    if (!normalized) {
+      return "";
+    }
+
+    return normalized.length > 88
+      ? `${normalized.slice(0, 85).trimEnd()}...`
+      : normalized;
+  };
+
   // ---------- LOADING / ERROR ----------
   if (loading) {
     return (
@@ -731,6 +752,16 @@ export default function UserProfilePage() {
   const postCardClass = isPremiumProfile
     ? "rounded-2xl border border-white/10 bg-white/[0.04] p-6"
     : "bg-gray-50 dark:bg-gray-800 rounded-2xl p-6 border border-gray-200 dark:border-gray-700";
+  const visitorPostsGridClass = "grid grid-cols-3 gap-4";
+  const visitorPostCardClass = isPremiumProfile
+    ? "overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] shadow-[0_12px_30px_rgba(15,23,42,0.18)]"
+    : "overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 shadow-sm dark:border-gray-700 dark:bg-gray-800";
+  const visitorPreviewClass = isPremiumProfile
+    ? "relative aspect-square overflow-hidden bg-white/5"
+    : "relative aspect-square overflow-hidden bg-gray-100 dark:bg-gray-900";
+  const visitorMetaClass = isPremiumProfile
+    ? "border-t border-white/10 p-3"
+    : "border-t border-gray-200 p-3 dark:border-gray-700";
   const premiumMembershipClass = isPremiumProfile
     ? "md:col-span-2 rounded-xl border border-amber-200/20 bg-gradient-to-r from-[#5f4a0f] via-[#76601a] to-[#4a5568] p-4 text-amber-50 shadow-[0_10px_30px_rgba(245,158,11,0.18)]"
     : "md:col-span-2 p-4 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 text-white";
@@ -1429,7 +1460,7 @@ export default function UserProfilePage() {
                         : "This user hasn't posted anything yet."}
                     </p>
                   </div>
-                ) : (
+                ) : isCurrentUser ? (
                   posts.map((post) => (
                     <div
                       key={post.id}
@@ -1491,20 +1522,12 @@ export default function UserProfilePage() {
                         </div>
                       ) : (
                         <>
-                          <p className={`mb-4 whitespace-pre-wrap ${bodyTextClass}`}>
-                            {post.content}
-                          </p>
-                          {post.image && (
-                            <div className="rounded-xl overflow-hidden mb-4">
-                              <Image
-                                src={post.image}
-                                alt="Post"
-                                width={600}
-                                height={350}
-                                className="w-full h-auto object-cover"
-                              />
-                            </div>
+                          {post.content?.trim() && (
+                            <p className={`mb-4 whitespace-pre-wrap ${bodyTextClass}`}>
+                              {post.content}
+                            </p>
                           )}
+                          <ProfilePostMedia media={post.media} altPrefix="Profile post media" />
                           <div className={`flex items-center gap-4 pt-4 text-sm ${mutedTextClass} border-t ${sectionDividerClass}`}>
                             <button
                               onClick={() => toggleLike(post.id)}
@@ -1532,6 +1555,79 @@ export default function UserProfilePage() {
                       )}
                     </div>
                   ))
+                ) : (
+                  <div className={visitorPostsGridClass}>
+                    {posts.map((post) => {
+                      const primaryMedia = post.media?.[0];
+                      const mediaCount = post.media?.length || 0;
+                      const previewText = getPostPreviewText(post.content);
+
+                      return (
+                        <div
+                          key={post.id}
+                          className={visitorPostCardClass}
+                        >
+                          <div className={visitorPreviewClass}>
+                            {primaryMedia ? (
+                              isVideoMediaUrl(primaryMedia) ? (
+                                <>
+                                  <video
+                                    src={primaryMedia}
+                                    muted
+                                    playsInline
+                                    preload="metadata"
+                                    className="h-full w-full object-cover"
+                                  />
+                                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/10">
+                                    <div className="rounded-full bg-black/55 p-2 text-white shadow-lg">
+                                      <Video size={18} />
+                                    </div>
+                                  </div>
+                                </>
+                              ) : (
+                                <Image
+                                  src={primaryMedia}
+                                  alt="Post media preview"
+                                  fill
+                                  sizes="(max-width: 1024px) 33vw, 20vw"
+                                  className="object-cover"
+                                />
+                              )
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-amber-500/10 via-transparent to-slate-500/10 p-4">
+                                <p className={`text-center text-sm font-medium ${bodyTextClass}`}>
+                                  {previewText || "Text post"}
+                                </p>
+                              </div>
+                            )}
+
+                            {mediaCount > 1 && (
+                              <div className="absolute right-3 top-3 rounded-full bg-black/65 px-2 py-1 text-[11px] font-semibold text-white">
+                                {mediaCount}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className={visitorMetaClass}>
+                            {previewText && primaryMedia && (
+                              <p className={`mb-3 text-sm ${bodyTextClass}`}>
+                                {previewText}
+                              </p>
+                            )}
+                            <div className={`flex items-center justify-between gap-2 text-xs ${mutedTextClass}`}>
+                              <div className="flex items-center gap-3">
+                                <span>{post.likes ?? 0} likes</span>
+                                <span>{post.comments ?? 0} comments</span>
+                              </div>
+                              {post.timestamp && (
+                                <span>{formatDate(post.timestamp)}</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             </div>
