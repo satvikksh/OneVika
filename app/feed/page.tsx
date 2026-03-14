@@ -933,6 +933,7 @@ const WHEEL_SCROLL_THROTTLE_MS = 120;
 const WHEEL_DELTA_THRESHOLD = 28;
 const SCROLL_UNLOCK_DELAY_MS = 260;
 const FEED_CACHE_WRITE_DELAY_MS = 250;
+const BLINK_STATUS_BANNER_DURATION_MS = 3500;
 const SETTINGS_STORAGE_KEY = "orbitbyte.settings.v1";
 
 function readBlinkScrollSetting() {
@@ -975,6 +976,9 @@ export default function FeedPage() {
     readBlinkScrollSetting()
   );
   const [blinkCameraError, setBlinkCameraError] = useState<string | null>(null);
+  const [showBlinkStatusBanner, setShowBlinkStatusBanner] = useState(() =>
+    readBlinkScrollSetting()
+  );
      
   // Navigation State
   const [currentPostIndex, setCurrentPostIndex] = useState(
@@ -1458,6 +1462,28 @@ export default function FeedPage() {
     }
   }, [blinkScrollEnabled]);
 
+  useEffect(() => {
+    if (!blinkScrollEnabled) {
+      setShowBlinkStatusBanner(false);
+      return;
+    }
+
+    if (blinkCameraError || blinkNavigationError) {
+      setShowBlinkStatusBanner(true);
+      return;
+    }
+
+    setShowBlinkStatusBanner(true);
+
+    const hideTimer = window.setTimeout(() => {
+      setShowBlinkStatusBanner(false);
+    }, BLINK_STATUS_BANNER_DURATION_MS);
+
+    return () => {
+      window.clearTimeout(hideTimer);
+    };
+  }, [blinkScrollEnabled, blinkCameraError, blinkNavigationError]);
+
   /* ============================
        HANDLE WHEEL SCROLL
   ============================ */
@@ -1910,25 +1936,27 @@ export default function FeedPage() {
 
       {blinkScrollEnabled && (
         <>
-          <div className="pointer-events-none fixed right-4 top-20 z-[75] max-w-xs rounded-2xl border border-white/10 bg-black/70 px-4 py-3 text-white shadow-2xl backdrop-blur-md">
-            <div className="flex items-start gap-3">
-              <div className="mt-0.5 rounded-full bg-white/10 p-2">
-                {blinkLoading ? (
-                  <Loader2 size={16} className="animate-spin text-amber-300" />
-                ) : (
-                  <Eye size={16} className="text-amber-300" />
-                )}
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-white">
-                  Eye-Blink Navigation
-                </p>
-                <p className="mt-1 text-xs leading-relaxed text-white/75">
-                  {blinkStatusMessage}
-                </p>
+          {showBlinkStatusBanner && (
+            <div className="pointer-events-none fixed right-4 top-20 z-[75] max-w-xs rounded-2xl border border-white/10 bg-black/70 px-4 py-3 text-white shadow-2xl backdrop-blur-md">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 rounded-full bg-white/10 p-2">
+                  {blinkLoading ? (
+                    <Loader2 size={16} className="animate-spin text-amber-300" />
+                  ) : (
+                    <Eye size={16} className="text-amber-300" />
+                  )}
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-white">
+                    Eye-Blink Navigation
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed text-white/75">
+                    {blinkStatusMessage}
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {shouldEnableBlinkNavigation && (
             <div className="pointer-events-none fixed bottom-4 right-4 opacity-0">
