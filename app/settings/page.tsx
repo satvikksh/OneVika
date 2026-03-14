@@ -368,7 +368,13 @@ export default function SettingsPage() {
 
             {activeTab === "feed" && (
               <div className="space-y-4">
-                <Toggle label="Enable Blink Scroll" checked={settings.feed.enableBlinkScroll} onChange={(checked) => setSettings((s) => ({ ...s, feed: { ...s.feed, enableBlinkScroll: checked } }))} />
+                <Toggle label="Enable Eye-Blink Navigation" checked={settings.feed.enableBlinkScroll} onChange={(checked) => setSettings((s) => ({ ...s, feed: { ...s.feed, enableBlinkScroll: checked } }))} />
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/70">
+                  <p className="font-medium text-white">Hands-free reel controls</p>
+                  <p className="mt-1">This feature is enabled by default so you can browse reels hands-free.</p>
+                  <p className="mt-1">Double blink to move to the next reel. Triple blink to return to the previous reel.</p>
+                  <p className="mt-1 text-white/50">Turn this off any time to use normal scrolling or touch controls. Your camera is used only while eye-blink navigation is enabled on the feed.</p>
+                </div>
                 <Toggle label="Auto-play videos" checked={settings.feed.autoPlayVideos} onChange={(checked) => setSettings((s) => ({ ...s, feed: { ...s.feed, autoPlayVideos: checked } }))} />
                 <Toggle label="Mute videos by default" checked={settings.feed.muteVideos} onChange={(checked) => setSettings((s) => ({ ...s, feed: { ...s.feed, muteVideos: checked } }))} />
                 <Toggle label="Show reels" checked={settings.feed.showReels} onChange={(checked) => setSettings((s) => ({ ...s, feed: { ...s.feed, showReels: checked } }))} />

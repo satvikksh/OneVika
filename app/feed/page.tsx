@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import Image from "next/image";
+import Webcam from "react-webcam";
 import {
   Heart,
   MessageCircle,
@@ -22,11 +23,14 @@ import {
   Edit,
   ChevronLeft,
   ChevronRight,
+  Eye,
+  Loader2,
 } from "lucide-react";
 import { useTheme } from "../theme-provider";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useUserAvatar } from "../hooks/useUserAvatar";
+import { useBlinkNavigation } from "../hooks/useBlinkNavigation";
 import { PremiumAvatar, PremiumName } from "../components/premium-ui";
 // import { useSettings } from "../components/settings-provider";
 
@@ -929,6 +933,28 @@ const WHEEL_SCROLL_THROTTLE_MS = 120;
 const WHEEL_DELTA_THRESHOLD = 28;
 const SCROLL_UNLOCK_DELAY_MS = 260;
 const FEED_CACHE_WRITE_DELAY_MS = 250;
+const SETTINGS_STORAGE_KEY = "orbitbyte.settings.v1";
+
+function readBlinkScrollSetting() {
+  if (typeof window === "undefined") return true;
+
+  try {
+    const raw = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
+    if (!raw) return true;
+
+    const parsed = JSON.parse(raw) as {
+      feed?: { enableBlinkScroll?: boolean };
+    };
+
+    if (typeof parsed?.feed?.enableBlinkScroll === "boolean") {
+      return parsed.feed.enableBlinkScroll;
+    }
+
+    return true;
+  } catch {
+    return true;
+  }
+}
 
 // --- MAIN FEED PAGE ---
 export default function FeedPage() {
@@ -945,6 +971,10 @@ export default function FeedPage() {
   const [hasMore, setHasMore] = useState(feedPageCache?.hasMore ?? true);
   const [page, setPage] = useState(feedPageCache?.page ?? 1);
   const [initialLoad, setInitialLoad] = useState(!feedPageCache);
+  const [blinkScrollEnabled, setBlinkScrollEnabled] = useState(() =>
+    readBlinkScrollSetting()
+  );
+  const [blinkCameraError, setBlinkCameraError] = useState<string | null>(null);
      
   // Navigation State
   const [currentPostIndex, setCurrentPostIndex] = useState(
@@ -1004,6 +1034,12 @@ export default function FeedPage() {
     isOpen: false,
     post: null,
   });
+  const shouldEnableBlinkNavigation =
+    blinkScrollEnabled &&
+    !likeModal.isOpen &&
+    !commentsModal.isOpen &&
+    !shareModal.isOpen &&
+    !editModal.isOpen;
 
   const feedContainerRef = useRef<HTMLDivElement>(null);
   const carouselContainerRef = useRef<HTMLDivElement>(null); // REF FOR CAROUSEL
@@ -1072,6 +1108,23 @@ export default function FeedPage() {
       if (cacheWriteTimeoutRef.current) {
         clearTimeout(cacheWriteTimeoutRef.current);
       }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const syncBlinkSetting = () => {
+      setBlinkScrollEnabled(readBlinkScrollSetting());
+    };
+
+    syncBlinkSetting();
+    window.addEventListener("storage", syncBlinkSetting);
+    window.addEventListener("focus", syncBlinkSetting);
+
+    return () => {
+      window.removeEventListener("storage", syncBlinkSetting);
+      window.removeEventListener("focus", syncBlinkSetting);
     };
   }, []);
 
@@ -1379,6 +1432,31 @@ export default function FeedPage() {
     },
     []
   );
+
+  const handleBlinkNextReel = useCallback(() => {
+    navigateFeed(1);
+  }, [navigateFeed]);
+
+  const handleBlinkPreviousReel = useCallback(() => {
+    navigateFeed(-1);
+  }, [navigateFeed]);
+
+  const {
+    webcamRef,
+    loading: blinkLoading,
+    error: blinkNavigationError,
+    isReady: isBlinkNavigationReady,
+  } = useBlinkNavigation(
+    handleBlinkNextReel,
+    handleBlinkPreviousReel,
+    shouldEnableBlinkNavigation
+  );
+
+  useEffect(() => {
+    if (!blinkScrollEnabled) {
+      setBlinkCameraError(null);
+    }
+  }, [blinkScrollEnabled]);
 
   /* ============================
        HANDLE WHEEL SCROLL
@@ -1803,6 +1881,19 @@ export default function FeedPage() {
   const currentMediaIsVideo = currentPost?.images 
     ? isVideo(currentPost.images[carouselIndex])
     : false;
+  const blinkStatusMessage = !blinkScrollEnabled
+    ? null
+    : blinkCameraError
+      ? blinkCameraError
+      : blinkNavigationError
+        ? blinkNavigationError
+        : blinkLoading
+          ? "Starting eye-blink navigation..."
+          : !shouldEnableBlinkNavigation
+            ? "Eye navigation paused while a modal is open."
+            : isBlinkNavigationReady
+              ? "Eye navigation on: double blink for next reel, triple blink for previous reel."
+              : "Preparing eye navigation...";
 
   return (
     <>
@@ -1816,6 +1907,49 @@ export default function FeedPage() {
           scrollbar-width: none;
         }
       `}</style>
+
+      {blinkScrollEnabled && (
+        <>
+          <div className="pointer-events-none fixed right-4 top-20 z-[75] max-w-xs rounded-2xl border border-white/10 bg-black/70 px-4 py-3 text-white shadow-2xl backdrop-blur-md">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 rounded-full bg-white/10 p-2">
+                {blinkLoading ? (
+                  <Loader2 size={16} className="animate-spin text-amber-300" />
+                ) : (
+                  <Eye size={16} className="text-amber-300" />
+                )}
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-white">
+                  Eye-Blink Navigation
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-white/75">
+                  {blinkStatusMessage}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {shouldEnableBlinkNavigation && (
+            <div className="pointer-events-none fixed bottom-4 right-4 opacity-0">
+              <Webcam
+                ref={webcamRef}
+                audio={false}
+                mirrored
+                screenshotFormat="image/jpeg"
+                videoConstraints={{
+                  facingMode: "user",
+                }}
+                onUserMedia={() => setBlinkCameraError(null)}
+                onUserMediaError={() =>
+                  setBlinkCameraError("Camera access is required for eye navigation.")
+                }
+                className="h-24 w-24"
+              />
+            </div>
+          )}
+        </>
+      )}
 
       <div
         ref={feedContainerRef}

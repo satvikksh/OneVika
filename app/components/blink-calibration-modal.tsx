@@ -2,81 +2,138 @@
 
 import { useEffect, useRef, useState } from "react";
 import Webcam from "react-webcam";
-import * as tf from "@tensorflow/tfjs";
-import * as faceLandmarksDetection from "@tensorflow-models/face-landmarks-detection";
-import { X, CheckCircle, AlertCircle, Eye, EyeOff, Loader2 } from "lucide-react";
+import { X, Eye, EyeOff, Loader2 } from "lucide-react";
+import {
+  createFaceMeshInstance,
+  type FaceMeshInstance,
+  type FaceMeshLandmark,
+} from "../lib/mediapipe-face-mesh";
 
-export function BlinkCalibrationModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+export function BlinkCalibrationModal({
+  isOpen,
+  onClose,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+}) {
   const webcamRef = useRef<Webcam>(null);
-  const [model, setModel] = useState<faceLandmarksDetection.FaceLandmarksDetector | null>(null);
+  const requestRef = useRef<number | null>(null);
+  const isProcessingRef = useRef(false);
+  const modelRef = useRef<FaceMeshInstance | null>(null);
+
+  const [isModelReady, setIsModelReady] = useState(false);
   const [blinkStatus, setBlinkStatus] = useState<"OPEN" | "CLOSED">("OPEN");
   const [blinkCount, setBlinkCount] = useState(0);
   const [message, setMessage] = useState("Initializing AI Model...");
-  const requestRef = useRef<number>(0);
   const blinkState = useRef({ isClosed: false });
 
-  // Load Model
-  useEffect(() => {
-    if (!isOpen) return;
-    
-    const loadModel = async () => {
-      await tf.ready();
-      const loadedModel = await faceLandmarksDetection.createDetector(
-        faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh,
-        { runtime: "tfjs", refineLandmarks: true, maxFaces: 1 }
-      );
-      setModel(loadedModel);
-      setMessage("Ready! Try blinking naturally.");
-    };
-    loadModel();
+  const processLandmarks = (landmarks: FaceMeshLandmark[]) => {
+    const top = landmarks[159];
+    const bottom = landmarks[145];
+    const left = landmarks[33];
+    const right = landmarks[133];
 
-    return () => {
-       if(requestRef.current) cancelAnimationFrame(requestRef.current);
-    }
-  }, [isOpen]);
+    const height = Math.hypot(top.x - bottom.x, top.y - bottom.y);
+    const width = Math.hypot(left.x - right.x, left.y - right.y);
+    const ear = height / width;
+    const isClosed = ear < 0.26;
 
-  // Detection Loop
-  const detect = async () => {
-    if (webcamRef.current?.video?.readyState === 4 && model) {
-      const video = webcamRef.current.video;
-      const predictions = await model.estimateFaces(video);
-
-      if (predictions.length > 0) {
-        const keypoints = predictions[0].keypoints;
-        // Simple EAR calculation (Left Eye)
-        const top = keypoints[159];
-        const bottom = keypoints[145];
-        const left = keypoints[33];
-        const right = keypoints[133];
-
-        const height = Math.sqrt(Math.pow(top.x - bottom.x, 2) + Math.pow(top.y - bottom.y, 2));
-        const width = Math.sqrt(Math.pow(left.x - right.x, 2) + Math.pow(left.y - right.y, 2));
-        const ear = height / width;
-
-        const isClosed = ear < 0.26; // Threshold
-
-        if (isClosed) {
-          setBlinkStatus("CLOSED");
-          if (!blinkState.current.isClosed) {
-            blinkState.current.isClosed = true;
-          }
-        } else {
-          setBlinkStatus("OPEN");
-          if (blinkState.current.isClosed) {
-            setBlinkCount(c => c + 1);
-            blinkState.current.isClosed = false;
-          }
-        }
+    if (isClosed) {
+      setBlinkStatus("CLOSED");
+      if (!blinkState.current.isClosed) {
+        blinkState.current.isClosed = true;
       }
+      return;
     }
-    requestRef.current = requestAnimationFrame(detect);
+
+    setBlinkStatus("OPEN");
+    if (blinkState.current.isClosed) {
+      setBlinkCount((count) => count + 1);
+      blinkState.current.isClosed = false;
+    }
   };
 
   useEffect(() => {
-    if (model && isOpen) {
-      requestRef.current = requestAnimationFrame(detect);
+    if (!isOpen) {
+      return;
     }
-  }, [model, isOpen]);
+
+    let cancelled = false;
+    blinkState.current.isClosed = false;
+    setBlinkStatus("OPEN");
+    setBlinkCount(0);
+    setIsModelReady(false);
+    setMessage("Initializing AI Model...");
+
+    const detect = async () => {
+      if (cancelled) {
+        return;
+      }
+
+      const video = webcamRef.current?.video;
+      const model = modelRef.current;
+
+      if (video && model && video.readyState === 4 && !isProcessingRef.current) {
+        isProcessingRef.current = true;
+        try {
+          await model.send({ image: video });
+        } catch (error) {
+          console.warn("Blink calibration error:", error);
+        } finally {
+          isProcessingRef.current = false;
+        }
+      }
+
+      requestRef.current = requestAnimationFrame(detect);
+    };
+
+    const loadModel = async () => {
+      try {
+        const faceMesh = await createFaceMeshInstance({
+          maxNumFaces: 1,
+          refineLandmarks: true,
+        });
+
+        if (cancelled) {
+          void faceMesh.close();
+          return;
+        }
+
+        faceMesh.onResults((results) => {
+          const landmarks = results.multiFaceLandmarks?.[0];
+          if (landmarks?.length) {
+            processLandmarks(landmarks);
+          }
+        });
+
+        modelRef.current = faceMesh;
+        setIsModelReady(true);
+        setMessage("Ready! Try blinking naturally.");
+        requestRef.current = requestAnimationFrame(detect);
+      } catch (error) {
+        console.error("Blink calibration model load failed:", error);
+        setMessage("Blink calibration is unavailable on this device.");
+      }
+    };
+
+    void loadModel();
+
+    return () => {
+      cancelled = true;
+      isProcessingRef.current = false;
+
+      if (requestRef.current !== null) {
+        cancelAnimationFrame(requestRef.current);
+        requestRef.current = null;
+      }
+
+      const currentModel = modelRef.current;
+      modelRef.current = null;
+      if (currentModel) {
+        void currentModel.close();
+      }
+    };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -101,7 +158,7 @@ export function BlinkCalibrationModal({ isOpen, onClose }: { isOpen: boolean; on
               mirrored
               className="w-full h-full object-cover"
             />
-            {!model && (
+            {!isModelReady && (
               <div className="absolute inset-0 bg-black/60 flex items-center justify-center flex-col gap-2">
                 <Loader2 className="animate-spin text-indigo-400" size={32} />
                 <span className="text-xs text-white/70">Loading AI...</span>
