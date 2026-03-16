@@ -1,92 +1,169 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import Webcam from "react-webcam";
+import { useCallback, useEffect, useRef, useState } from "react";
+import Webcam, { type WebcamProps } from "react-webcam";
+import {
+  createBlinkDetector,
+  getBlinkCameraErrorMessage,
+  getBlinkCameraProfiles,
+  isLikelyMobileDevice,
+  shouldRetryBlinkCamera,
+  type BlinkCameraConstraints,
+} from "../lib/blink-navigation";
 import {
   createFaceMeshInstance,
   type FaceMeshInstance,
-  type FaceMeshLandmark,
 } from "../lib/mediapipe-face-mesh";
+
+const DESKTOP_FRAME_INTERVAL_MS = 60;
+const MOBILE_FRAME_INTERVAL_MS = 85;
+
+type BlinkWebcamProps = Pick<
+  WebcamProps,
+  | "audio"
+  | "disablePictureInPicture"
+  | "mirrored"
+  | "muted"
+  | "onUserMedia"
+  | "onUserMediaError"
+  | "playsInline"
+  | "screenshotFormat"
+  | "videoConstraints"
+>;
 
 export function useBlinkNavigation(
   onDoubleBlink: () => void,
   onTripleBlink: () => void,
-  enabled: boolean
+  enabled: boolean,
+  paused = false
 ) {
   const webcamRef = useRef<Webcam>(null);
+  const detectorRef = useRef<ReturnType<typeof createBlinkDetector> | null>(
+    null
+  );
   const requestRef = useRef<number | null>(null);
+  const cameraReadyRef = useRef(false);
   const isProcessingRef = useRef(false);
   const modelRef = useRef<FaceMeshInstance | null>(null);
+  const frameIntervalRef = useRef(DESKTOP_FRAME_INTERVAL_MS);
+  const lastProcessedAtRef = useRef(0);
+  const pausedRef = useRef(paused);
 
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [cameraProfileIndex, setCameraProfileIndex] = useState(0);
+  const [cameraProfiles, setCameraProfiles] = useState<BlinkCameraConstraints[]>(
+    () => getBlinkCameraProfiles(false)
+  );
+  const [cameraReady, setCameraReady] = useState(false);
+  const [isRetryingCamera, setIsRetryingCamera] = useState(false);
+  const [modelError, setModelError] = useState<string | null>(null);
+  const [modelReady, setModelReady] = useState(false);
 
-  const blink = useRef({
-    count: 0,
-    isClosed: false,
-    timer: null as ReturnType<typeof setTimeout> | null,
-  });
+  useEffect(() => {
+    pausedRef.current = paused;
+  }, [paused]);
+
+  const handleUserMedia = useCallback(() => {
+    cameraReadyRef.current = true;
+    setCameraReady(true);
+    setCameraError(null);
+    setIsRetryingCamera(false);
+  }, []);
+
+  const handleUserMediaError = useCallback(
+    (error: string | DOMException) => {
+      cameraReadyRef.current = false;
+      setCameraReady(false);
+
+      if (
+        shouldRetryBlinkCamera(error, cameraProfileIndex, cameraProfiles.length)
+      ) {
+        setIsRetryingCamera(true);
+        setCameraError(null);
+        setCameraProfileIndex((currentIndex) =>
+          Math.min(currentIndex + 1, cameraProfiles.length - 1)
+        );
+        return;
+      }
+
+      setIsRetryingCamera(false);
+      setCameraError(getBlinkCameraErrorMessage(error));
+    },
+    [cameraProfileIndex, cameraProfiles.length]
+  );
 
   useEffect(() => {
     if (!enabled) {
-      setLoading(false);
-      setError(null);
+      detectorRef.current?.dispose();
+      detectorRef.current = null;
+      cameraReadyRef.current = false;
+      setCameraError(null);
+      setCameraReady(false);
+      setIsRetryingCamera(false);
+      setModelError(null);
+      setModelReady(false);
       return;
     }
 
+    const isMobile = isLikelyMobileDevice();
+    frameIntervalRef.current = isMobile
+      ? MOBILE_FRAME_INTERVAL_MS
+      : DESKTOP_FRAME_INTERVAL_MS;
+
+    setCameraProfiles(getBlinkCameraProfiles(isMobile));
+    setCameraProfileIndex(0);
+    cameraReadyRef.current = false;
+    setCameraError(null);
+    setCameraReady(false);
+    setIsRetryingCamera(false);
+    setModelError(null);
+    setModelReady(false);
+    lastProcessedAtRef.current = 0;
+
+    detectorRef.current?.dispose();
+    detectorRef.current = createBlinkDetector({
+      onDoubleBlink,
+      onTripleBlink,
+    });
+
     let cancelled = false;
-    const blinkState = blink.current;
 
-    const dist = (a: FaceMeshLandmark, b: FaceMeshLandmark) =>
-      Math.hypot(a.x - b.x, a.y - b.y);
-
-    const handleLandmarks = (landmarks: FaceMeshLandmark[]) => {
-      const ear =
-        (dist(landmarks[159], landmarks[145]) / dist(landmarks[33], landmarks[133]) +
-          dist(landmarks[386], landmarks[374]) / dist(landmarks[362], landmarks[263])) /
-        2;
-
-      if (ear < 0.26) {
-        blinkState.isClosed = true;
-        return;
-      }
-
-      if (!blinkState.isClosed) {
-        return;
-      }
-
-      blinkState.isClosed = false;
-      blinkState.count += 1;
-
-      if (blinkState.timer) {
-        clearTimeout(blinkState.timer);
-      }
-
-      blinkState.timer = setTimeout(() => {
-        if (blinkState.count === 2) {
-          onDoubleBlink();
-        }
-        if (blinkState.count === 3) {
-          onTripleBlink();
-        }
-        blinkState.count = 0;
-      }, 800);
-    };
-
-    const detect = async () => {
+    const detect = async (timestamp: number) => {
       if (cancelled) {
+        return;
+      }
+
+      if (pausedRef.current || document.hidden) {
+        detectorRef.current?.markFaceMissing(timestamp);
+        requestRef.current = requestAnimationFrame(detect);
+        return;
+      }
+
+      if (timestamp - lastProcessedAtRef.current < frameIntervalRef.current) {
+        requestRef.current = requestAnimationFrame(detect);
         return;
       }
 
       const video = webcamRef.current?.video;
       const model = modelRef.current;
 
-      if (video && model && video.readyState === 4 && !isProcessingRef.current) {
+      if (
+        video &&
+        model &&
+        cameraReadyRef.current &&
+        video.readyState >= 2 &&
+        video.videoWidth > 0 &&
+        video.videoHeight > 0 &&
+        !isProcessingRef.current
+      ) {
+        lastProcessedAtRef.current = timestamp;
         isProcessingRef.current = true;
+
         try {
           await model.send({ image: video });
-        } catch (e) {
-          console.warn("Blink detection error:", e);
+        } catch (error) {
+          console.warn("Blink detection error:", error);
+          detectorRef.current?.markFaceMissing(timestamp);
         } finally {
           isProcessingRef.current = false;
         }
@@ -95,14 +172,20 @@ export function useBlinkNavigation(
       requestRef.current = requestAnimationFrame(detect);
     };
 
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        detectorRef.current?.markFaceMissing();
+      }
+    };
+
     const loadAndRun = async () => {
       try {
-        setLoading(true);
-        setError(null);
-
         const faceMesh = await createFaceMeshInstance({
           maxNumFaces: 1,
+          minDetectionConfidence: isMobile ? 0.55 : 0.5,
+          minTrackingConfidence: isMobile ? 0.55 : 0.5,
           refineLandmarks: true,
+          selfieMode: true,
         });
 
         if (cancelled) {
@@ -112,39 +195,41 @@ export function useBlinkNavigation(
 
         faceMesh.onResults((results) => {
           const landmarks = results.multiFaceLandmarks?.[0];
+
           if (landmarks?.length) {
-            handleLandmarks(landmarks);
+            detectorRef.current?.processLandmarks(landmarks);
+            return;
           }
+
+          detectorRef.current?.markFaceMissing();
         });
 
         modelRef.current = faceMesh;
-        setLoading(false);
+        setModelReady(true);
         requestRef.current = requestAnimationFrame(detect);
-      } catch (e) {
-        console.error("Blink model load failed:", e);
-        setError("Blink navigation is unavailable on this device.");
-        setLoading(false);
+      } catch (error) {
+        console.error("Blink model load failed:", error);
+        setModelError("Eye navigation is unavailable on this device.");
       }
     };
 
-    loadAndRun();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    void loadAndRun();
 
     return () => {
       cancelled = true;
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      cameraReadyRef.current = false;
       isProcessingRef.current = false;
+      lastProcessedAtRef.current = 0;
 
       if (requestRef.current !== null) {
         cancelAnimationFrame(requestRef.current);
         requestRef.current = null;
       }
 
-      if (blinkState.timer) {
-        clearTimeout(blinkState.timer);
-        blinkState.timer = null;
-      }
-
-      blinkState.count = 0;
-      blinkState.isClosed = false;
+      detectorRef.current?.dispose();
+      detectorRef.current = null;
 
       const currentModel = modelRef.current;
       modelRef.current = null;
@@ -154,10 +239,34 @@ export function useBlinkNavigation(
     };
   }, [enabled, onDoubleBlink, onTripleBlink]);
 
+  const error = cameraError ?? modelError;
+  const loading =
+    enabled && !error && (isRetryingCamera || !cameraReady || !modelReady);
+  const isReady =
+    enabled &&
+    !paused &&
+    !error &&
+    !isRetryingCamera &&
+    cameraReady &&
+    modelReady;
+
+  const webcamProps: BlinkWebcamProps = {
+    audio: false,
+    disablePictureInPicture: true,
+    mirrored: true,
+    muted: true,
+    onUserMedia: handleUserMedia,
+    onUserMediaError: handleUserMediaError,
+    playsInline: true,
+    screenshotFormat: "image/jpeg",
+    videoConstraints: cameraProfiles[cameraProfileIndex] ?? true,
+  };
+
   return {
-    webcamRef,
-    loading,
     error,
-    isReady: enabled && !loading && !error,
+    isReady,
+    loading,
+    webcamProps,
+    webcamRef,
   };
 }

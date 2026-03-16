@@ -975,7 +975,6 @@ export default function FeedPage() {
   const [blinkScrollEnabled, setBlinkScrollEnabled] = useState(() =>
     readBlinkScrollSetting()
   );
-  const [blinkCameraError, setBlinkCameraError] = useState<string | null>(null);
   const [showBlinkStatusBanner, setShowBlinkStatusBanner] = useState(() =>
     readBlinkScrollSetting()
   );
@@ -1038,12 +1037,11 @@ export default function FeedPage() {
     isOpen: false,
     post: null,
   });
-  const shouldEnableBlinkNavigation =
-    blinkScrollEnabled &&
-    !likeModal.isOpen &&
-    !commentsModal.isOpen &&
-    !shareModal.isOpen &&
-    !editModal.isOpen;
+  const isBlinkNavigationPaused =
+    likeModal.isOpen ||
+    commentsModal.isOpen ||
+    shareModal.isOpen ||
+    editModal.isOpen;
 
   const feedContainerRef = useRef<HTMLDivElement>(null);
   const carouselContainerRef = useRef<HTMLDivElement>(null); // REF FOR CAROUSEL
@@ -1447,20 +1445,16 @@ export default function FeedPage() {
 
   const {
     webcamRef,
+    webcamProps,
     loading: blinkLoading,
     error: blinkNavigationError,
     isReady: isBlinkNavigationReady,
   } = useBlinkNavigation(
     handleBlinkNextReel,
     handleBlinkPreviousReel,
-    shouldEnableBlinkNavigation
+    blinkScrollEnabled,
+    isBlinkNavigationPaused
   );
-
-  useEffect(() => {
-    if (!blinkScrollEnabled) {
-      setBlinkCameraError(null);
-    }
-  }, [blinkScrollEnabled]);
 
   useEffect(() => {
     if (!blinkScrollEnabled) {
@@ -1468,12 +1462,12 @@ export default function FeedPage() {
       return;
     }
 
-    if (blinkCameraError || blinkNavigationError) {
+    setShowBlinkStatusBanner(true);
+
+    if (blinkNavigationError || blinkLoading || isBlinkNavigationPaused) {
       setShowBlinkStatusBanner(true);
       return;
     }
-
-    setShowBlinkStatusBanner(true);
 
     const hideTimer = window.setTimeout(() => {
       setShowBlinkStatusBanner(false);
@@ -1482,7 +1476,12 @@ export default function FeedPage() {
     return () => {
       window.clearTimeout(hideTimer);
     };
-  }, [blinkScrollEnabled, blinkCameraError, blinkNavigationError]);
+  }, [
+    blinkLoading,
+    blinkNavigationError,
+    blinkScrollEnabled,
+    isBlinkNavigationPaused,
+  ]);
 
   /* ============================
        HANDLE WHEEL SCROLL
@@ -1909,17 +1908,15 @@ export default function FeedPage() {
     : false;
   const blinkStatusMessage = !blinkScrollEnabled
     ? null
-    : blinkCameraError
-      ? blinkCameraError
-      : blinkNavigationError
-        ? blinkNavigationError
-        : blinkLoading
-          ? "Starting eye-blink navigation..."
-          : !shouldEnableBlinkNavigation
-            ? "Eye navigation paused while a modal is open."
-            : isBlinkNavigationReady
-              ? "Eye navigation on: double blink for next reel, triple blink for previous reel."
-              : "Preparing eye navigation...";
+    : blinkNavigationError
+      ? blinkNavigationError
+      : blinkLoading
+        ? "Starting eye-blink navigation..."
+        : isBlinkNavigationPaused
+          ? "Eye navigation paused while a modal is open."
+          : isBlinkNavigationReady
+            ? "Eye navigation on: double blink for next reel, triple blink for previous reel."
+            : "Preparing eye navigation...";
 
   return (
     <>
@@ -1958,24 +1955,13 @@ export default function FeedPage() {
             </div>
           )}
 
-          {shouldEnableBlinkNavigation && (
-            <div className="pointer-events-none fixed bottom-4 right-4 opacity-0">
-              <Webcam
-                ref={webcamRef}
-                audio={false}
-                mirrored
-                screenshotFormat="image/jpeg"
-                videoConstraints={{
-                  facingMode: "user",
-                }}
-                onUserMedia={() => setBlinkCameraError(null)}
-                onUserMediaError={() =>
-                  setBlinkCameraError("Camera access is required for eye navigation.")
-                }
-                className="h-24 w-24"
-              />
-            </div>
-          )}
+          <div className="pointer-events-none fixed bottom-4 right-4 opacity-0">
+            <Webcam
+              ref={webcamRef}
+              {...webcamProps}
+              className="h-24 w-24"
+            />
+          </div>
         </>
       )}
 
