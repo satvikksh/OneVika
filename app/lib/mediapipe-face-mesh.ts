@@ -1,6 +1,5 @@
-const FACE_MESH_CDN_BASE =
-  "https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619";
-const FACE_MESH_SCRIPT_URL = `${FACE_MESH_CDN_BASE}/face_mesh.js`;
+const FACE_MESH_PUBLIC_BASE = "/mediapipe/face_mesh";
+const FACE_MESH_SCRIPT_URL = `${FACE_MESH_PUBLIC_BASE}/face_mesh.js`;
 const FACE_MESH_SCRIPT_SELECTOR = 'script[data-mediapipe-face-mesh="true"]';
 
 let faceMeshConstructorPromise: Promise<FaceMeshConstructor> | null = null;
@@ -152,7 +151,7 @@ export async function createFaceMeshInstance(
 ): Promise<FaceMeshInstance> {
   const FaceMesh = await loadFaceMeshConstructor();
   const faceMesh = new FaceMesh({
-    locateFile: (file) => `${FACE_MESH_CDN_BASE}/${file}`,
+    locateFile: (file) => `${FACE_MESH_PUBLIC_BASE}/${file}`,
   });
 
   faceMesh.setOptions({
