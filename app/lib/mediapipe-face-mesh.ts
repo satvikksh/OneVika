@@ -1,6 +1,7 @@
 const FACE_MESH_PUBLIC_BASE = "/mediapipe/face_mesh";
 const FACE_MESH_SCRIPT_URL = `${FACE_MESH_PUBLIC_BASE}/face_mesh.js`;
 const FACE_MESH_SCRIPT_SELECTOR = 'script[data-mediapipe-face-mesh="true"]';
+const FACE_MESH_SCRIPT_STATE_KEY = "mediapipeFaceMeshState";
 
 let faceMeshConstructorPromise: Promise<FaceMeshConstructor> | null = null;
 
@@ -52,6 +53,17 @@ function getFaceMeshConstructor(): FaceMeshConstructor | undefined {
     .FaceMesh;
 }
 
+function getScriptState(script: HTMLScriptElement) {
+  return script.dataset[FACE_MESH_SCRIPT_STATE_KEY];
+}
+
+function setScriptState(
+  script: HTMLScriptElement,
+  state: "loading" | "loaded" | "error"
+) {
+  script.dataset[FACE_MESH_SCRIPT_STATE_KEY] = state;
+}
+
 function loadFaceMeshScript(): Promise<void> {
   if (typeof document === "undefined") {
     return Promise.reject(
@@ -68,14 +80,31 @@ function loadFaceMeshScript(): Promise<void> {
       return Promise.resolve();
     }
 
+    const existingScriptState = getScriptState(existingScript);
+    if (
+      existingScriptState === "error" ||
+      existingScriptState === "loaded"
+    ) {
+      existingScript.remove();
+      return loadFaceMeshScript();
+    }
+
     return new Promise((resolve, reject) => {
       const handleLoad = () => {
         cleanup();
-        resolve();
+        if (getFaceMeshConstructor()) {
+          resolve();
+          return;
+        }
+
+        existingScript.remove();
+        reject(new Error("MediaPipe FaceMesh failed to register globally."));
       };
 
       const handleError = () => {
         cleanup();
+        setScriptState(existingScript, "error");
+        existingScript.remove();
         reject(new Error("Failed to load MediaPipe FaceMesh script."));
       };
 
@@ -94,11 +123,21 @@ function loadFaceMeshScript(): Promise<void> {
 
     const handleLoad = () => {
       cleanup();
-      resolve();
+      setScriptState(script, "loaded");
+
+      if (getFaceMeshConstructor()) {
+        resolve();
+        return;
+      }
+
+      script.remove();
+      reject(new Error("MediaPipe FaceMesh failed to register globally."));
     };
 
     const handleError = () => {
       cleanup();
+      setScriptState(script, "error");
+      script.remove();
       reject(new Error("Failed to load MediaPipe FaceMesh script."));
     };
 
@@ -111,6 +150,7 @@ function loadFaceMeshScript(): Promise<void> {
     script.async = true;
     script.crossOrigin = "anonymous";
     script.dataset.mediapipeFaceMesh = "true";
+    setScriptState(script, "loading");
     script.addEventListener("load", handleLoad);
     script.addEventListener("error", handleError);
     document.head.appendChild(script);
