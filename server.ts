@@ -3,9 +3,36 @@ import http from "http";
 import { Server } from "socket.io";
 import mongoose from "mongoose";
 import admin from "firebase-admin";
-import User from "./app/models/User.js"; // adjust path if needed
+import User from "./app/models/User.js";
+import Notification from "./app/models/Notification.js";
 
-// 🔥 Initialize Firebase Admin
+type NotificationPayload = {
+  _id?: string;
+  type?: string;
+  title?: string;
+  message: string;
+  senderId?: string;
+  url?: string;
+  createdAt?: string | Date;
+  isRead?: boolean;
+};
+
+type PushTargetUser = {
+  _id?: mongoose.Types.ObjectId;
+  fcmToken?: string | null;
+  fcmTokens?: string[] | null;
+};
+
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://orbitbyte.vercel.app";
+const PREMIUM_REMINDER_WINDOW_MS = 24 * 60 * 60 * 1000;
+const BACKGROUND_JOB_INTERVAL_MS = Number(
+  process.env.BACKGROUND_JOB_INTERVAL_MS || "300000"
+);
+
+let backgroundJobsStarted = false;
+let backgroundJobsRunning = false;
+
+// Initialize Firebase Admin
 if (!admin.apps.length) {
   admin.initializeApp({
     credential: admin.credential.cert({
@@ -16,10 +43,11 @@ if (!admin.apps.length) {
   });
 }
 
-// 🔥 Connect MongoDB
-mongoose.connect(process.env.MONGO_URI as string).then(() => {
-  console.log("MongoDB connected");
-});
+const mongoUri = process.env.MONGO_URI || process.env.MONGODB_URI;
+
+if (!mongoUri) {
+  throw new Error("MONGO_URI or MONGODB_URI is required");
+}
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -39,64 +67,324 @@ const io = new Server(httpServer, {
 
 const activeUsers = new Map<string, Set<string>>();
 
-io.on("connection", (socket) => {
-  const userId = socket.handshake.auth?.userId;
+const addSocketToActiveUser = (userId: string, socketId: string) => {
+  const existingSockets = activeUsers.get(userId);
+  const wasOffline = !existingSockets || existingSockets.size === 0;
 
-  console.log("Socket connected:", socket.id, "user:", userId);
-
-  if (userId) {
-    socket.join(`user_${userId}`);
-
-    if (!activeUsers.has(userId)) {
-      activeUsers.set(userId, new Set());
-    }
-
-    activeUsers.get(userId)?.add(socket.id);
-
-    io.emit("user_status", { userId, isOnline: true });
-    io.emit("online_users", Array.from(activeUsers.keys()));
+  if (!existingSockets) {
+    activeUsers.set(userId, new Set([socketId]));
+  } else {
+    existingSockets.add(socketId);
   }
 
-  // 🔥 SEND MESSAGE
+  if (wasOffline) {
+    io.emit("user_status", { userId, isOnline: true });
+  }
+
+  io.emit("online_users", Array.from(activeUsers.keys()));
+};
+
+const removeSocketFromActiveUser = (userId: string, socketId: string) => {
+  const userSockets = activeUsers.get(userId);
+  if (!userSockets) return;
+
+  userSockets.delete(socketId);
+
+  if (userSockets.size === 0) {
+    activeUsers.delete(userId);
+    io.emit("user_status", { userId, isOnline: false });
+  }
+
+  io.emit("online_users", Array.from(activeUsers.keys()));
+};
+
+const collectPushTokens = (user: PushTargetUser | null) =>
+  Array.from(
+    new Set(
+      [
+        ...(Array.isArray(user?.fcmTokens) ? user.fcmTokens : []),
+        user?.fcmToken,
+      ].filter((token): token is string => Boolean(token))
+    )
+  );
+
+async function pushNotificationToUser(
+  targetUserId: string,
+  payload: NotificationPayload
+) {
+  const receiver = (await User.findById(targetUserId).select(
+    "fcmToken fcmTokens"
+  )) as PushTargetUser | null;
+
+  const tokens = collectPushTokens(receiver);
+  if (tokens.length === 0) {
+    return;
+  }
+
+  const pushTitle =
+    payload.title ||
+    (payload.type === "follow"
+      ? "New Follower"
+      : payload.type === "story"
+      ? "New Story"
+      : payload.type === "thought"
+      ? "New Thought"
+      : payload.type === "premium"
+      ? "Premium Reminder"
+      : "New Notification");
+
+  const response = await admin.messaging().sendEachForMulticast({
+    tokens,
+    notification: {
+      title: pushTitle,
+      body: payload.message,
+    },
+    webpush: {
+      headers: {
+        Urgency: "high",
+      },
+      notification: {
+        icon: `${APP_URL}/icons/icon-192.png`,
+        badge: `${APP_URL}/icons/icon-192.png`,
+        tag: `${payload.type ?? "notification"}_${payload.senderId ?? "system"}`,
+        renotify: true,
+      },
+      fcmOptions: {
+        link: `${APP_URL}${payload.url ?? "/notifications"}`,
+      },
+    },
+    data: {
+      type: String(payload.type ?? "notification"),
+      senderId: String(payload.senderId ?? ""),
+      receiverId: String(targetUserId),
+      url: String(payload.url ?? "/notifications"),
+    },
+  });
+
+  const invalidTokens = response.responses
+    .map((result, index) => ({ result, token: tokens[index] }))
+    .filter(
+      ({ result }) =>
+        !result.success &&
+        (result.error?.code === "messaging/invalid-registration-token" ||
+          result.error?.code === "messaging/registration-token-not-registered")
+    )
+    .map(({ token }) => token);
+
+  if (invalidTokens.length > 0 && receiver?._id) {
+    await User.findByIdAndUpdate(receiver._id, {
+      $pull: { fcmTokens: { $in: invalidTokens } },
+      ...(receiver.fcmToken && invalidTokens.includes(receiver.fcmToken)
+        ? { $set: { fcmToken: null } }
+        : {}),
+    });
+  }
+}
+
+async function dispatchNotification(
+  targetUserId: string,
+  payload: NotificationPayload
+) {
+  io.to(`user_${targetUserId}`).emit("receiveNotification", payload);
+  await pushNotificationToUser(targetUserId, payload);
+}
+
+async function markExpiredPremiumInactive() {
+  const result = await User.updateMany(
+    {
+      isPremium: true,
+      premiumExpiresAt: { $lte: new Date() },
+    },
+    {
+      $set: { isPremium: false },
+      $unset: {
+        premiumExpiryReminderFor: 1,
+        premiumExpiryReminderSentAt: 1,
+      },
+    }
+  );
+
+  if ((result.modifiedCount ?? 0) > 0) {
+    console.log(
+      `Premium status cleared for ${result.modifiedCount} expired account(s)`
+    );
+  }
+}
+
+async function claimNextPremiumReminderCandidate() {
+  const now = new Date();
+  const reminderCutoff = new Date(now.getTime() + PREMIUM_REMINDER_WINDOW_MS);
+
+  return User.findOneAndUpdate(
+    {
+      isPremium: true,
+      premiumExpiresAt: { $gt: now, $lte: reminderCutoff },
+      $or: [
+        { premiumExpiryReminderFor: { $exists: false } },
+        { premiumExpiryReminderFor: null },
+        { $expr: { $ne: ["$premiumExpiryReminderFor", "$premiumExpiresAt"] } },
+      ],
+    },
+    [
+      {
+        $set: {
+          premiumExpiryReminderFor: "$premiumExpiresAt",
+          premiumExpiryReminderSentAt: now,
+        },
+      },
+    ],
+    {
+      new: true,
+      sort: { premiumExpiresAt: 1 },
+      lean: true,
+    }
+  );
+}
+
+async function sendPremiumRenewalReminders() {
+  let processed = 0;
+
+  while (processed < 25) {
+    const user = await claimNextPremiumReminderCandidate();
+    if (!user?._id || !user.premiumExpiresAt) {
+      break;
+    }
+
+    const userId = user._id.toString();
+    const reminderUrl = `/profile/${userId}#premium-membership`;
+    const reminderMessage =
+      "OrbitByte Premium ends in less than 24 hours. Renew now to keep your benefits active.";
+
+    try {
+      const notification = await Notification.create({
+        userId: user._id,
+        type: "premium",
+        title: "Premium renewal reminder",
+        message: reminderMessage,
+        url: reminderUrl,
+      });
+
+      await dispatchNotification(userId, {
+        _id: notification._id.toString(),
+        type: "premium",
+        title: notification.title || "Premium renewal reminder",
+        message: notification.message,
+        url: notification.url || reminderUrl,
+        createdAt: notification.createdAt,
+        isRead: false,
+      });
+
+      processed += 1;
+    } catch (error) {
+      console.error("Premium reminder error:", error);
+
+      await User.updateOne(
+        {
+          _id: user._id,
+          premiumExpiryReminderFor: user.premiumExpiresAt,
+        },
+        {
+          $set: {
+            premiumExpiryReminderFor: null,
+            premiumExpiryReminderSentAt: null,
+          },
+        }
+      );
+    }
+  }
+
+  if (processed > 0) {
+    console.log(`Sent ${processed} premium renewal reminder(s)`);
+  }
+}
+
+async function runBackgroundJobs() {
+  if (backgroundJobsRunning) {
+    return;
+  }
+
+  backgroundJobsRunning = true;
+
+  try {
+    await markExpiredPremiumInactive();
+    await sendPremiumRenewalReminders();
+  } catch (error) {
+    console.error("Background job error:", error);
+  } finally {
+    backgroundJobsRunning = false;
+  }
+}
+
+function startBackgroundJobs() {
+  if (backgroundJobsStarted) {
+    return;
+  }
+
+  backgroundJobsStarted = true;
+  void runBackgroundJobs();
+  setInterval(() => {
+    void runBackgroundJobs();
+  }, BACKGROUND_JOB_INTERVAL_MS);
+}
+
+mongoose.connect(mongoUri).then(() => {
+  console.log("MongoDB connected");
+  startBackgroundJobs();
+});
+
+io.on("connection", (socket) => {
+  const socketUserIds = new Set<string>();
+
+  const registerSocketUser = (candidateUserId?: string | null) => {
+    const resolvedUserId = candidateUserId?.toString().trim();
+    if (!resolvedUserId) {
+      return;
+    }
+
+    socket.join(`user_${resolvedUserId}`);
+    socketUserIds.add(resolvedUserId);
+    addSocketToActiveUser(resolvedUserId, socket.id);
+  };
+
+  const handshakeUserId = socket.handshake.auth?.userId as string | undefined;
+
+  console.log("Socket connected:", socket.id, "user:", handshakeUserId);
+  registerSocketUser(handshakeUserId);
+
+  socket.on("join", (joinedUserId?: string) => {
+    registerSocketUser(joinedUserId);
+  });
+
   socket.on("send_message", async (message) => {
     try {
-      // Send real-time socket message
       io.to(`user_${message.receiverId}`).emit("receive_message", message);
       io.to(`user_${message.senderId}`).emit("receive_message", message);
 
-      // 🔥 SEND PUSH NOTIFICATION
-      const receiver = await User.findById(message.receiverId).select(
+      const receiver = (await User.findById(message.receiverId).select(
         "fcmToken fcmTokens"
-      );
+      )) as PushTargetUser | null;
 
-      const tokens = Array.from(
-        new Set(
-          [
-            ...(Array.isArray(receiver?.fcmTokens) ? receiver.fcmTokens : []),
-            receiver?.fcmToken,
-          ].filter((token): token is string => Boolean(token))
-        )
-      );
+      const tokens = collectPushTokens(receiver);
 
       if (tokens.length > 0) {
         const response = await admin.messaging().sendEachForMulticast({
           tokens,
           notification: {
             title: "New Message",
-            body: message.content,
+            body: message.content || "You received a new message.",
           },
           webpush: {
             headers: {
               Urgency: "high",
             },
             notification: {
-              icon: "https://orbitbyte.vercel.app/icons/icon-192.png",
-              badge: "https://orbitbyte.vercel.app/icons/icon-192.png",
+              icon: `${APP_URL}/icons/icon-192.png`,
+              badge: `${APP_URL}/icons/icon-192.png`,
               tag: `chat_${message.senderId}`,
               renotify: true,
             },
             fcmOptions: {
-              link: "https://orbitbyte.vercel.app/chat",
+              link: `${APP_URL}/chat`,
             },
           },
           data: {
@@ -121,7 +409,7 @@ io.on("connection", (socket) => {
         if (invalidTokens.length > 0 && receiver?._id) {
           await User.findByIdAndUpdate(receiver._id, {
             $pull: { fcmTokens: { $in: invalidTokens } },
-            ...(invalidTokens.includes(receiver.fcmToken)
+            ...(invalidTokens.includes(receiver.fcmToken || "")
               ? { $set: { fcmToken: null } }
               : {}),
           });
@@ -143,16 +431,7 @@ io.on("connection", (socket) => {
       data,
     }: {
       userId?: string;
-      data?: {
-        _id?: string;
-        type?: string;
-        title?: string;
-        message?: string;
-        senderId?: string;
-        url?: string;
-        createdAt?: string | Date;
-        isRead?: boolean;
-      };
+      data?: NotificationPayload;
     }) => {
       try {
         if (!targetUserId || !data?.message) return;
@@ -168,82 +447,7 @@ io.on("connection", (socket) => {
           url: data.url ?? "/notifications",
         };
 
-        // Realtime event for active sessions
-        io.to(`user_${targetUserId}`).emit("receiveNotification", payload);
-
-        // Push notification for inactive app / background / offline cases
-        const receiver = await User.findById(targetUserId).select(
-          "fcmToken fcmTokens"
-        );
-
-        const tokens = Array.from(
-          new Set(
-            [
-              ...(Array.isArray(receiver?.fcmTokens) ? receiver.fcmTokens : []),
-              receiver?.fcmToken,
-            ].filter((token): token is string => Boolean(token))
-          )
-        );
-
-        if (tokens.length === 0) return;
-
-        const pushTitle =
-          payload.title ||
-          (payload.type === "follow"
-            ? "New Follower"
-            : payload.type === "story"
-            ? "New Story"
-            : payload.type === "thought"
-            ? "New Thought"
-            : "New Notification");
-
-        const response = await admin.messaging().sendEachForMulticast({
-          tokens,
-          notification: {
-            title: pushTitle,
-            body: payload.message,
-          },
-          webpush: {
-            headers: {
-              Urgency: "high",
-            },
-            notification: {
-              icon: "https://orbitbyte.vercel.app/icons/icon-192.png",
-              badge: "https://orbitbyte.vercel.app/icons/icon-192.png",
-              tag: `${payload.type}_${payload.senderId ?? "system"}`,
-              renotify: true,
-            },
-            fcmOptions: {
-              link: `https://orbitbyte.vercel.app${payload.url ?? "/notifications"}`,
-            },
-          },
-          data: {
-            type: String(payload.type ?? "notification"),
-            senderId: String(payload.senderId ?? ""),
-            receiverId: String(targetUserId),
-            url: String(payload.url ?? "/notifications"),
-          },
-        });
-
-        const invalidTokens = response.responses
-          .map((result, index) => ({ result, token: tokens[index] }))
-          .filter(
-            ({ result }) =>
-              !result.success &&
-              (result.error?.code === "messaging/invalid-registration-token" ||
-                result.error?.code ===
-                  "messaging/registration-token-not-registered")
-          )
-          .map(({ token }) => token);
-
-        if (invalidTokens.length > 0 && receiver?._id) {
-          await User.findByIdAndUpdate(receiver._id, {
-            $pull: { fcmTokens: { $in: invalidTokens } },
-            ...(receiver.fcmToken && invalidTokens.includes(receiver.fcmToken)
-              ? { $set: { fcmToken: null } }
-              : {}),
-          });
-        }
+        await dispatchNotification(targetUserId, payload);
       } catch (error) {
         console.error("sendNotification error:", error);
       }
@@ -288,17 +492,9 @@ io.on("connection", (socket) => {
   socket.on("disconnect", () => {
     console.log("Socket disconnected:", socket.id);
 
-    if (userId && activeUsers.has(userId)) {
-      const userSockets = activeUsers.get(userId);
-      userSockets?.delete(socket.id);
-
-      if (!userSockets || userSockets.size === 0) {
-        activeUsers.delete(userId);
-        io.emit("user_status", { userId, isOnline: false });
-      }
-
-      io.emit("online_users", Array.from(activeUsers.keys()));
-    }
+    socketUserIds.forEach((joinedUserId) => {
+      removeSocketFromActiveUser(joinedUserId, socket.id);
+    });
   });
 });
 

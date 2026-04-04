@@ -46,6 +46,8 @@ export interface IUser extends Document {
   premiumLastPaymentAt?: Date;
   premiumLastPaymentIntentId?: string;
   premiumLastCheckoutSessionId?: string;
+  premiumExpiryReminderSentAt?: Date;
+  premiumExpiryReminderFor?: Date;
   premiumPaymentMethod?: {
     type?: string;
     brand?: string;
@@ -185,6 +187,14 @@ const UserSchema = new Schema<IUser>(
     },
     premiumLastCheckoutSessionId: {
       type: String,
+      default: null,
+    },
+    premiumExpiryReminderSentAt: {
+      type: Date,
+      default: null,
+    },
+    premiumExpiryReminderFor: {
+      type: Date,
       default: null,
     },
     premiumPaymentMethod: {

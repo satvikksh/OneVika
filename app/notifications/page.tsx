@@ -4,10 +4,25 @@ import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
+type NotificationSender = {
+  _id?: string;
+  id?: string;
+};
+
+type AppNotification = {
+  _id: string;
+  senderId?: string | NotificationSender | null;
+  type?: "like" | "comment" | "follow" | "message" | "story" | "thought" | "call" | "premium";
+  message: string;
+  url?: string | null;
+  isRead?: boolean;
+  createdAt: string | Date;
+};
+
 export default function NotificationsPage() {
   const { data: session } = useSession();
   const router = useRouter();
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -35,14 +50,18 @@ export default function NotificationsPage() {
     fetchNotifications();
   }, [session]);
 
-  const getSenderId = (notification: any) => {
+  const getSenderId = (notification: AppNotification) => {
     const sender = notification?.senderId;
     if (!sender) return "";
     if (typeof sender === "string") return sender;
     return sender?._id || sender?.id || "";
   };
 
-  const resolveNotificationUrl = (notification: any) => {
+  const resolveNotificationUrl = (notification: AppNotification) => {
+    if (typeof notification?.url === "string" && notification.url.trim()) {
+      return notification.url;
+    }
+
     const senderId = getSenderId(notification);
 
     if (notification?.type === "follow" && senderId) {
@@ -61,10 +80,14 @@ export default function NotificationsPage() {
       return senderId ? `/chat?userId=${senderId}` : "/chat";
     }
 
+    if (notification?.type === "premium" && session?.user?.id) {
+      return `/profile/${session.user.id}#premium-membership`;
+    }
+
     return "/notifications";
   };
 
-  const handleNotificationClick = async (notification: any) => {
+  const handleNotificationClick = async (notification: AppNotification) => {
     const targetUrl = resolveNotificationUrl(notification);
 
     try {

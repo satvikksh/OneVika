@@ -47,6 +47,23 @@ export function useAudioCall(roomName: string) {
     return () => clearInterval(timer);
   }, []);
 
+  const scheduleRoomDeletion = async (roomId: string) => {
+    try {
+      await fetch("/api/metered", {
+        method: "POST",
+        keepalive: true,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "scheduleDelete",
+          roomName: roomId,
+          deleteAfterHours: 24,
+        }),
+      });
+    } catch (error) {
+      console.error("Failed to schedule Metered room deletion:", error);
+    }
+  };
+
   // 📞 Start call
   const startCall = async () => {
     if (!isReady || !frameRef.current) {
@@ -108,6 +125,12 @@ export function useAudioCall(roomName: string) {
 
   // ❌ End call
   const endCall = () => {
+    const roomIdToDelete = activeRoomId;
+
+    if (roomIdToDelete) {
+      void scheduleRoomDeletion(roomIdToDelete);
+    }
+
     try {
       frameRef.current?.leave();
     } catch {}

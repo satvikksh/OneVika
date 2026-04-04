@@ -23,6 +23,8 @@ type PremiumUser = Pick<
   | "premiumLastPaymentAt"
   | "premiumLastPaymentIntentId"
   | "premiumLastCheckoutSessionId"
+  | "premiumExpiryReminderSentAt"
+  | "premiumExpiryReminderFor"
   | "premiumPaymentMethod"
   | "uiTheme"
 >;
@@ -80,6 +82,8 @@ export async function applyPremiumToUser(
   user.premiumLastPaymentAt = now;
   user.premiumLastPaymentIntentId = payment.paymentIntentId || null;
   user.premiumLastCheckoutSessionId = payment.checkoutSessionId || null;
+  user.premiumExpiryReminderSentAt = null;
+  user.premiumExpiryReminderFor = null;
   user.premiumPaymentMethod = payment.paymentMethod || null;
   user.uiTheme = theme;
 }

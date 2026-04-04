@@ -23,12 +23,7 @@ export async function POST() {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    if (isPremiumActive(user)) {
-      return NextResponse.json(
-        { error: "Premium is already active for this account." },
-        { status: 409 },
-      );
-    }
+    const renewingActivePremium = isPremiumActive(user);
 
     const amountPaise = Number(process.env.PREMIUM_PRICE_CENTS || "4900");
     const currency = (process.env.PREMIUM_CURRENCY || "inr").toLowerCase();
@@ -53,7 +48,9 @@ export async function POST() {
       name: "OrbitByte",
       description:
         process.env.PREMIUM_PRODUCT_NAME ||
-        "OrbitByte Premium Membership",
+        (renewingActivePremium
+          ? "OrbitByte Premium Renewal"
+          : "OrbitByte Premium Membership"),
       prefill: {
         name: session.user.name || "",
         email: session.user.email || "",

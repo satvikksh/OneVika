@@ -692,6 +692,11 @@ export default function UserProfilePage() {
   const isPrivatePostsLocked =
     !isCurrentUser && Boolean(user.isPrivate) && !Boolean(user.canViewPosts);
   const isPremiumProfile = Boolean(user.isPremium || premiumStatus?.isPremium);
+  const canRenewPremium =
+    !premiumStatus?.isPremium || premiumStatus.daysRemaining <= 1;
+  const premiumActionLabel = premiumStatus?.isPremium
+    ? "Renew Premium"
+    : "Activate Premium";
 
   const pageClass = isPremiumProfile
     ? "min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(250,204,21,0.16),_transparent_24%),radial-gradient(circle_at_top_right,_rgba(226,232,240,0.14),_transparent_30%),linear-gradient(180deg,_#1c1917_0%,_#2b2418_32%,_#0f172a_100%)]"
@@ -1352,7 +1357,7 @@ export default function UserProfilePage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {isCurrentUser && (
-                    <div className={premiumMembershipClass}>
+                    <div id="premium-membership" className={premiumMembershipClass}>
                       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                         <div>
                           <p className="font-semibold">Premium Membership</p>
@@ -1363,6 +1368,12 @@ export default function UserProfilePage() {
                                 ? `Active, ${premiumStatus.daysRemaining} day(s) left`
                                 : "Inactive"}
                           </p>
+                          {premiumStatus?.isPremium &&
+                            premiumStatus.daysRemaining <= 1 && (
+                              <p className="text-xs text-white/80 mt-1">
+                                Premium ends within 24 hours. Renew now to avoid interruption.
+                              </p>
+                            )}
                           {premiumStatus?.paymentMethod?.last4 && (
                             <p className="text-xs text-white/90 mt-1">
                               Card: {premiumStatus.paymentMethod.brand || "card"} ending in{" "}
@@ -1371,13 +1382,13 @@ export default function UserProfilePage() {
                           )}
                         </div>
 
-                        {!premiumStatus?.isPremium && (
+                        {canRenewPremium && (
                           <button
                             onClick={handleActivatePremium}
                             disabled={premiumActionLoading || premiumLoading}
                             className={premiumMembershipButtonClass}
                           >
-                            {premiumActionLoading ? "Redirecting..." : "Activate Premium"}
+                            {premiumActionLoading ? "Redirecting..." : premiumActionLabel}
                           </button>
                         )}
                       </div>
