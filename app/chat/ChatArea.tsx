@@ -1,7 +1,7 @@
 // ChatArea.tsx
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useCallback, useEffect } from "react";
 import { ChatAttachment, Message, User } from "../types/socket";
 import { Session } from "next-auth";
 import {
@@ -45,7 +45,7 @@ interface ChatAreaProps {
   handleEmojiClick: (emoji: string) => void;
   commonEmojis: string[];
   handleMessageContextMenu: (
-    e: React.MouseEvent | React.TouchEvent,
+    e: React.MouseEvent | React.TouchEvent | { x: number; y: number },
     message: Message
   ) => void;
   handleDropdownClick: (e: React.MouseEvent, message: Message) => void;
@@ -63,6 +63,7 @@ interface ChatAreaProps {
   handleKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   onSendMessage: () => void;
   isConnected?: boolean; // Optional for connection status
+  isChatBlocked?: boolean;
 }
 
 const formatFileSize = (size?: number) => {
@@ -263,17 +264,16 @@ export default function ChatArea({
   handleKeyDown,
   onSendMessage,
   isConnected = true, // Default to true for backward compatibility
+  isChatBlocked = false,
 }: ChatAreaProps) {
   const currentUserId = session?.user?.id;
+  const longPressTimerRef = React.useRef<number | null>(null);
+  const touchOriginRef = React.useRef<{ x: number; y: number } | null>(null);
+  const [pressedMessageId, setPressedMessageId] = React.useState<string | null>(null);
 
   // Handle enter key for sending
   const handleKeyDownOverride = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !isMobile && !e.shiftKey) {
-      e.preventDefault();
-      onSendMessage();
-    } else {
-      handleTyping();
-    }
+    handleKeyDown(e);
   };
 
   // Handle send button click
@@ -289,6 +289,17 @@ export default function ChatArea({
       }, 100);
     }
   }, [messages, messagesEndRef]);
+
+  const cancelLongPress = useCallback(() => {
+    if (longPressTimerRef.current) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    touchOriginRef.current = null;
+    setPressedMessageId(null);
+  }, []);
+
+  useEffect(() => () => cancelLongPress(), [cancelLongPress]);
 
   return (
     <div className="flex flex-col h-full w-full bg-white dark:bg-black">
@@ -320,6 +331,27 @@ export default function ChatArea({
                   const isCurrentUser = msg.senderId === currentUserId;
                   const hasAttachment = Boolean(msg.attachments?.[0]?.url);
                   const hasText = Boolean(msg.text || msg.content);
+
+                  const startMessageLongPress = (touch: React.Touch) => {
+                    if (!isMobile) return;
+
+                    touchOriginRef.current = {
+                      x: touch.clientX,
+                      y: touch.clientY,
+                    };
+                    setPressedMessageId(msg.id);
+
+                    longPressTimerRef.current = window.setTimeout(() => {
+                      handleMessageContextMenu(
+                        { x: touch.clientX, y: touch.clientY },
+                        msg
+                      );
+                      setPressedMessageId(null);
+                      if ("vibrate" in navigator) {
+                        navigator.vibrate(16);
+                      }
+                    }, 600);
+                  };
                   
                   return (
                     <div
@@ -342,8 +374,27 @@ export default function ChatArea({
                             isCurrentUser
                               ? 'bg-blue-600 text-white rounded-br-none'
                               : 'bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-white rounded-bl-none'
-                          } ${msg.status === 'sending' ? 'opacity-80' : ''}`}
+                          } ${msg.status === 'sending' ? 'opacity-80' : ''} ${
+                            pressedMessageId === msg.id ? "ring-2 ring-blue-400/60" : ""
+                          }`}
                           onContextMenu={(e) => handleMessageContextMenu(e, msg)}
+                          onTouchStart={(event) => {
+                            const touch = event.touches[0];
+                            if (touch) {
+                              startMessageLongPress(touch);
+                            }
+                          }}
+                          onTouchEnd={() => cancelLongPress()}
+                          onTouchCancel={() => cancelLongPress()}
+                          onTouchMove={(event) => {
+                            const touch = event.touches[0];
+                            if (!touchOriginRef.current || !touch) return;
+                            const deltaX = Math.abs(touch.clientX - touchOriginRef.current.x);
+                            const deltaY = Math.abs(touch.clientY - touchOriginRef.current.y);
+                            if (deltaX > 12 || deltaY > 12) {
+                              cancelLongPress();
+                            }
+                          }}
                         >
                           {/* Reply indicator */}
                           {msg.replyToId && (
@@ -388,7 +439,10 @@ export default function ChatArea({
                             className={`absolute ${isCurrentUser ? 'left-0 -translate-x-8' : 'right-0 translate-x-8'} top-1/2 -translate-y-1/2`}
                           >
                             <button
-                              onClick={(e) => handleDropdownClick(e, msg)}
+                              onClick={(e) => {
+                                setActiveDropdownId(msg.id);
+                                handleDropdownClick(e, msg);
+                              }}
                               className="p-1 bg-white dark:bg-gray-800 rounded-full shadow-md hover:shadow-lg transition-shadow"
                               aria-label="Message options"
                             >
@@ -424,6 +478,11 @@ export default function ChatArea({
       {/* Input Area - Fixed at bottom within chat area */}
       {selectedUser && (
         <div className="fixed bottom-0 left-0 lg:left-80 right-0 bg-white dark:bg-black border-t border-gray-200 dark:border-gray-800">
+          {isChatBlocked ? (
+            <div className="border-b border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300">
+              Messaging is disabled for this chat until the user is unblocked.
+            </div>
+          ) : null}
           {/* Reply Preview */}
           {replyTo && (
             <div className="px-4 pt-3 bg-gradient-to-r from-blue-50 to-pink-50 dark:from-blue-900/20 dark:to-pink-900/20 border-b border-blue-200 dark:border-blue-800">
@@ -464,7 +523,8 @@ export default function ChatArea({
                 <button
                   type="button"
                   onClick={handleFileSelect}
-                  className="p-2 text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-black rounded-lg transition-colors"
+                  disabled={isChatBlocked}
+                  className="p-2 text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-black rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                   aria-label="Attach file"
                 >
                   <Paperclip size={20} />
@@ -475,7 +535,8 @@ export default function ChatArea({
                   <button
                     type="button"
                     onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                    className="p-2 text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-black rounded-lg transition-colors"
+                    disabled={isChatBlocked}
+                    className="p-2 text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-black rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                     aria-label="Emoji"
                   >
                     <Smile size={20} />
@@ -557,8 +618,9 @@ export default function ChatArea({
                     onKeyDown={handleKeyDownOverride}
                     onFocus={handleInputFocus}
                     onBlur={handleInputBlur}
-                    placeholder="Type a message..."
-                    className="w-full resize-none rounded-xl border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder={isChatBlocked ? "Unblock this user to send messages" : "Type a message..."}
+                    disabled={isChatBlocked}
+                    className="w-full resize-none rounded-xl border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
                     style={{ minHeight: '30px', maxHeight: '50px' }}
                   />
                 </div>
@@ -567,7 +629,7 @@ export default function ChatArea({
                 <button
                   type="button"
                   onClick={handleSendClick}
-                  disabled={sendingMessage || (!newMessage.trim() && !pendingAttachment) || (isConnected !== undefined && !isConnected)}
+                  disabled={isChatBlocked || sendingMessage || (!newMessage.trim() && !pendingAttachment) || (isConnected !== undefined && !isConnected)}
                   className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg flex items-center justify-center"
                   style={{ minHeight: '44px', minWidth: '44px' }}
                 >

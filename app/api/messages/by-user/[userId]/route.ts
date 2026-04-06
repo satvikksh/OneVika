@@ -40,6 +40,7 @@ type StoredMessage = {
   type?: "text" | "image" | "video" | "audio" | "file";
   attachments?: StoredAttachment[];
   replyToId?: mongoose.Types.ObjectId | string;
+  deletedForUserIds?: mongoose.Types.ObjectId[];
 };
 
 type PreferenceRequestBody = {
@@ -54,6 +55,10 @@ type PreferenceRequestBody = {
 
 type UnlockRequestBody = {
   password?: string;
+};
+
+type DeleteChatRequestBody = {
+  scope?: "messages" | "conversation";
 };
 
 export async function GET(
@@ -130,7 +135,10 @@ export async function GET(
 
     const messages = await db
       .collection("messages")
-      .find({ conversationId: conversation._id })
+      .find({
+        conversationId: conversation._id,
+        deletedForUserIds: { $ne: senderId },
+      })
       .sort({ createdAt: 1 })
       .toArray();
 
@@ -248,6 +256,33 @@ export async function PATCH(
     }
 
     if (hasLockUpdate && body.lock?.enabled === false) {
+      if (!existing?.isLocked || !existing.lockPasswordHash) {
+        return NextResponse.json(
+          { error: "Chat is not currently locked" },
+          { status: 400 }
+        );
+      }
+
+      const currentPassword = body.lock.password?.trim() ?? "";
+      if (!currentPassword) {
+        return NextResponse.json(
+          { error: "Password confirmation is required to remove the lock" },
+          { status: 400 }
+        );
+      }
+
+      const passwordMatches = await bcrypt.compare(
+        currentPassword,
+        existing.lockPasswordHash
+      );
+
+      if (!passwordMatches) {
+        return NextResponse.json(
+          { error: "Incorrect password" },
+          { status: 403 }
+        );
+      }
+
       nextPasswordHash = undefined;
       nextPreference.lockVisibility = "blur";
     }
@@ -363,6 +398,87 @@ export async function POST(
     console.error("UNLOCK CHAT ERROR:", error);
     return NextResponse.json(
       { error: "Failed to unlock chat" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  req: NextRequest,
+  context: { params: Promise<{ userId: string }> }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { userId } = await context.params;
+    if (!ObjectId.isValid(session.user.id) || !ObjectId.isValid(userId)) {
+      return NextResponse.json({ error: "Invalid user id" }, { status: 400 });
+    }
+
+    const body = (await req.json().catch(() => ({}))) as DeleteChatRequestBody;
+    const scope = body.scope === "messages" ? "messages" : "conversation";
+
+    const currentUserObjectId = new ObjectId(session.user.id);
+    const otherUserObjectId = new ObjectId(userId);
+    const db = await getNativeDb();
+
+    const conversation = await db.collection("conversations").findOne({
+      participants: {
+        $all: [currentUserObjectId, otherUserObjectId],
+        $size: 2,
+      },
+    });
+
+    if (!conversation?._id) {
+      return NextResponse.json({
+        success: true,
+        scope,
+        deletedMessages: 0,
+        deletedConversation: 0,
+      });
+    }
+
+    const messagesDeleteResult = await db.collection("messages").deleteMany({
+      conversationId: conversation._id,
+    });
+
+    let deletedConversationCount = 0;
+    if (scope === "conversation") {
+      const [conversationDeleteResult] = await Promise.all([
+        db.collection("conversations").deleteOne({ _id: conversation._id }),
+        db.collection<ChatPreferenceDoc>("chatPreferences").deleteOne({
+          ownerId: currentUserObjectId,
+          chatUserId: otherUserObjectId,
+        }),
+      ]);
+
+      deletedConversationCount = conversationDeleteResult.deletedCount ?? 0;
+    } else {
+      await db.collection("conversations").updateOne(
+        { _id: conversation._id },
+        { $set: { updatedAt: new Date() } }
+      );
+    }
+
+    const response = NextResponse.json({
+      success: true,
+      scope,
+      deletedMessages: messagesDeleteResult.deletedCount ?? 0,
+      deletedConversation: deletedConversationCount,
+    });
+
+    if (scope === "conversation") {
+      clearChatUnlockCookie(response, userId);
+    }
+
+    return response;
+  } catch (error) {
+    console.error("DELETE CHAT ERROR:", error);
+    return NextResponse.json(
+      { error: "Failed to update chat" },
       { status: 500 }
     );
   }

@@ -56,6 +56,10 @@ export interface User {
   isLocked?: boolean;
   lockVisibility?: "blur" | "hidden";
   isUnlocked?: boolean;
+  isBlocked?: boolean;
+  isBlockedByCurrentUser?: boolean;
+  hasBlockedCurrentUser?: boolean;
+  canMessage?: boolean;
 }
 
 

@@ -43,6 +43,11 @@ type ChatUserRow = {
   premiumExpiresAt?: Date | null;
 };
 
+type BlockRow = {
+  blockerId?: mongoose.Types.ObjectId;
+  blockedId?: mongoose.Types.ObjectId;
+};
+
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -111,6 +116,39 @@ export async function GET(req: NextRequest) {
     }
 
     const objectIds = [...allowedUserIds].map((id) => new ObjectId(id));
+    const blocks = await db
+      .collection<BlockRow>("blockedUsers")
+      .find({
+        $or: [
+          {
+            blockerId: currentUserId,
+            blockedId: { $in: objectIds },
+          },
+          {
+            blockerId: { $in: objectIds },
+            blockedId: currentUserId,
+          },
+        ],
+      })
+      .toArray();
+
+    const blockedByCurrentUser = new Set<string>();
+    const blockedCurrentUser = new Set<string>();
+
+    blocks.forEach((block) => {
+      const blockerId = block.blockerId?.toString?.();
+      const blockedId = block.blockedId?.toString?.();
+      if (!blockerId || !blockedId) return;
+
+      if (blockerId === session.user.id) {
+        blockedByCurrentUser.add(blockedId);
+      }
+
+      if (blockedId === session.user.id) {
+        blockedCurrentUser.add(blockerId);
+      }
+    });
+
     const preferences = await db
       .collection<ChatPreferenceDoc>("chatPreferences")
       .find(
@@ -197,6 +235,7 @@ export async function GET(req: NextRequest) {
         .collection("messages")
         .aggregate([
           { $match: { conversationId: { $in: conversationIds } } },
+          { $match: { deletedForUserIds: { $ne: currentUserId } } },
           { $sort: { createdAt: -1 } },
           {
             $group: {
@@ -224,6 +263,7 @@ export async function GET(req: NextRequest) {
               conversationId: { $in: conversationIds },
               receiverId: currentUserId,
               read: { $ne: true },
+              deletedForUserIds: { $ne: currentUserId },
             },
           },
           {
@@ -251,6 +291,8 @@ export async function GET(req: NextRequest) {
         ? hasUnlockedChatCookie(req, session.user.id, userId)
         : false;
       const chatPreference = toChatPreferenceState(preference, isUnlocked);
+      const isBlockedByCurrentUser = blockedByCurrentUser.has(userId);
+      const hasBlockedCurrentUser = blockedCurrentUser.has(userId);
 
       return {
         _id: user._id.toString(),
@@ -269,6 +311,10 @@ export async function GET(req: NextRequest) {
         isLocked: chatPreference.isLocked,
         lockVisibility: chatPreference.lockVisibility,
         isUnlocked: chatPreference.isUnlocked,
+        isBlocked: isBlockedByCurrentUser || hasBlockedCurrentUser,
+        isBlockedByCurrentUser,
+        hasBlockedCurrentUser,
+        canMessage: !(isBlockedByCurrentUser || hasBlockedCurrentUser),
       };
     });
 

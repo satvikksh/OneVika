@@ -9,6 +9,7 @@ import ChatSidebar from "./ChatSidebar";
 import ChatTopBar from "./ChatTopBar";
 import ChatArea from "./ChatArea";
 import ContextMenu from "./ContextMenu";
+import { readCachedChatState, writeCachedChatState } from "./chatLocalCache";
 import { Users, Menu } from "lucide-react";
 
 type ChatPreferenceUpdate = {
@@ -25,6 +26,20 @@ type UnlockChatResult = {
   success: boolean;
   error?: string;
 };
+
+type DeleteMessageScope = "self" | "everyone";
+type ContextMenuTrigger =
+  | React.MouseEvent
+  | React.TouchEvent
+  | { x: number; y: number };
+
+type ConfirmDialogState = {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  tone?: "danger" | "default";
+  onConfirm: () => Promise<void> | void;
+} | null;
 
 /* -------------------------------- SKELETON LOADER -------------------------------- */
 const ChatSkeleton = () => {
@@ -121,6 +136,60 @@ const ChatSkeleton = () => {
   );
 };
 
+const ConfirmDialog = ({
+  dialog,
+  isSubmitting,
+  onClose,
+  onConfirm,
+}: {
+  dialog: ConfirmDialogState;
+  isSubmitting: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) => {
+  if (!dialog) return null;
+
+  const isDanger = dialog.tone !== "default";
+
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/55 p-4">
+      <button
+        className="absolute inset-0 cursor-default"
+        onClick={onClose}
+        aria-label="Close confirmation dialog"
+      />
+      <div className="relative z-[91] w-full max-w-md rounded-[28px] border border-gray-200 bg-white shadow-2xl dark:border-gray-800 dark:bg-gray-950">
+        <div className="border-b border-gray-100 px-5 py-4 dark:border-gray-800">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+            {dialog.title}
+          </h3>
+          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+            {dialog.description}
+          </p>
+        </div>
+        <div className="flex flex-col-reverse gap-3 px-5 py-4 sm:flex-row sm:justify-end">
+          <button
+            onClick={onClose}
+            disabled={isSubmitting}
+            className="rounded-2xl border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={isSubmitting}
+            className={`rounded-2xl px-4 py-3 text-sm font-medium text-white transition disabled:opacity-60 ${
+              isDanger ? "bg-red-600 hover:bg-red-700" : "bg-blue-600 hover:bg-blue-700"
+            }`}
+          >
+            {isSubmitting ? "Working..." : dialog.confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 /* -------------------------------- HELPERS -------------------------------- */
 const isValidObjectId = (id?: string) =>
   typeof id === "string" && id.length === 24;
@@ -184,7 +253,7 @@ export default function ChatPage() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [newMessage, setNewMessage] = useState("");
   const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment | null>(null);
-  const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
+  const [typingUsers] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -206,6 +275,8 @@ export default function ChatPage() {
   const [unreadByUser, setUnreadByUser] = useState<Record<string, number>>({});
   const [deletingChatUserId, setDeletingChatUserId] = useState<string | null>(null);
   const [updatingChatUserId, setUpdatingChatUserId] = useState<string | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>(null);
+  const [isConfirmingAction, setIsConfirmingAction] = useState(false);
 
   // Message status tracking - now tracked locally for UI
   const [messageStatus, setMessageStatus] = useState<Record<string, 'sending' | 'sent' | 'delivered' | 'read'>>({});
@@ -247,6 +318,29 @@ export default function ChatPage() {
         : prev
     );
   }, []);
+
+  const openConfirmDialog = useCallback((dialog: Exclude<ConfirmDialogState, null>) => {
+    setConfirmDialog(dialog);
+  }, []);
+
+  const closeConfirmDialog = useCallback(() => {
+    if (isConfirmingAction) return;
+    setConfirmDialog(null);
+  }, [isConfirmingAction]);
+
+  const handleConfirmAction = useCallback(async () => {
+    if (!confirmDialog) return;
+
+    try {
+      setIsConfirmingAction(true);
+      await confirmDialog.onConfirm();
+      setConfirmDialog(null);
+    } catch (error) {
+      console.error("Confirmation action failed:", error);
+    } finally {
+      setIsConfirmingAction(false);
+    }
+  }, [confirmDialog]);
 
   /* ---------------------------- DISPATCH FOCUS EVENTS ---------------------------- */
   // Function to dispatch focus event to navbar
@@ -408,17 +502,29 @@ export default function ChatPage() {
   /* ------------------------------- FETCH USERS ------------------------------- */
   useEffect(() => {
     if (status !== "authenticated") return;
+    if (!session?.user?.id) return;
 
     const cachedUsers = chatPageCache?.users ?? [];
+    const localCache = readCachedChatState(session.user.id);
+    const localUsers = localCache?.users ?? [];
+
     if (cachedUsers.length > 0) {
       setUsers(cachedUsers);
       setLoadingUsers(false);
-      return;
+    } else if (localUsers.length > 0) {
+      setUsers(localUsers);
+      setLoadingUsers(false);
+      chatPageCache = {
+        users: localUsers,
+        selectedUserId: localCache?.selectedUserId ?? null,
+      };
     }
 
     (async () => {
       try {
-        setLoadingUsers(true);
+        if (cachedUsers.length === 0 && localUsers.length === 0) {
+          setLoadingUsers(true);
+        }
         const res = await fetch("/api/user/chat");
 
         if (!res.ok) {
@@ -431,12 +537,14 @@ export default function ChatPage() {
         setUsers(normalized);
       } catch (error) {
         console.error("Error fetching users:", error);
-        setUsers([]);
+        if (cachedUsers.length === 0 && localUsers.length === 0) {
+          setUsers([]);
+        }
       } finally {
         setLoadingUsers(false);
       }
     })();
-  }, [status]);
+  }, [session?.user?.id, status]);
 
   useEffect(() => {
     if (!users.length) return;
@@ -467,7 +575,14 @@ export default function ChatPage() {
       users,
       selectedUserId: selectedUser?.id ?? null,
     };
-  }, [users, selectedUser?.id]);
+    if (session?.user?.id) {
+      writeCachedChatState(session.user.id, {
+        users,
+        selectedUserId: selectedUser?.id ?? null,
+        updatedAt: Date.now(),
+      });
+    }
+  }, [users, selectedUser?.id, session?.user?.id]);
 
   useEffect(() => {
     if (!users.length) return;
@@ -798,7 +913,8 @@ export default function ChatPage() {
     if (
       !selectedUser ||
       !currentUserId ||
-      sendingMessage
+      sendingMessage ||
+      selectedUser.canMessage === false
     ) {
       return;
     }
@@ -843,62 +959,110 @@ export default function ChatPage() {
   };
 
   /* ---------------------------- DELETE MESSAGE ---------------------------- */
-  const handleDeleteMessage = async (message: Message) => {
-    try {
-      if (message.id.startsWith('temp_')) {
-        removeMessage(message.id);
-      } else {
-        const response = await fetch(`/api/messages/by-message/${message.id}`, {
-          method: "DELETE",
-          headers: {
-            "Content-Type": "application/json",
-          },
+  const removeMessagesForChat = useCallback(
+    (chatUserId: string) => {
+      if (!currentUserId) return;
+
+      const relatedMessageIds = socketMessages
+        .filter(
+          (msg) =>
+            (msg.senderId === currentUserId && msg.receiverId === chatUserId) ||
+            (msg.senderId === chatUserId && msg.receiverId === currentUserId)
+        )
+        .map((msg) => msg.id);
+
+      relatedMessageIds.forEach((id) => removeMessage(id));
+
+      setMessageStatus((prev) => {
+        if (relatedMessageIds.length === 0) return prev;
+
+        const next = { ...prev };
+        relatedMessageIds.forEach((id) => {
+          delete next[id];
         });
-
-        if (!response.ok) {
-          const errorData = await response.json() as { error?: string };
-          throw new Error(errorData.error || "Failed to delete message");
-        }
-
-        removeMessage(message.id);
-        if (currentUserId) {
-          emitMessageDelete({
-            messageId: message.id,
-            senderId: currentUserId,
-            receiverId: message.receiverId,
-          });
-        }
-      }
-      
-      // Remove from message status tracking
-      setMessageStatus(prev => {
-        const updated = { ...prev };
-        delete updated[message.id];
-        return updated;
+        return next;
       });
-    } catch (error) {
-      console.error("Error deleting message:", error);
-      alert("Failed to delete message. Please try again.");
-    }
-  };
+
+      setReplyTo((prev) =>
+        prev && relatedMessageIds.includes(prev.id) ? null : prev
+      );
+    },
+    [currentUserId, removeMessage, socketMessages]
+  );
+
+  const handleDeleteMessage = useCallback(
+    async (message: Message, scope: DeleteMessageScope) => {
+      try {
+        if (message.id.startsWith("temp_")) {
+          removeMessage(message.id);
+        } else {
+          const response = await fetch(
+            `/api/messages/by-message/${message.id}?scope=${scope}`,
+            {
+              method: "DELETE",
+            }
+          );
+
+          const data = (await response.json().catch(() => ({}))) as {
+            error?: string;
+          };
+
+          if (!response.ok) {
+            throw new Error(data.error || "Failed to delete message");
+          }
+
+          removeMessage(message.id);
+
+          if (scope === "everyone" && currentUserId) {
+            emitMessageDelete({
+              messageId: message.id,
+              senderId: currentUserId,
+              receiverId: message.receiverId,
+            });
+          }
+        }
+
+        setReplyTo((prev) => (prev?.id === message.id ? null : prev));
+        setMessageStatus((prev) => {
+          const updated = { ...prev };
+          delete updated[message.id];
+          return updated;
+        });
+      } catch (error) {
+        console.error("Error deleting message:", error);
+        alert("Failed to delete message. Please try again.");
+      }
+    },
+    [currentUserId, emitMessageDelete, removeMessage]
+  );
 
   /* ---------------------------- CONTEXT MENU HANDLERS --------------------------- */
   const handleMessageContextMenu = (
-    e: React.MouseEvent | React.TouchEvent,
+    trigger: ContextMenuTrigger,
     message: Message
   ) => {
-    e.preventDefault();
-    e.stopPropagation();
+    let clientX: number;
+    let clientY: number;
 
-    let clientX, clientY;
-    
-    if ('touches' in e) {
-      const touch = e.touches[0];
+    if ("preventDefault" in trigger) {
+      trigger.preventDefault();
+    }
+
+    if ("stopPropagation" in trigger) {
+      trigger.stopPropagation();
+    }
+
+    if ("x" in trigger && "y" in trigger) {
+      clientX = trigger.x;
+      clientY = trigger.y;
+    } else if ("touches" in trigger) {
+      const touch = trigger.touches[0] ?? trigger.changedTouches[0];
+      if (!touch) return;
       clientX = touch.clientX;
       clientY = touch.clientY;
     } else {
-      clientX = e.clientX;
-      clientY = e.clientY;
+      clientX = trigger.clientX;
+      clientY = trigger.clientY;
     }
 
     setContextMenu({
@@ -929,96 +1093,19 @@ export default function ChatPage() {
         inputRef.current?.focus();
         break;
       case "copy":
-        await navigator.clipboard.writeText(message.text || message.content || '');
-        if (isMobile && 'vibrate' in navigator) {
+        await navigator.clipboard.writeText(message.text || message.content || "");
+        if (isMobile && "vibrate" in navigator) {
           navigator.vibrate(30);
         }
         break;
       case "copyLink": {
+        if (!currentUserId) break;
         const chatUserId =
           message.senderId === currentUserId ? message.receiverId : message.senderId;
         const link = `${window.location.origin}/chat?userId=${chatUserId}#message-${message.id}`;
         await navigator.clipboard.writeText(link);
         break;
       }
-      case "share": {
-        const attachment = message.attachments?.[0];
-        const shareUrl = attachment?.url || window.location.href;
-
-        if (navigator.share) {
-          try {
-            await navigator.share({
-              title: attachment?.fileName || "Chat message",
-              text: message.text || message.content || "Shared from chat",
-              url: shareUrl,
-            });
-          } catch (error) {
-            console.error("Share failed:", error);
-          }
-        } else {
-          await navigator.clipboard.writeText(shareUrl);
-        }
-        break;
-      }
-      case "forward":
-        alert("Forward functionality coming soon!");
-        break;
-      case "pin":
-        try {
-          await fetch(`/api/messages/by-message/${message.id}/pin`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-          });
-        } catch (error) {
-          console.error("Error pinning message:", error);
-        }
-        break;
-      case "star":
-        try {
-          await fetch(`/api/messages/by-message/${message.id}/star`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-          });
-        } catch (error) {
-          console.error("Error starring message:", error);
-        }
-        break;
-      case "edit":
-        const currentText = message.text || message.content || '';
-        const newText = prompt("Edit your message:", currentText);
-        if (newText !== null && newText !== currentText) {
-          try {
-            await fetch(`/api/messages/by-message/${message.id}`, {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ text: newText }),
-            });
-          } catch (error) {
-            console.error("Error editing message:", error);
-          }
-        }
-        break;
-      case "report":
-        try {
-          await fetch(`/api/messages/by-message/${message.id}/report`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ reason: "Inappropriate content" }),
-          });
-          alert("Message reported successfully");
-        } catch (error) {
-          console.error("Error reporting message:", error);
-          alert("Failed to report message");
-        }
-        break;
-      case "delete":
-        if (window.confirm("Delete this message?\n\nThis action cannot be undone.")) {
-          await handleDeleteMessage(message);
-        }
-        break;
-      case "info":
-        alert(`Message Info:\n\nID: ${message.id}\nSent: ${new Date(message.timestamp).toLocaleString()}\nStatus: ${message.status || 'unknown'}`);
-        break;
       case "download": {
         const attachment = message.attachments?.[0];
         if (!attachment?.url) break;
@@ -1032,9 +1119,29 @@ export default function ChatPage() {
         link.remove();
         break;
       }
-      case "bookmark":
-      case "archive":
-      case "select":
+      case "deleteSelf":
+        openConfirmDialog({
+          title: "Delete message for you?",
+          description:
+            "This message will be removed from your view only and can’t be recovered here.",
+          confirmLabel: "Delete for me",
+          tone: "danger",
+          onConfirm: async () => {
+            await handleDeleteMessage(message, "self");
+          },
+        });
+        break;
+      case "deleteEveryone":
+        openConfirmDialog({
+          title: "Delete message for everyone?",
+          description:
+            "This removes the message for both people. This action can’t be undone.",
+          confirmLabel: "Delete for everyone",
+          tone: "danger",
+          onConfirm: async () => {
+            await handleDeleteMessage(message, "everyone");
+          },
+        });
         break;
     }
     setContextMenu(null);
@@ -1104,6 +1211,161 @@ export default function ChatPage() {
     [mergeUserState]
   );
 
+  const handleRemoveLock = useCallback(
+    async (user: User, password: string) => {
+      await updateChatPreferences(user, {
+        lock: {
+          enabled: false,
+          password,
+        },
+      });
+    },
+    [updateChatPreferences]
+  );
+
+  const handleArchiveChat = useCallback(
+    async (user: User, nextArchived = !user.isArchived) => {
+      try {
+        await updateChatPreferences(user, { isArchived: nextArchived });
+      } catch (error) {
+        console.error("Failed to update archive state:", error);
+        alert("Failed to update this chat. Please try again.");
+      }
+    },
+    [updateChatPreferences]
+  );
+
+  const handleBlockUser = useCallback(
+    (user: User) => {
+      if (!user?.id) return;
+
+      openConfirmDialog({
+        title: `Block ${user.name || "this user"}?`,
+        description:
+          "You won’t be able to send messages in this chat until the user is unblocked.",
+        confirmLabel: "Block user",
+        tone: "danger",
+        onConfirm: async () => {
+          try {
+            setUpdatingChatUserId(user.id);
+
+            const response = await fetch(`/api/user/profile/${user.id}`, {
+              method: "POST",
+            });
+            const data = (await response.json().catch(() => ({}))) as {
+              error?: string;
+            };
+
+            if (!response.ok) {
+              throw new Error(data.error || "Failed to block user");
+            }
+
+            mergeUserState(user.id, {
+              isBlocked: true,
+              isBlockedByCurrentUser: true,
+              canMessage: false,
+            });
+          } catch (error) {
+            console.error("Failed to block user:", error);
+            alert("Failed to block this user. Please try again.");
+          } finally {
+            setUpdatingChatUserId(null);
+          }
+        },
+      });
+    },
+    [mergeUserState, openConfirmDialog]
+  );
+
+  const handleUnblockUser = useCallback(
+    (user: User) => {
+      if (!user?.id) return;
+
+      openConfirmDialog({
+        title: `Unblock ${user.name || "this user"}?`,
+        description:
+          "This restores messaging only if the other user has not blocked you.",
+        confirmLabel: "Unblock user",
+        tone: "default",
+        onConfirm: async () => {
+          try {
+            setUpdatingChatUserId(user.id);
+
+            const response = await fetch(`/api/user/profile/${user.id}`, {
+              method: "DELETE",
+            });
+            const data = (await response.json().catch(() => ({}))) as {
+              error?: string;
+            };
+
+            if (!response.ok) {
+              throw new Error(data.error || "Failed to unblock user");
+            }
+
+            mergeUserState(user.id, {
+              isBlockedByCurrentUser: false,
+              isBlocked: Boolean(user.hasBlockedCurrentUser),
+              canMessage: !user.hasBlockedCurrentUser,
+            });
+          } catch (error) {
+            console.error("Failed to unblock user:", error);
+            alert("Failed to unblock this user. Please try again.");
+          } finally {
+            setUpdatingChatUserId(null);
+          }
+        },
+      });
+    },
+    [mergeUserState, openConfirmDialog]
+  );
+
+  const handleClearChat = useCallback(
+    (user: User) => {
+      if (!user?.id) return;
+
+      openConfirmDialog({
+        title: "Clear all chat messages?",
+        description:
+          "This will permanently remove every message in this chat for you.",
+        confirmLabel: "Clear chat",
+        tone: "danger",
+        onConfirm: async () => {
+          try {
+            setDeletingChatUserId(user.id);
+
+            const response = await fetch(`/api/messages/by-user/${user.id}`, {
+              method: "DELETE",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ scope: "messages" }),
+            });
+            const data = (await response.json().catch(() => ({}))) as {
+              error?: string;
+            };
+
+            if (!response.ok) {
+              throw new Error(data.error || "Failed to clear chat");
+            }
+
+            removeMessagesForChat(user.id);
+            mergeUserState(user.id, {
+              lastMessageAt: null,
+              unreadCount: 0,
+            });
+            setUnreadByUser((prev) => ({ ...prev, [user.id]: 0 }));
+            setContextMenu(null);
+            setReplyTo(null);
+          } catch (error) {
+            console.error("Failed to clear chat:", error);
+            alert("Failed to clear this chat. Please try again.");
+          } finally {
+            setDeletingChatUserId(null);
+          }
+        },
+      });
+    },
+    [mergeUserState, openConfirmDialog, removeMessagesForChat]
+  );
+
   const handleSelectUser = (user: User) => {
     if (!isValidObjectId(user.id)) {
       console.warn("Invalid user selection:", user);
@@ -1167,68 +1429,60 @@ export default function ChatPage() {
   const handleDeleteChat = useCallback(
     async (user: User) => {
       if (!user?.id) return;
-      const confirmed = window.confirm(
-        `Delete chat with ${user.name || "this user"}?\n\nThis will remove the conversation and messages.`
-      );
-      if (!confirmed) return;
+      openConfirmDialog({
+        title: `Delete chat with ${user.name || "this user"}?`,
+        description:
+          "This permanently removes the conversation, messages, and saved chat controls.",
+        confirmLabel: "Delete chat",
+        tone: "danger",
+        onConfirm: async () => {
+          try {
+            setDeletingChatUserId(user.id);
 
-      try {
-        setDeletingChatUserId(user.id);
+            const response = await fetch(`/api/messages/by-user/${user.id}`, {
+              method: "DELETE",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ scope: "conversation" }),
+            });
 
-        const response = await fetch(
-          `/api/messages/by-user/${user.id}/conversation`,
-          {
-            method: "DELETE",
-            headers: { "Content-Type": "application/json" },
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+              throw new Error(data.error || "Failed to delete chat");
+            }
+
+            removeMessagesForChat(user.id);
+            setUsers((prev) => prev.filter((u) => u.id !== user.id));
+            setUnreadByUser((prev) => {
+              const next = { ...prev };
+              delete next[user.id];
+              return next;
+            });
+            loadedMessagesByUserRef.current.delete(user.id);
+
+            if (selectedUser?.id === user.id) {
+              setSelectedUser(null);
+              setReplyTo(null);
+              setContextMenu(null);
+              clearPendingAttachment();
+              if (isMobile) {
+                setShowMobileSidebar(true);
+              }
+            }
+          } catch (error) {
+            console.error("Failed to delete chat:", error);
+            alert("Failed to delete chat. Please try again.");
+          } finally {
+            setDeletingChatUserId(null);
           }
-        );
-
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          throw new Error(data.error || "Failed to delete chat");
-        }
-
-        const relatedMessageIds = socketMessages
-          .filter(
-            (msg) =>
-              (msg.senderId === currentUserId && msg.receiverId === user.id) ||
-              (msg.senderId === user.id && msg.receiverId === currentUserId)
-          )
-          .map((msg) => msg.id);
-
-        relatedMessageIds.forEach((id) => removeMessage(id));
-
-        setUsers((prev) => prev.filter((u) => u.id !== user.id));
-        setUnreadByUser((prev) => {
-          const next = { ...prev };
-          delete next[user.id];
-          return next;
-        });
-        loadedMessagesByUserRef.current.delete(user.id);
-
-        if (selectedUser?.id === user.id) {
-          setSelectedUser(null);
-          setReplyTo(null);
-          setContextMenu(null);
-          clearPendingAttachment();
-          if (isMobile) {
-            setShowMobileSidebar(true);
-          }
-        }
-      } catch (error) {
-        console.error("Failed to delete chat:", error);
-        alert("Failed to delete chat. Please try again.");
-      } finally {
-        setDeletingChatUserId(null);
-      }
+        },
+      });
     },
     [
       clearPendingAttachment,
-      currentUserId,
       isMobile,
-      removeMessage,
+      openConfirmDialog,
+      removeMessagesForChat,
       selectedUser?.id,
-      socketMessages,
     ]
   );
 
@@ -1340,17 +1594,6 @@ export default function ChatPage() {
     });
   }, [users, socketMessages, currentUserId, unreadByUser]);
 
-  // Group consecutive messages from same sender
-  const groupedMessages = sortedMessages.reduce((acc, msg, idx) => {
-    const prevMsg = sortedMessages[idx - 1];
-    const isGrouped = prevMsg && 
-      prevMsg.senderId === msg.senderId && 
-      new Date(msg.timestamp).getTime() - new Date(prevMsg.timestamp).getTime() < 60000;
-    
-    acc.push({ ...msg, isGrouped });
-    return acc;
-  }, [] as (Message & { isGrouped?: boolean })[]);
-
   /* -------------------------------- LOADING -------------------------------- */
   // UPDATED: Using the new ChatSkeleton instead of the spinner
   if (status === "loading" || loadingUsers) {
@@ -1399,6 +1642,36 @@ export default function ChatPage() {
         typingUsers={typingUsers}
         isMobile={isMobile}
         isNavbarHidden={isNavbarHidden}
+        onClearChat={() => {
+          if (selectedUser) {
+            handleClearChat(selectedUser);
+          }
+        }}
+        onDeleteChat={() => {
+          if (selectedUser) {
+            void handleDeleteChat(selectedUser);
+          }
+        }}
+        onArchiveChat={() => {
+          if (selectedUser) {
+            void handleArchiveChat(selectedUser);
+          }
+        }}
+        onBlockUser={() => {
+          if (selectedUser) {
+            handleBlockUser(selectedUser);
+          }
+        }}
+        onUnblockUser={() => {
+          if (selectedUser) {
+            handleUnblockUser(selectedUser);
+          }
+        }}
+        isActionBusy={Boolean(
+          selectedUser &&
+            (deletingChatUserId === selectedUser.id ||
+              updatingChatUserId === selectedUser.id)
+        )}
       />
 
       {/* Main Content Area */}
@@ -1416,9 +1689,7 @@ export default function ChatPage() {
           typingUsers={typingUsers}
           getUnreadCount={getUnreadCount}
           onDeleteChat={handleDeleteChat}
-          onArchiveChat={(user, nextArchived) =>
-            updateChatPreferences(user, { isArchived: nextArchived })
-          }
+          onArchiveChat={handleArchiveChat}
           onPinChat={(user, nextPinned) =>
             updateChatPreferences(user, { isPinned: nextPinned })
           }
@@ -1431,6 +1702,7 @@ export default function ChatPage() {
               },
             })
           }
+          onRemoveLock={handleRemoveLock}
           onUnlockChat={handleUnlockChat}
           deletingChatUserId={deletingChatUserId}
           updatingChatUserId={updatingChatUserId}
@@ -1483,6 +1755,7 @@ export default function ChatPage() {
             messageStatus={messageStatus}
             isMobile={isMobile}
             handleKeyDown={handleKeyDown}
+            isChatBlocked={Boolean(selectedUser?.isBlocked)}
           />
         </div>
       </div>
@@ -1498,6 +1771,13 @@ export default function ChatPage() {
           isMobile={isMobile}
         />
       )}
+
+      <ConfirmDialog
+        dialog={confirmDialog}
+        isSubmitting={isConfirmingAction}
+        onClose={closeConfirmDialog}
+        onConfirm={handleConfirmAction}
+      />
 
       {/* Global Styles */}
       <style jsx global>{`

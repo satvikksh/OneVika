@@ -41,6 +41,7 @@ interface ChatSidebarProps {
     password: string,
     visibility: "blur" | "hidden"
   ) => Promise<void> | void;
+  onRemoveLock: (user: User, password: string) => Promise<void> | void;
   onUnlockChat: (
     user: User,
     password: string
@@ -54,7 +55,9 @@ interface ChatSidebarProps {
 }
 
 type ActionMenuState = { user: User; rect: DOMRect };
-type LockDialogState = { mode: "lock" | "unlock"; user: User } | null;
+type LockDialogState =
+  | { mode: "lock" | "unlock" | "removeLock"; user: User }
+  | null;
 
 const LONG_PRESS_DURATION_MS = 650;
 const MOVE_CANCEL_THRESHOLD_PX = 12;
@@ -77,7 +80,7 @@ const getPresentedStatus = (
   }
 
   if (typingUsers.has(user.id)) return "typing...";
-  return isOnline ? "Online" : "Tap to open";
+  return isOnline ? "Online" : " ";
 };
 
 const styles = `
@@ -106,7 +109,10 @@ const ChatActionMenu: React.FC<{
   isMobile: boolean;
   busyUserId: string | null;
   onClose: () => void;
-  onAction: (action: "delete" | "archive" | "pin" | "lock", user: User) => void;
+  onAction: (
+    action: "delete" | "archive" | "pin" | "lock" | "removeLock",
+    user: User
+  ) => void;
 }> = ({ menu, isMobile, busyUserId, onClose, onAction }) => {
   useEffect(() => {
     if (!menu) return;
@@ -137,6 +143,9 @@ const ChatActionMenu: React.FC<{
     { id: "archive" as const, icon: Archive, label: user.isArchived ? "Restore Chat" : "Archive Chat" },
     { id: "pin" as const, icon: user.isPinned ? PinOff : Pin, label: user.isPinned ? "Unpin Chat" : "Pin Chat" },
     { id: "lock" as const, icon: Lock, label: user.isLocked ? "Update Lock" : "Lock Chat" },
+    ...(user.isLocked
+      ? [{ id: "removeLock" as const, icon: EyeOff, label: "Remove Lock" }]
+      : []),
   ];
 
   if (isMobile) {
@@ -229,6 +238,7 @@ const ChatPasswordDialog: React.FC<{
   onVisibilityChange: (value: "blur" | "hidden") => void;
   onClose: () => void;
   onSubmit: () => void;
+  onRemoveLock?: () => void;
 }> = ({
   dialog,
   isMobile,
@@ -242,6 +252,7 @@ const ChatPasswordDialog: React.FC<{
   onVisibilityChange,
   onClose,
   onSubmit,
+  onRemoveLock,
 }) => {
   useEffect(() => {
     if (!dialog) return;
@@ -257,6 +268,7 @@ const ChatPasswordDialog: React.FC<{
   if (!dialog) return null;
 
   const isLockMode = dialog.mode === "lock";
+  const isRemoveLockMode = dialog.mode === "removeLock";
 
   return (
     <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/55 p-4 sm:items-center">
@@ -264,8 +276,8 @@ const ChatPasswordDialog: React.FC<{
       <div className={`relative z-[81] w-full max-w-md overflow-hidden rounded-[28px] border border-gray-200 bg-white shadow-2xl dark:border-gray-800 dark:bg-gray-950 ${isMobile ? "animate-chatSheet" : "animate-chatPopover"}`} role="dialog" aria-modal="true">
         <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-5 py-4 dark:border-gray-800">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">{isLockMode ? "Protect chat" : "Unlock chat"}</p>
-            <h3 className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">{isLockMode ? "Set a chat password" : "Enter your chat password"}</h3>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">{isLockMode ? "Protect chat" : isRemoveLockMode ? "Remove lock" : "Unlock chat"}</p>
+            <h3 className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">{isLockMode ? "Set a chat password" : isRemoveLockMode ? "Confirm password to remove lock" : "Enter your chat password"}</h3>
           </div>
           <button onClick={onClose} disabled={submitting} className="rounded-full p-2 text-gray-500 transition-colors hover:bg-gray-100 disabled:opacity-50 dark:text-gray-400 dark:hover:bg-gray-800" aria-label="Close dialog">
             <X size={18} />
@@ -274,7 +286,11 @@ const ChatPasswordDialog: React.FC<{
         <div className="space-y-4 px-5 py-5">
           <div className="rounded-2xl bg-gray-50 px-4 py-3 text-sm text-gray-600 dark:bg-gray-900 dark:text-gray-300">
             <span className="font-medium text-gray-900 dark:text-white">{getPresentedName(dialog.user)}</span>
-            {isLockMode ? " will require this password next time it is opened." : " is locked. Enter the password to continue."}
+            {isLockMode
+              ? " will require this password next time it is opened."
+              : isRemoveLockMode
+                ? " will be unlocked for future access after password confirmation."
+                : " is locked. Enter the password to continue."}
           </div>
           <label className="block">
             <span className="mb-2 block text-sm font-medium text-gray-800 dark:text-gray-200">Password</span>
@@ -300,9 +316,16 @@ const ChatPasswordDialog: React.FC<{
         </div>
         <div className="flex flex-col-reverse gap-3 border-t border-gray-100 px-5 py-4 sm:flex-row sm:justify-end dark:border-gray-800">
           <button onClick={onClose} disabled={submitting} className="rounded-2xl border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900">Cancel</button>
-          <button onClick={onSubmit} disabled={submitting} className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-60">
-            {submitting ? <span className="inline-flex items-center gap-2"><Loader2 size={16} className="animate-spin" />{isLockMode ? "Saving..." : "Unlocking..."}</span> : isLockMode ? "Save password" : "Unlock chat"}
-          </button>
+          {isRemoveLockMode && onRemoveLock ? (
+            <button onClick={onRemoveLock} disabled={submitting} className="rounded-2xl bg-red-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-60">
+              {submitting ? <span className="inline-flex items-center gap-2"><Loader2 size={16} className="animate-spin" />Removing...</span> : "Remove lock"}
+            </button>
+          ) : null}
+          {!isRemoveLockMode ? (
+            <button onClick={onSubmit} disabled={submitting} className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-60">
+              {submitting ? <span className="inline-flex items-center gap-2"><Loader2 size={16} className="animate-spin" />{isLockMode ? "Saving..." : "Unlocking..."}</span> : isLockMode ? "Save password" : "Unlock chat"}
+            </button>
+          ) : null}
         </div>
       </div>
     </div>
@@ -324,6 +347,7 @@ export default function ChatSidebar({
   onArchiveChat,
   onPinChat,
   onLockChat,
+  onRemoveLock,
   onUnlockChat,
   deletingChatUserId = null,
   updatingChatUserId = null,
@@ -368,7 +392,7 @@ export default function ChatSidebar({
     setActionMenu({ user, rect: target.getBoundingClientRect() });
   }, []);
 
-  const openLockDialog = useCallback((mode: "lock" | "unlock", user: User) => {
+  const openLockDialog = useCallback((mode: "lock" | "unlock" | "removeLock", user: User) => {
     setActionMenu(null);
     setDialogError("");
     setPasswordInput("");
@@ -499,10 +523,15 @@ export default function ChatSidebar({
     }
   }, [cancelLongPress]);
 
-  const handleMenuAction = useCallback(async (action: "delete" | "archive" | "pin" | "lock", user: User) => {
+  const handleMenuAction = useCallback(async (action: "delete" | "archive" | "pin" | "lock" | "removeLock", user: User) => {
     try {
       if (action === "lock") {
         openLockDialog("lock", user);
+        return;
+      }
+
+      if (action === "removeLock") {
+        openLockDialog("removeLock", user);
         return;
       }
 
@@ -543,6 +572,27 @@ export default function ChatSidebar({
       return;
     }
 
+    if (lockDialog.mode === "removeLock") {
+      if (!passwordInput.trim()) {
+        setDialogError("Enter the current password to remove the lock.");
+        return;
+      }
+
+      try {
+        setDialogError("");
+        setIsDialogSubmitting(true);
+        await onRemoveLock(lockDialog.user, passwordInput);
+        closeDialog();
+      } catch (error) {
+        console.error("Remove lock failed:", error);
+        setDialogError("Unable to remove the lock right now.");
+      } finally {
+        setIsDialogSubmitting(false);
+      }
+
+      return;
+    }
+
     if (!passwordInput.trim()) {
       setDialogError("Enter the password to unlock this chat.");
       return;
@@ -560,7 +610,7 @@ export default function ChatSidebar({
     setIsDialogSubmitting(false);
     closeDialog();
     handleUserSelect({ ...lockDialog.user, isUnlocked: true });
-  }, [closeDialog, confirmPasswordInput, handleUserSelect, lockDialog, lockVisibility, onLockChat, onUnlockChat, passwordInput]);
+  }, [closeDialog, confirmPasswordInput, handleUserSelect, lockDialog, lockVisibility, onLockChat, onRemoveLock, onUnlockChat, passwordInput]);
 
   const renderUserRow = (user: User) => {
     const unreadCount = getUnreadCount(user.id);
@@ -717,7 +767,7 @@ export default function ChatSidebar({
         <div className={`fixed inset-0 z-40 bg-black/50 transition-opacity duration-300 lg:hidden ${showMobileSidebar ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`} onClick={onToggleMobileSidebar} />
         <aside ref={sidebarRef} className={`fixed inset-y-16 left-0 z-50 flex h-full w-full max-w-sm flex-col border-r border-gray-200 bg-white transition-transform duration-300 ease-in-out dark:border-gray-800 dark:bg-black lg:hidden ${showMobileSidebar ? "translate-x-0" : "-translate-x-full"}`}>{sidebarShell}</aside>
         <ChatActionMenu menu={actionMenu} isMobile busyUserId={activeBusyUserId} onClose={() => setActionMenu(null)} onAction={handleMenuAction} />
-        <ChatPasswordDialog dialog={lockDialog} isMobile password={passwordInput} confirmPassword={confirmPasswordInput} visibility={lockVisibility} error={dialogError} submitting={isDialogSubmitting} onPasswordChange={setPasswordInput} onConfirmPasswordChange={setConfirmPasswordInput} onVisibilityChange={setLockVisibility} onClose={closeDialog} onSubmit={handleDialogSubmit} />
+        <ChatPasswordDialog dialog={lockDialog} isMobile password={passwordInput} confirmPassword={confirmPasswordInput} visibility={lockVisibility} error={dialogError} submitting={isDialogSubmitting} onPasswordChange={setPasswordInput} onConfirmPasswordChange={setConfirmPasswordInput} onVisibilityChange={setLockVisibility} onClose={closeDialog} onSubmit={handleDialogSubmit} onRemoveLock={handleDialogSubmit} />
       </>
     );
   }
@@ -726,7 +776,7 @@ export default function ChatSidebar({
     <>
       <aside className="fixed left-0 top-16 hidden h-full w-80 shrink-0 flex-col border-r border-gray-200 bg-white dark:border-gray-800 dark:bg-black lg:flex">{sidebarShell}</aside>
       <ChatActionMenu menu={actionMenu} isMobile={false} busyUserId={activeBusyUserId} onClose={() => setActionMenu(null)} onAction={handleMenuAction} />
-      <ChatPasswordDialog dialog={lockDialog} isMobile={false} password={passwordInput} confirmPassword={confirmPasswordInput} visibility={lockVisibility} error={dialogError} submitting={isDialogSubmitting} onPasswordChange={setPasswordInput} onConfirmPasswordChange={setConfirmPasswordInput} onVisibilityChange={setLockVisibility} onClose={closeDialog} onSubmit={handleDialogSubmit} />
+      <ChatPasswordDialog dialog={lockDialog} isMobile={false} password={passwordInput} confirmPassword={confirmPasswordInput} visibility={lockVisibility} error={dialogError} submitting={isDialogSubmitting} onPasswordChange={setPasswordInput} onConfirmPasswordChange={setConfirmPasswordInput} onVisibilityChange={setLockVisibility} onClose={closeDialog} onSubmit={handleDialogSubmit} onRemoveLock={handleDialogSubmit} />
     </>
   );
 }

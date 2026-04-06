@@ -32,6 +32,11 @@ interface UserProfile {
   };
 }
 
+type PremiumStatus = {
+  isPremium?: boolean;
+  premiumExpiresAt?: Date | string | null;
+};
+
 export async function GET(
   req: NextRequest,
   context: { params: Promise<{ userId: string }> }
@@ -131,8 +136,8 @@ export async function GET(
       { _id: currentUserObjectId },
       { projection: { isPremium: 1, premiumExpiresAt: 1 } }
     );
-    const viewerPremiumActive = isPremiumActive(currentUser as any);
-    const profilePremiumActive = isPremiumActive(userProfile as any);
+    const viewerPremiumActive = isPremiumActive(currentUser as PremiumStatus | null);
+    const profilePremiumActive = isPremiumActive(userProfile as PremiumStatus);
 
     const isCurrentUser = profileId === currentUserId;
     const isPrivateProfile = Boolean(userProfile.isPrivate);
@@ -253,7 +258,7 @@ export async function PATCH(
     ];
 
     // Filter updates to only include allowed fields
-    const filteredUpdates: Record<string, any> = {};
+    const filteredUpdates: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(updates)) {
       if (allowedUpdates.includes(key)) {
         filteredUpdates[key] = value;
@@ -292,6 +297,113 @@ export async function PATCH(
     console.error("UPDATE PROFILE ERROR:", error);
     return NextResponse.json(
       { error: "Failed to update profile" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(
+  req: NextRequest,
+  context: { params: Promise<{ userId: string }> }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { userId: profileId } = await context.params;
+    const currentUserId = session.user.id;
+
+    if (
+      !ObjectId.isValid(profileId) ||
+      !ObjectId.isValid(currentUserId) ||
+      profileId === currentUserId
+    ) {
+      return NextResponse.json(
+        { error: "Invalid user selection" },
+        { status: 400 }
+      );
+    }
+
+    await dbConnect();
+    const db = mongoose.connection.db;
+    if (!db) {
+      throw new Error("MongoDB not connected");
+    }
+
+    const blockerId = new ObjectId(currentUserId);
+    const blockedId = new ObjectId(profileId);
+
+    await db.collection("blockedUsers").updateOne(
+      { blockerId, blockedId },
+      {
+        $set: {
+          blockerId,
+          blockedId,
+          updatedAt: new Date(),
+        },
+        $setOnInsert: {
+          createdAt: new Date(),
+        },
+      },
+      { upsert: true }
+    );
+
+    return NextResponse.json({
+      success: true,
+      blocked: true,
+    });
+  } catch (error) {
+    console.error("BLOCK USER ERROR:", error);
+    return NextResponse.json(
+      { error: "Failed to block user" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  req: NextRequest,
+  context: { params: Promise<{ userId: string }> }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { userId: profileId } = await context.params;
+    const currentUserId = session.user.id;
+
+    if (!ObjectId.isValid(profileId) || !ObjectId.isValid(currentUserId)) {
+      return NextResponse.json(
+        { error: "Invalid user selection" },
+        { status: 400 }
+      );
+    }
+
+    await dbConnect();
+    const db = mongoose.connection.db;
+    if (!db) {
+      throw new Error("MongoDB not connected");
+    }
+
+    await db.collection("blockedUsers").deleteOne({
+      blockerId: new ObjectId(currentUserId),
+      blockedId: new ObjectId(profileId),
+    });
+
+    return NextResponse.json({
+      success: true,
+      blocked: false,
+    });
+  } catch (error) {
+    console.error("UNBLOCK USER ERROR:", error);
+    return NextResponse.json(
+      { error: "Failed to unblock user" },
       { status: 500 }
     );
   }

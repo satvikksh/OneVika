@@ -121,6 +121,20 @@ export async function POST(req: NextRequest) {
     const senderObjectId = new ObjectId(session.user.id);
     const receiverObjectId = new ObjectId(receiverId);
 
+    const blockRelationship = await db.collection("blockedUsers").findOne({
+      $or: [
+        { blockerId: senderObjectId, blockedId: receiverObjectId },
+        { blockerId: receiverObjectId, blockedId: senderObjectId },
+      ],
+    });
+
+    if (blockRelationship) {
+      return NextResponse.json(
+        { error: "Messaging is disabled for this user" },
+        { status: 403 }
+      );
+    }
+
     let conversation = await db.collection("conversations").findOne({
       participants: { $all: [senderObjectId, receiverObjectId] },
     });
@@ -170,6 +184,7 @@ export async function POST(req: NextRequest) {
       receiverId: receiverObjectId,
       createdAt,
       read: false,
+      deletedForUserIds: [],
       type: messageType,
       ...(uploadedAttachment ? { attachments: [uploadedAttachment] } : {}),
       ...(replyToId ? { replyToId } : {}),
