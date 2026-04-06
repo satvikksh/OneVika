@@ -1,13 +1,49 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/lib/authOptions";
 import { dbConnect } from "@/app/lib/mongodb";
+import {
+  ChatPreferenceDoc,
+  hasUnlockedChatCookie,
+  toChatPreferenceState,
+} from "@/app/lib/chatAccess";
 import { isPremiumActive } from "@/app/lib/premium";
 import mongoose from "mongoose";
 
 const { ObjectId } = mongoose.Types;
 
-export async function GET() {
+type FollowRow = {
+  followerId?: mongoose.Types.ObjectId;
+  followingId?: mongoose.Types.ObjectId;
+};
+
+type ConversationRow = {
+  _id: mongoose.Types.ObjectId;
+  participants?: mongoose.Types.ObjectId[];
+};
+
+type LastMessageRow = {
+  _id?: mongoose.Types.ObjectId;
+  lastMessageAt?: Date;
+};
+
+type UnreadCountRow = {
+  _id?: mongoose.Types.ObjectId;
+  count?: number;
+};
+
+type ChatUserRow = {
+  _id: mongoose.Types.ObjectId;
+  name?: string;
+  email?: string;
+  avatar?: string;
+  image?: string;
+  lastSeen?: Date | string | null;
+  isPremium?: boolean;
+  premiumExpiresAt?: Date | null;
+};
+
+export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
 
@@ -27,7 +63,7 @@ export async function GET() {
 
     // 1) Mutual follows only (A follows B and B follows A, both active)
     const iFollowRows = await db
-      .collection("follows")
+      .collection<FollowRow>("follows")
       .find(
         { followerId: currentUserId, status: "active" },
         { projection: { followingId: 1 } }
@@ -35,7 +71,7 @@ export async function GET() {
       .toArray();
 
     const followsMeRows = await db
-      .collection("follows")
+      .collection<FollowRow>("follows")
       .find(
         { followingId: currentUserId, status: "active" },
         { projection: { followerId: 1 } }
@@ -43,10 +79,10 @@ export async function GET() {
       .toArray();
 
     const iFollowSet = new Set(
-      iFollowRows.map((row: any) => row.followingId?.toString?.()).filter(Boolean)
+      iFollowRows.map((row) => row.followingId?.toString?.()).filter(Boolean)
     );
     const followsMeSet = new Set(
-      followsMeRows.map((row: any) => row.followerId?.toString?.()).filter(Boolean)
+      followsMeRows.map((row) => row.followerId?.toString?.()).filter(Boolean)
     );
 
     iFollowSet.forEach((id) => {
@@ -57,12 +93,12 @@ export async function GET() {
 
     // 2) Any existing conversation interaction
     const conversations = await db
-      .collection("conversations")
+      .collection<ConversationRow>("conversations")
       .find({ participants: currentUserId }, { projection: { participants: 1 } })
       .toArray();
 
-    conversations.forEach((conv: any) => {
-      (conv.participants || []).forEach((p: any) => {
+    conversations.forEach((conv) => {
+      (conv.participants || []).forEach((p) => {
         const id = p?.toString?.();
         if (id && id !== session.user?.id) {
           allowedUserIds.add(id);
@@ -75,9 +111,35 @@ export async function GET() {
     }
 
     const objectIds = [...allowedUserIds].map((id) => new ObjectId(id));
+    const preferences = await db
+      .collection<ChatPreferenceDoc>("chatPreferences")
+      .find(
+        {
+          ownerId: currentUserId,
+          chatUserId: { $in: objectIds },
+        },
+        {
+          projection: {
+            chatUserId: 1,
+            isPinned: 1,
+            isArchived: 1,
+            isLocked: 1,
+            lockVisibility: 1,
+          },
+        }
+      )
+      .toArray();
+
+    const preferenceByUserId = new Map<string, ChatPreferenceDoc>();
+    preferences.forEach((preference) => {
+      const key = preference.chatUserId?.toString?.();
+      if (key) {
+        preferenceByUserId.set(key, preference);
+      }
+    });
 
     const users = await db
-      .collection("users")
+      .collection<ChatUserRow>("users")
       .find(
         { _id: { $in: objectIds } },
         {
@@ -97,16 +159,16 @@ export async function GET() {
 
     const conversationByOtherUserId = new Map<
       string,
-      { conversationId: any; otherUserId: string }
+      { conversationId: mongoose.Types.ObjectId; otherUserId: string }
     >();
 
-    conversations.forEach((conv: any) => {
+    conversations.forEach((conv) => {
       const participants = Array.isArray(conv.participants)
         ? conv.participants
         : [];
 
       const other = participants.find(
-        (p: any) => p?.toString?.() !== session.user?.id
+        (p) => p?.toString?.() !== session.user?.id
       );
       const otherUserId = other?.toString?.();
       if (!otherUserId) return;
@@ -143,9 +205,9 @@ export async function GET() {
             },
           },
         ])
-        .toArray();
+        .toArray() as LastMessageRow[];
 
-      lastMessages.forEach((row: any) => {
+      lastMessages.forEach((row) => {
         const key = row?._id?.toString?.();
         if (!key || !row.lastMessageAt) return;
         lastMessageByConversationId.set(
@@ -171,19 +233,24 @@ export async function GET() {
             },
           },
         ])
-        .toArray();
+        .toArray() as UnreadCountRow[];
 
-      unreadCounts.forEach((row: any) => {
+      unreadCounts.forEach((row) => {
         const senderId = row?._id?.toString?.();
         if (!senderId) return;
         unreadBySenderId.set(senderId, Number(row.count) || 0);
       });
     }
 
-    const usersWithStatus = users.map((user: any) => {
+    const usersWithStatus = users.map((user) => {
       const userId = user._id.toString();
       const conv = conversationByOtherUserId.get(userId);
       const conversationId = conv?.conversationId?.toString?.();
+      const preference = preferenceByUserId.get(userId);
+      const isUnlocked = preference?.isLocked
+        ? hasUnlockedChatCookie(req, session.user.id, userId)
+        : false;
+      const chatPreference = toChatPreferenceState(preference, isUnlocked);
 
       return {
         _id: user._id.toString(),
@@ -197,6 +264,11 @@ export async function GET() {
         lastMessageAt: conversationId
           ? lastMessageByConversationId.get(conversationId) ?? null
           : null,
+        isPinned: chatPreference.isPinned,
+        isArchived: chatPreference.isArchived,
+        isLocked: chatPreference.isLocked,
+        lockVisibility: chatPreference.lockVisibility,
+        isUnlocked: chatPreference.isUnlocked,
       };
     });
 

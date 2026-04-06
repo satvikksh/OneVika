@@ -51,6 +51,11 @@ export interface User {
   image?: string;
   unreadCount?: number;
   lastMessageAt?: string | null;
+  isPinned?: boolean;
+  isArchived?: boolean;
+  isLocked?: boolean;
+  lockVisibility?: "blur" | "hidden";
+  isUnlocked?: boolean;
 }
 
 

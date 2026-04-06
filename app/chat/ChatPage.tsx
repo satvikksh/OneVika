@@ -11,6 +11,21 @@ import ChatArea from "./ChatArea";
 import ContextMenu from "./ContextMenu";
 import { Users, Menu } from "lucide-react";
 
+type ChatPreferenceUpdate = {
+  isPinned?: boolean;
+  isArchived?: boolean;
+  lock?: {
+    enabled: boolean;
+    password?: string;
+    visibility?: "blur" | "hidden";
+  };
+};
+
+type UnlockChatResult = {
+  success: boolean;
+  error?: string;
+};
+
 /* -------------------------------- SKELETON LOADER -------------------------------- */
 const ChatSkeleton = () => {
   return (
@@ -190,6 +205,7 @@ export default function ChatPage() {
   const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null);
   const [unreadByUser, setUnreadByUser] = useState<Record<string, number>>({});
   const [deletingChatUserId, setDeletingChatUserId] = useState<string | null>(null);
+  const [updatingChatUserId, setUpdatingChatUserId] = useState<string | null>(null);
 
   // Message status tracking - now tracked locally for UI
   const [messageStatus, setMessageStatus] = useState<Record<string, 'sending' | 'sent' | 'delivered' | 'read'>>({});
@@ -209,6 +225,28 @@ export default function ChatPage() {
   const focusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const loadedMessagesByUserRef = useRef<Set<string>>(new Set());
   const routeSelectionHandledRef = useRef(false);
+
+  const mergeUserState = useCallback((userId: string, updates: Partial<User>) => {
+    setUsers((prev) =>
+      prev.map((user) =>
+        user.id === userId
+          ? {
+              ...user,
+              ...updates,
+            }
+          : user
+      )
+    );
+
+    setSelectedUser((prev) =>
+      prev?.id === userId
+        ? {
+            ...prev,
+            ...updates,
+          }
+        : prev
+    );
+  }, []);
 
   /* ---------------------------- DISPATCH FOCUS EVENTS ---------------------------- */
   // Function to dispatch focus event to navbar
@@ -418,7 +456,7 @@ export default function ChatPage() {
     if (!selectedId) return;
 
     const cachedSelection = users.find((u) => u.id === selectedId) ?? null;
-    if (cachedSelection) {
+    if (cachedSelection && (!cachedSelection.isLocked || cachedSelection.isUnlocked)) {
       setSelectedUser(cachedSelection);
     }
   }, [users]);
@@ -455,7 +493,9 @@ export default function ChatPage() {
 
     const existing = users.find((u) => u.id === userIdFromRoute);
     if (existing) {
-      setSelectedUser(existing);
+      if (!existing.isLocked || existing.isUnlocked) {
+        setSelectedUser(existing);
+      }
       routeSelectionHandledRef.current = true;
       return;
     }
@@ -515,29 +555,51 @@ export default function ChatPage() {
         setLoadingMessages(true);
 
         const res = await fetch(`/api/messages/by-user/${userId}`);
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
+
+        if (res.status === 423) {
+          mergeUserState(userId, { isUnlocked: false });
+          return false;
+        }
 
         if (!res.ok) {
           throw new Error(data.error || "Failed to fetch messages");
         }
 
-        // Push DB MESSAGES INTO SOCKET STATE
         addMessages(data.messages);
+        return true;
       } catch (err) {
         console.error("Fetch initial messages failed:", err);
+        return false;
       } finally {
         setLoadingMessages(false);
       }
     },
-    [session?.user?.id, addMessages]
+    [session?.user?.id, addMessages, mergeUserState]
   );
 
   useEffect(() => {
     if (!selectedUser?.id) return;
     if (loadedMessagesByUserRef.current.has(selectedUser.id)) return;
 
-    loadedMessagesByUserRef.current.add(selectedUser.id);
-    fetchInitialMessages(selectedUser.id);
+    let isMounted = true;
+
+    (async () => {
+      const didLoad = await fetchInitialMessages(selectedUser.id);
+
+      if (!isMounted) return;
+
+      if (didLoad) {
+        loadedMessagesByUserRef.current.add(selectedUser.id);
+        return;
+      }
+
+      loadedMessagesByUserRef.current.delete(selectedUser.id);
+    })();
+
+    return () => {
+      isMounted = false;
+    };
   }, [selectedUser?.id, fetchInitialMessages]);
 
   /* ---------------------------- FILTER MESSAGES FOR SELECTED USER ---------------------------- */
@@ -979,9 +1041,76 @@ export default function ChatPage() {
   };
 
   /* ---------------------------- UI HANDLERS --------------------------- */
+  const updateChatPreferences = useCallback(
+    async (user: User, updates: ChatPreferenceUpdate) => {
+      if (!user?.id) return;
+
+      try {
+        setUpdatingChatUserId(user.id);
+
+        const response = await fetch(`/api/messages/by-user/${user.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updates),
+        });
+
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to update chat preferences");
+        }
+
+        mergeUserState(user.id, data.preference ?? {});
+      } finally {
+        setUpdatingChatUserId(null);
+      }
+    },
+    [mergeUserState]
+  );
+
+  const handleUnlockChat = useCallback(
+    async (user: User, password: string): Promise<UnlockChatResult> => {
+      if (!user?.id) {
+        return { success: false, error: "Invalid chat selection" };
+      }
+
+      try {
+        setUpdatingChatUserId(user.id);
+
+        const response = await fetch(`/api/messages/by-user/${user.id}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password }),
+        });
+
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          return {
+            success: false,
+            error: data.error || "Failed to unlock chat",
+          };
+        }
+
+        mergeUserState(user.id, data.preference ?? { isUnlocked: true });
+        loadedMessagesByUserRef.current.delete(user.id);
+
+        return { success: true };
+      } catch (error) {
+        console.error("Failed to unlock chat:", error);
+        return { success: false, error: "Failed to unlock chat" };
+      } finally {
+        setUpdatingChatUserId(null);
+      }
+    },
+    [mergeUserState]
+  );
+
   const handleSelectUser = (user: User) => {
     if (!isValidObjectId(user.id)) {
       console.warn("Invalid user selection:", user);
+      return;
+    }
+
+    if (user.isLocked && !user.isUnlocked) {
       return;
     }
 
@@ -1104,7 +1233,7 @@ export default function ChatPage() {
   );
 
   const toggleMobileSidebar = () => {
-    setShowMobileSidebar(!showMobileSidebar);
+    setShowMobileSidebar((prev) => !prev);
   };
 
   /* ----------------------------- INPUT FOCUS HANDLERS ----------------------------- */
@@ -1182,6 +1311,14 @@ export default function ChatPage() {
     });
 
     return [...users].sort((a, b) => {
+      const aArchived = Number(Boolean(a.isArchived));
+      const bArchived = Number(Boolean(b.isArchived));
+      if (aArchived !== bArchived) return aArchived - bArchived;
+
+      const aPinned = Number(Boolean(a.isPinned));
+      const bPinned = Number(Boolean(b.isPinned));
+      if (aPinned !== bPinned) return bPinned - aPinned;
+
       const aUnread = unreadByUser[a.id] ?? a.unreadCount ?? 0;
       const bUnread = unreadByUser[b.id] ?? b.unreadCount ?? 0;
 
@@ -1279,7 +1416,24 @@ export default function ChatPage() {
           typingUsers={typingUsers}
           getUnreadCount={getUnreadCount}
           onDeleteChat={handleDeleteChat}
+          onArchiveChat={(user, nextArchived) =>
+            updateChatPreferences(user, { isArchived: nextArchived })
+          }
+          onPinChat={(user, nextPinned) =>
+            updateChatPreferences(user, { isPinned: nextPinned })
+          }
+          onLockChat={(user, password, visibility) =>
+            updateChatPreferences(user, {
+              lock: {
+                enabled: true,
+                password,
+                visibility,
+              },
+            })
+          }
+          onUnlockChat={handleUnlockChat}
           deletingChatUserId={deletingChatUserId}
+          updatingChatUserId={updatingChatUserId}
           isMobile={isMobile}
           showMobileSidebar={showMobileSidebar}
           onToggleMobileSidebar={toggleMobileSidebar}

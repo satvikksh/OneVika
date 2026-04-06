@@ -1,9 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import bcrypt from "bcryptjs";
 import { authOptions } from "@/app/lib/authOptions";
-import { dbConnect } from "@/app/lib/mongodb";
+import { dbConnect, getNativeDb } from "@/app/lib/mongodb";
 import mongoose from "mongoose";
 import { decryptChatText } from "@/app/lib/chatCrypto";
+import {
+  ChatPreferenceDoc,
+  clearChatUnlockCookie,
+  hasUnlockedChatCookie,
+  normalizeLockVisibility,
+  setChatUnlockCookie,
+  toChatPreferenceState,
+} from "@/app/lib/chatAccess";
 
 const { ObjectId } = mongoose.Types;
 
@@ -33,19 +42,31 @@ type StoredMessage = {
   replyToId?: mongoose.Types.ObjectId | string;
 };
 
+type PreferenceRequestBody = {
+  isPinned?: boolean;
+  isArchived?: boolean;
+  lock?: {
+    enabled?: boolean;
+    password?: string;
+    visibility?: "blur" | "hidden";
+  };
+};
+
+type UnlockRequestBody = {
+  password?: string;
+};
+
 export async function GET(
   req: NextRequest,
   context: { params: Promise<{ userId: string }> }
 ) {
   try {
-    /* ---------------- AUTH ---------------- */
     const session = await getServerSession(authOptions);
 
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    /* 🔥 FIX: await params */
     const { userId: receiverIdRaw } = await context.params;
     const senderIdRaw = session.user.id;
 
@@ -56,10 +77,7 @@ export async function GET(
       );
     }
 
-    if (
-      !ObjectId.isValid(receiverIdRaw) ||
-      !ObjectId.isValid(senderIdRaw)
-    ) {
+    if (!ObjectId.isValid(receiverIdRaw) || !ObjectId.isValid(senderIdRaw)) {
       return NextResponse.json(
         { error: "Invalid MongoDB user id" },
         { status: 400 }
@@ -70,7 +88,6 @@ export async function GET(
       return NextResponse.json({ messages: [] });
     }
 
-    /* ---------------- DB ---------------- */
     await dbConnect();
     const db = mongoose.connection.db;
 
@@ -81,7 +98,28 @@ export async function GET(
     const senderId = new ObjectId(senderIdRaw);
     const receiverId = new ObjectId(receiverIdRaw);
 
-    /* ---------------- FIND CONVERSATION ---------------- */
+    const preference = await db.collection<ChatPreferenceDoc>("chatPreferences").findOne(
+      { ownerId: senderId, chatUserId: receiverId },
+      {
+        projection: {
+          isLocked: 1,
+        },
+      }
+    );
+
+    if (
+      preference?.isLocked &&
+      !hasUnlockedChatCookie(req, senderIdRaw, receiverIdRaw)
+    ) {
+      return NextResponse.json(
+        {
+          error: "This chat is locked",
+          requiresPassword: true,
+        },
+        { status: 423 }
+      );
+    }
+
     const conversation = await db.collection("conversations").findOne({
       participants: { $all: [senderId, receiverId] },
     });
@@ -90,19 +128,16 @@ export async function GET(
       return NextResponse.json({ messages: [] });
     }
 
-    /* ---------------- FETCH MESSAGES ---------------- */
     const messages = await db
       .collection("messages")
       .find({ conversationId: conversation._id })
       .sort({ createdAt: 1 })
       .toArray();
 
-    /* ---------------- FORMAT RESPONSE ---------------- */
     const formatted = messages.map((m) => {
       const message = m as StoredMessage;
       let text = message.text || "";
 
-      // New encrypted storage path
       if (!text && message.textCipher && message.textIv && message.textTag) {
         try {
           text = decryptChatText({
@@ -110,8 +145,8 @@ export async function GET(
             textIv: message.textIv,
             textTag: message.textTag,
           });
-        } catch (e) {
-          console.error("MESSAGE DECRYPT ERROR:", e);
+        } catch (error) {
+          console.error("MESSAGE DECRYPT ERROR:", error);
           text = "[Unable to decrypt message]";
         }
       }
@@ -148,6 +183,186 @@ export async function GET(
     console.error("FETCH MESSAGES ERROR:", error);
     return NextResponse.json(
       { error: "Failed to fetch messages" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(
+  req: NextRequest,
+  context: { params: Promise<{ userId: string }> }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { userId } = await context.params;
+    if (!ObjectId.isValid(session.user.id) || !ObjectId.isValid(userId)) {
+      return NextResponse.json({ error: "Invalid user id" }, { status: 400 });
+    }
+
+    const body = (await req.json().catch(() => null)) as PreferenceRequestBody | null;
+    if (!body) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
+
+    const hasPinUpdate = typeof body.isPinned === "boolean";
+    const hasArchiveUpdate = typeof body.isArchived === "boolean";
+    const hasLockUpdate = typeof body.lock?.enabled === "boolean";
+
+    if (!hasPinUpdate && !hasArchiveUpdate && !hasLockUpdate) {
+      return NextResponse.json({ error: "No preference changes provided" }, { status: 400 });
+    }
+
+    const ownerId = new ObjectId(session.user.id);
+    const chatUserId = new ObjectId(userId);
+    const db = await getNativeDb();
+    const collection = db.collection<ChatPreferenceDoc>("chatPreferences");
+    const existing = await collection.findOne({ ownerId, chatUserId });
+
+    const nextPreference = {
+      isPinned: hasPinUpdate ? Boolean(body.isPinned) : Boolean(existing?.isPinned),
+      isArchived: hasArchiveUpdate ? Boolean(body.isArchived) : Boolean(existing?.isArchived),
+      isLocked: hasLockUpdate
+        ? Boolean(body.lock?.enabled)
+        : Boolean(existing?.isLocked),
+      lockVisibility: hasLockUpdate
+        ? normalizeLockVisibility(body.lock?.visibility)
+        : normalizeLockVisibility(existing?.lockVisibility),
+    };
+
+    let nextPasswordHash = existing?.lockPasswordHash;
+
+    if (hasLockUpdate && body.lock?.enabled) {
+      const nextPassword = body.lock.password?.trim() ?? "";
+      if (nextPassword.length < 4) {
+        return NextResponse.json(
+          { error: "Password must be at least 4 characters long" },
+          { status: 400 }
+        );
+      }
+
+      nextPasswordHash = await bcrypt.hash(nextPassword, 10);
+    }
+
+    if (hasLockUpdate && body.lock?.enabled === false) {
+      nextPasswordHash = undefined;
+      nextPreference.lockVisibility = "blur";
+    }
+
+    const isDefaultState =
+      !nextPreference.isPinned &&
+      !nextPreference.isArchived &&
+      !nextPreference.isLocked;
+
+    if (isDefaultState) {
+      await collection.deleteOne({ ownerId, chatUserId });
+
+      const response = NextResponse.json({
+        preference: toChatPreferenceState(null, false),
+      });
+      clearChatUnlockCookie(response, userId);
+      return response;
+    }
+
+    const now = new Date();
+    const updateDoc: Record<string, unknown> = {
+      $set: {
+        ownerId,
+        chatUserId,
+        isPinned: nextPreference.isPinned,
+        isArchived: nextPreference.isArchived,
+        isLocked: nextPreference.isLocked,
+        lockVisibility: nextPreference.lockVisibility,
+        updatedAt: now,
+      },
+      $setOnInsert: {
+        createdAt: now,
+      },
+    };
+
+    if (nextPreference.isLocked && nextPasswordHash) {
+      (updateDoc.$set as Record<string, unknown>).lockPasswordHash = nextPasswordHash;
+    } else {
+      updateDoc.$unset = { lockPasswordHash: "" };
+    }
+
+    const result = await collection.findOneAndUpdate(
+      { ownerId, chatUserId },
+      updateDoc,
+      {
+        upsert: true,
+        returnDocument: "after",
+      }
+    );
+
+    const response = NextResponse.json({
+      preference: toChatPreferenceState(result, false),
+    });
+
+    if (hasLockUpdate) {
+      clearChatUnlockCookie(response, userId);
+    }
+
+    return response;
+  } catch (error) {
+    console.error("UPDATE CHAT PREFERENCES ERROR:", error);
+    return NextResponse.json(
+      { error: "Failed to update chat preferences" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(
+  req: NextRequest,
+  context: { params: Promise<{ userId: string }> }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { userId } = await context.params;
+    if (!ObjectId.isValid(session.user.id) || !ObjectId.isValid(userId)) {
+      return NextResponse.json({ error: "Invalid user id" }, { status: 400 });
+    }
+
+    const body = (await req.json().catch(() => null)) as UnlockRequestBody | null;
+    const password = body?.password?.trim() ?? "";
+    if (!password) {
+      return NextResponse.json({ error: "Password is required" }, { status: 400 });
+    }
+
+    const ownerId = new ObjectId(session.user.id);
+    const chatUserId = new ObjectId(userId);
+    const db = await getNativeDb();
+    const collection = db.collection<ChatPreferenceDoc>("chatPreferences");
+    const preference = await collection.findOne({ ownerId, chatUserId });
+
+    if (!preference?.isLocked || !preference.lockPasswordHash) {
+      return NextResponse.json({ error: "Chat is not locked" }, { status: 400 });
+    }
+
+    const isMatch = await bcrypt.compare(password, preference.lockPasswordHash);
+    if (!isMatch) {
+      return NextResponse.json({ error: "Incorrect password" }, { status: 403 });
+    }
+
+    const response = NextResponse.json({
+      success: true,
+      preference: toChatPreferenceState(preference, true),
+    });
+    setChatUnlockCookie(response, session.user.id, userId);
+
+    return response;
+  } catch (error) {
+    console.error("UNLOCK CHAT ERROR:", error);
+    return NextResponse.json(
+      { error: "Failed to unlock chat" },
       { status: 500 }
     );
   }

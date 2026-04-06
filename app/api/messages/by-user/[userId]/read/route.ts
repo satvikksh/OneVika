@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/lib/authOptions";
 import { dbConnect } from "@/app/lib/mongodb";
+import { ChatPreferenceDoc, hasUnlockedChatCookie } from "@/app/lib/chatAccess";
 import mongoose from "mongoose";
 
 const { Types } = mongoose;
@@ -45,6 +46,25 @@ export async function POST(
 
     const senderObjId = new Types.ObjectId(senderId);
     const receiverObjId = new Types.ObjectId(receiverId);
+
+    const preference = await db?.collection<ChatPreferenceDoc>("chatPreferences").findOne(
+      { ownerId: senderObjId, chatUserId: receiverObjId },
+      {
+        projection: {
+          isLocked: 1,
+        },
+      }
+    );
+
+    if (
+      preference?.isLocked &&
+      !hasUnlockedChatCookie(req, senderId, receiverId)
+    ) {
+      return NextResponse.json(
+        { error: "This chat is locked", requiresPassword: true },
+        { status: 423 }
+      );
+    }
 
     /* ---------------- FIND CONVERSATION ---------------- */
     const conversation = await db?.collection("conversations").findOne({
