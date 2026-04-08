@@ -5,6 +5,7 @@ import { authOptions } from "@/app/lib/authOptions";
 import { dbConnect, getNativeDb } from "@/app/lib/mongodb";
 import mongoose from "mongoose";
 import { decryptChatText } from "@/app/lib/chatCrypto";
+import User from "@/app/models/User";
 import {
   ChatPreferenceDoc,
   clearChatUnlockCookie,
@@ -13,6 +14,11 @@ import {
   setChatUnlockCookie,
   toChatPreferenceState,
 } from "@/app/lib/chatAccess";
+import {
+  isSecurityKey,
+  normalizeSecurityAnswer,
+  SecurityKey,
+} from "@/app/lib/securityQuestions";
 
 const { ObjectId } = mongoose.Types;
 
@@ -49,7 +55,12 @@ type PreferenceRequestBody = {
   lock?: {
     enabled?: boolean;
     password?: string;
+    currentPassword?: string;
     visibility?: "blur" | "hidden";
+    recovery?: {
+      securityQuestion?: SecurityKey;
+      securityAnswer?: string;
+    };
   };
 };
 
@@ -250,6 +261,86 @@ export async function PATCH(
           { error: "Password must be at least 4 characters long" },
           { status: 400 }
         );
+      }
+
+      if (existing?.isLocked && existing.lockPasswordHash) {
+        const recoveryQuestion = body.lock.recovery?.securityQuestion;
+        const recoveryAnswer = body.lock.recovery?.securityAnswer?.trim() ?? "";
+
+        if (recoveryQuestion || recoveryAnswer) {
+          if (!recoveryQuestion || !recoveryAnswer) {
+            return NextResponse.json(
+              { error: "Security question and answer are required for recovery" },
+              { status: 400 }
+            );
+          }
+
+          if (!isSecurityKey(String(recoveryQuestion))) {
+            return NextResponse.json(
+              { error: "Invalid security question" },
+              { status: 400 }
+            );
+          }
+
+          await dbConnect();
+          const owner = await User.findById(session.user.id)
+            .select("favoritePet favoriteColor nickname")
+            .lean<{
+              favoritePet?: string;
+              favoriteColor?: string;
+              nickname?: string;
+            } | null>();
+
+          if (!owner) {
+            return NextResponse.json(
+              { error: "Unable to verify this account right now" },
+              { status: 404 }
+            );
+          }
+
+          const hasRecoverySetup = ["favoritePet", "favoriteColor", "nickname"].some(
+            (key) => String(owner[key as SecurityKey] || "").trim() !== ""
+          );
+
+          if (!hasRecoverySetup) {
+            return NextResponse.json(
+              { error: "Password recovery is not set up for this account" },
+              { status: 400 }
+            );
+          }
+
+          const storedAnswer = normalizeSecurityAnswer(
+            String(owner[recoveryQuestion] || "")
+          );
+          const submittedAnswer = normalizeSecurityAnswer(recoveryAnswer);
+
+          if (!storedAnswer || storedAnswer !== submittedAnswer) {
+            return NextResponse.json(
+              { error: "Security answer does not match" },
+              { status: 403 }
+            );
+          }
+        } else {
+          const currentPassword = body.lock.currentPassword?.trim() ?? "";
+          if (!currentPassword) {
+            return NextResponse.json(
+              { error: "Current password is required to update the chat lock" },
+              { status: 400 }
+            );
+          }
+
+          const passwordMatches = await bcrypt.compare(
+            currentPassword,
+            existing.lockPasswordHash
+          );
+
+          if (!passwordMatches) {
+            return NextResponse.json(
+              { error: "Current password is incorrect" },
+              { status: 403 }
+            );
+          }
+        }
       }
 
       nextPasswordHash = await bcrypt.hash(nextPassword, 10);

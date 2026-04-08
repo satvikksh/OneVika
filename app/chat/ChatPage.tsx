@@ -11,6 +11,7 @@ import ChatArea from "./ChatArea";
 import ContextMenu from "./ContextMenu";
 import { readCachedChatState, writeCachedChatState } from "./chatLocalCache";
 import { Users, Menu } from "lucide-react";
+import { SecurityKey } from "../lib/securityQuestions";
 
 type ChatPreferenceUpdate = {
   isPinned?: boolean;
@@ -18,7 +19,12 @@ type ChatPreferenceUpdate = {
   lock?: {
     enabled: boolean;
     password?: string;
+    currentPassword?: string;
     visibility?: "blur" | "hidden";
+    recovery?: {
+      securityQuestion: SecurityKey;
+      securityAnswer: string;
+    };
   };
 };
 
@@ -1693,12 +1699,26 @@ export default function ChatPage() {
           onPinChat={(user, nextPinned) =>
             updateChatPreferences(user, { isPinned: nextPinned })
           }
-          onLockChat={(user, password, visibility) =>
+          onLockChat={(user, lockDetails) =>
             updateChatPreferences(user, {
               lock: {
                 enabled: true,
-                password,
-                visibility,
+                password: lockDetails.password,
+                currentPassword: lockDetails.currentPassword,
+                visibility: lockDetails.visibility,
+              },
+            })
+          }
+          onRecoverLock={(user, recovery) =>
+            updateChatPreferences(user, {
+              lock: {
+                enabled: true,
+                password: recovery.password,
+                visibility: recovery.visibility,
+                recovery: {
+                  securityQuestion: recovery.securityQuestion,
+                  securityAnswer: recovery.securityAnswer,
+                },
               },
             })
           }

@@ -21,6 +21,20 @@ import {
   X,
 } from "lucide-react";
 import { PremiumAvatar, PremiumName } from "../components/premium-ui";
+import { SECURITY_QUESTIONS, SecurityKey } from "../lib/securityQuestions";
+
+type SaveLockInput = {
+  password: string;
+  currentPassword?: string;
+  visibility: "blur" | "hidden";
+};
+
+type RecoverLockInput = {
+  password: string;
+  securityQuestion: SecurityKey;
+  securityAnswer: string;
+  visibility: "blur" | "hidden";
+};
 
 interface ChatSidebarProps {
   users: User[];
@@ -36,11 +50,8 @@ interface ChatSidebarProps {
   onDeleteChat: (user: User) => Promise<void> | void;
   onArchiveChat: (user: User, nextArchived: boolean) => Promise<void> | void;
   onPinChat: (user: User, nextPinned: boolean) => Promise<void> | void;
-  onLockChat: (
-    user: User,
-    password: string,
-    visibility: "blur" | "hidden"
-  ) => Promise<void> | void;
+  onLockChat: (user: User, input: SaveLockInput) => Promise<void> | void;
+  onRecoverLock: (user: User, input: RecoverLockInput) => Promise<void> | void;
   onRemoveLock: (user: User, password: string) => Promise<void> | void;
   onUnlockChat: (
     user: User,
@@ -56,7 +67,7 @@ interface ChatSidebarProps {
 
 type ActionMenuState = { user: User; rect: DOMRect };
 type LockDialogState =
-  | { mode: "lock" | "unlock" | "removeLock"; user: User }
+  | { mode: "lock" | "updateLock" | "unlock" | "removeLock" | "recoverLock"; user: User }
   | null;
 
 const LONG_PRESS_DURATION_MS = 650;
@@ -82,6 +93,9 @@ const getPresentedStatus = (
   if (typingUsers.has(user.id)) return "typing...";
   return isOnline ? "Online" : " ";
 };
+
+const getErrorMessage = (error: unknown, fallback: string) =>
+  error instanceof Error && error.message ? error.message : fallback;
 
 const styles = `
   @keyframes fadeIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
@@ -142,7 +156,7 @@ const ChatActionMenu: React.FC<{
     { id: "delete" as const, icon: Trash2, label: "Delete Chat/User", danger: true },
     { id: "archive" as const, icon: Archive, label: user.isArchived ? "Restore Chat" : "Archive Chat" },
     { id: "pin" as const, icon: user.isPinned ? PinOff : Pin, label: user.isPinned ? "Unpin Chat" : "Pin Chat" },
-    { id: "lock" as const, icon: Lock, label: user.isLocked ? "Update Lock" : "Lock Chat" },
+    { id: "lock" as const, icon: Lock, label: user.isLocked ? "Update Lock Password" : "Lock Chat" },
     ...(user.isLocked
       ? [{ id: "removeLock" as const, icon: EyeOff, label: "Remove Lock" }]
       : []),
@@ -178,7 +192,7 @@ const ChatActionMenu: React.FC<{
                 <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl ${
                   item.danger ? "bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-300" : "bg-white text-blue-600 dark:bg-gray-800 dark:text-blue-300"
                 }`}>
-                  {isBusy ? <Loader2 size={17} className="animate-spin" /> : <item.icon size={18} />}
+                  {isBusy ? <Loader2 size={18} className="animate-spin" /> : <item.icon size={18} />}
                 </div>
                 <div className="font-medium">{item.label}</div>
               </button>
@@ -229,30 +243,46 @@ const ChatPasswordDialog: React.FC<{
   dialog: LockDialogState;
   isMobile: boolean;
   password: string;
+  currentPassword: string;
   confirmPassword: string;
+  securityQuestion: SecurityKey | "";
+  securityAnswer: string;
   visibility: "blur" | "hidden";
   error: string;
+  notice: string;
   submitting: boolean;
   onPasswordChange: (value: string) => void;
+  onCurrentPasswordChange: (value: string) => void;
   onConfirmPasswordChange: (value: string) => void;
+  onSecurityQuestionChange: (value: SecurityKey | "") => void;
+  onSecurityAnswerChange: (value: string) => void;
   onVisibilityChange: (value: "blur" | "hidden") => void;
   onClose: () => void;
   onSubmit: () => void;
   onRemoveLock?: () => void;
+  onForgotPassword?: () => void;
 }> = ({
   dialog,
   isMobile,
   password,
+  currentPassword,
   confirmPassword,
+  securityQuestion,
+  securityAnswer,
   visibility,
   error,
+  notice,
   submitting,
   onPasswordChange,
+  onCurrentPasswordChange,
   onConfirmPasswordChange,
+  onSecurityQuestionChange,
+  onSecurityAnswerChange,
   onVisibilityChange,
   onClose,
   onSubmit,
   onRemoveLock,
+  onForgotPassword,
 }) => {
   useEffect(() => {
     if (!dialog) return;
@@ -268,7 +298,54 @@ const ChatPasswordDialog: React.FC<{
   if (!dialog) return null;
 
   const isLockMode = dialog.mode === "lock";
+  const isUpdateLockMode = dialog.mode === "updateLock";
   const isRemoveLockMode = dialog.mode === "removeLock";
+  const isUnlockMode = dialog.mode === "unlock";
+  const isRecoveryMode = dialog.mode === "recoverLock";
+  const needsNewPassword = isLockMode || isUpdateLockMode || isRecoveryMode;
+  const showVisibilityOptions = isLockMode || isUpdateLockMode;
+  const canRecover = !isLockMode && !isRecoveryMode && Boolean(onForgotPassword);
+  const headline = isLockMode
+    ? "Set a chat password"
+    : isUpdateLockMode
+      ? "Verify current password and set a new one"
+      : isRemoveLockMode
+        ? "Confirm password to remove lock"
+        : isRecoveryMode
+          ? "Reset chat lock password"
+          : "Enter your chat password";
+  const eyebrow = isLockMode
+    ? "Protect chat"
+    : isUpdateLockMode
+      ? "Update lock"
+      : isRemoveLockMode
+        ? "Remove lock"
+        : isRecoveryMode
+          ? "Recover lock"
+          : "Unlock chat";
+  const summary = isLockMode
+    ? " will require this password next time it is opened."
+    : isUpdateLockMode
+      ? " is protected. Verify the current password before saving a new one."
+      : isRemoveLockMode
+        ? " will be unlocked for future access after password confirmation."
+        : isRecoveryMode
+          ? " uses the same security-question recovery as your login password reset."
+          : " is locked. Enter the password to continue.";
+  const submitLabel = isLockMode
+    ? "Save password"
+    : isUpdateLockMode
+      ? "Update password"
+      : isRecoveryMode
+        ? "Reset password"
+        : "Unlock chat";
+  const submittingLabel = isLockMode
+    ? "Saving..."
+    : isUpdateLockMode
+      ? "Updating..."
+      : isRecoveryMode
+        ? "Resetting..."
+        : "Unlocking...";
 
   return (
     <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/55 p-4 sm:items-center">
@@ -276,8 +353,8 @@ const ChatPasswordDialog: React.FC<{
       <div className={`relative z-[81] w-full max-w-md overflow-hidden rounded-[28px] border border-gray-200 bg-white shadow-2xl dark:border-gray-800 dark:bg-gray-950 ${isMobile ? "animate-chatSheet" : "animate-chatPopover"}`} role="dialog" aria-modal="true">
         <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-5 py-4 dark:border-gray-800">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">{isLockMode ? "Protect chat" : isRemoveLockMode ? "Remove lock" : "Unlock chat"}</p>
-            <h3 className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">{isLockMode ? "Set a chat password" : isRemoveLockMode ? "Confirm password to remove lock" : "Enter your chat password"}</h3>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">{eyebrow}</p>
+            <h3 className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">{headline}</h3>
           </div>
           <button onClick={onClose} disabled={submitting} className="rounded-full p-2 text-gray-500 transition-colors hover:bg-gray-100 disabled:opacity-50 dark:text-gray-400 dark:hover:bg-gray-800" aria-label="Close dialog">
             <X size={18} />
@@ -286,32 +363,74 @@ const ChatPasswordDialog: React.FC<{
         <div className="space-y-4 px-5 py-5">
           <div className="rounded-2xl bg-gray-50 px-4 py-3 text-sm text-gray-600 dark:bg-gray-900 dark:text-gray-300">
             <span className="font-medium text-gray-900 dark:text-white">{getPresentedName(dialog.user)}</span>
-            {isLockMode
-              ? " will require this password next time it is opened."
-              : isRemoveLockMode
-                ? " will be unlocked for future access after password confirmation."
-                : " is locked. Enter the password to continue."}
+            {summary}
           </div>
-          <label className="block">
-            <span className="mb-2 block text-sm font-medium text-gray-800 dark:text-gray-200">Password</span>
-            <input type="password" value={password} onChange={(event) => onPasswordChange(event.target.value)} autoFocus className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white" placeholder={isLockMode ? "Choose a password" : "Enter password"} />
-          </label>
-          {isLockMode ? (
+          {isUpdateLockMode || isRemoveLockMode ? (
+            <label className="block">
+              <span className="mb-2 block text-sm font-medium text-gray-800 dark:text-gray-200">Current password</span>
+              <input type="password" value={currentPassword} onChange={(event) => onCurrentPasswordChange(event.target.value)} autoFocus className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white" placeholder="Enter current password" />
+            </label>
+          ) : null}
+          {isUnlockMode ? (
+            <label className="block">
+              <span className="mb-2 block text-sm font-medium text-gray-800 dark:text-gray-200">Password</span>
+              <input type="password" value={password} onChange={(event) => onPasswordChange(event.target.value)} autoFocus className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white" placeholder="Enter password" />
+            </label>
+          ) : null}
+          {canRecover ? (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={onForgotPassword}
+                disabled={submitting}
+                className="text-sm font-medium text-blue-600 transition hover:text-blue-700 disabled:opacity-60 dark:text-blue-400 dark:hover:text-blue-300"
+              >
+                Forgot password?
+              </button>
+            </div>
+          ) : null}
+          {isRecoveryMode ? (
             <>
               <label className="block">
-                <span className="mb-2 block text-sm font-medium text-gray-800 dark:text-gray-200">Confirm password</span>
-                <input type="password" value={confirmPassword} onChange={(event) => onConfirmPasswordChange(event.target.value)} className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white" placeholder="Re-enter password" />
+                <span className="mb-2 block text-sm font-medium text-gray-800 dark:text-gray-200">Security question</span>
+                <select value={securityQuestion} onChange={(event) => onSecurityQuestionChange(event.target.value as SecurityKey | "")} autoFocus className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white">
+                  <option value="">Select security question</option>
+                  {SECURITY_QUESTIONS.map((question) => (
+                    <option key={question.key} value={question.key}>
+                      {question.label}
+                    </option>
+                  ))}
+                </select>
               </label>
-              <div className="grid grid-cols-2 gap-3">
+              <label className="block">
+                <span className="mb-2 block text-sm font-medium text-gray-800 dark:text-gray-200">Security answer</span>
+                <input type="text" value={securityAnswer} onChange={(event) => onSecurityAnswerChange(event.target.value)} className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white" placeholder="Enter security answer" />
+              </label>
+            </>
+          ) : null}
+          {needsNewPassword ? (
+            <>
+              <label className="block">
+                <span className="mb-2 block text-sm font-medium text-gray-800 dark:text-gray-200">New password</span>
+                <input type="password" value={password} onChange={(event) => onPasswordChange(event.target.value)} autoFocus={isLockMode} className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white" placeholder="Choose a new password" />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-medium text-gray-800 dark:text-gray-200">Confirm new password</span>
+                <input type="password" value={confirmPassword} onChange={(event) => onConfirmPasswordChange(event.target.value)} className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white" placeholder="Re-enter new password" />
+              </label>
+              {showVisibilityOptions ? (
+                <div className="grid grid-cols-2 gap-3">
                 <button type="button" onClick={() => onVisibilityChange("blur")} className={`rounded-2xl border px-4 py-3 text-left transition ${visibility === "blur" ? "border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300" : "border-gray-200 bg-gray-50 text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300"}`}>
                   <div className="flex items-center gap-2 font-medium"><Shield size={16} /> Blur</div>
                 </button>
                 <button type="button" onClick={() => onVisibilityChange("hidden")} className={`rounded-2xl border px-4 py-3 text-left transition ${visibility === "hidden" ? "border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300" : "border-gray-200 bg-gray-50 text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300"}`}>
                   <div className="flex items-center gap-2 font-medium"><EyeOff size={16} /> Hide</div>
                 </button>
-              </div>
+                </div>
+              ) : null}
             </>
           ) : null}
+          {notice ? <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/40 dark:text-blue-300">{notice}</div> : null}
           {error ? <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">{error}</div> : null}
         </div>
         <div className="flex flex-col-reverse gap-3 border-t border-gray-100 px-5 py-4 sm:flex-row sm:justify-end dark:border-gray-800">
@@ -323,7 +442,7 @@ const ChatPasswordDialog: React.FC<{
           ) : null}
           {!isRemoveLockMode ? (
             <button onClick={onSubmit} disabled={submitting} className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-60">
-              {submitting ? <span className="inline-flex items-center gap-2"><Loader2 size={16} className="animate-spin" />{isLockMode ? "Saving..." : "Unlocking..."}</span> : isLockMode ? "Save password" : "Unlock chat"}
+              {submitting ? <span className="inline-flex items-center gap-2"><Loader2 size={16} className="animate-spin" />{submittingLabel}</span> : submitLabel}
             </button>
           ) : null}
         </div>
@@ -347,6 +466,7 @@ export default function ChatSidebar({
   onArchiveChat,
   onPinChat,
   onLockChat,
+  onRecoverLock,
   onRemoveLock,
   onUnlockChat,
   deletingChatUserId = null,
@@ -362,9 +482,13 @@ export default function ChatSidebar({
   const [actionMenu, setActionMenu] = useState<ActionMenuState | null>(null);
   const [lockDialog, setLockDialog] = useState<LockDialogState>(null);
   const [passwordInput, setPasswordInput] = useState("");
+  const [currentPasswordInput, setCurrentPasswordInput] = useState("");
   const [confirmPasswordInput, setConfirmPasswordInput] = useState("");
+  const [securityQuestionInput, setSecurityQuestionInput] = useState<SecurityKey | "">("");
+  const [securityAnswerInput, setSecurityAnswerInput] = useState("");
   const [lockVisibility, setLockVisibility] = useState<"blur" | "hidden">("blur");
   const [dialogError, setDialogError] = useState("");
+  const [dialogNotice, setDialogNotice] = useState("");
   const [isDialogSubmitting, setIsDialogSubmitting] = useState(false);
 
   const sidebarRef = useRef<HTMLDivElement>(null);
@@ -392,22 +516,30 @@ export default function ChatSidebar({
     setActionMenu({ user, rect: target.getBoundingClientRect() });
   }, []);
 
-  const openLockDialog = useCallback((mode: "lock" | "unlock" | "removeLock", user: User) => {
+  const resetDialogInputs = useCallback(() => {
+    setPasswordInput("");
+    setCurrentPasswordInput("");
+    setConfirmPasswordInput("");
+    setSecurityQuestionInput("");
+    setSecurityAnswerInput("");
+  }, []);
+
+  const openLockDialog = useCallback((mode: "lock" | "updateLock" | "unlock" | "removeLock" | "recoverLock", user: User, notice = "") => {
     setActionMenu(null);
     setDialogError("");
-    setPasswordInput("");
-    setConfirmPasswordInput("");
+    setDialogNotice(notice);
+    resetDialogInputs();
     setLockVisibility(user.lockVisibility === "hidden" ? "hidden" : "blur");
     setLockDialog({ mode, user });
-  }, []);
+  }, [resetDialogInputs]);
 
   const closeDialog = useCallback(() => {
     if (isDialogSubmitting) return;
     setLockDialog(null);
     setDialogError("");
-    setPasswordInput("");
-    setConfirmPasswordInput("");
-  }, [isDialogSubmitting]);
+    setDialogNotice("");
+    resetDialogInputs();
+  }, [isDialogSubmitting, resetDialogInputs]);
 
   useEffect(() => {
     if (!searchQuery.trim()) return;
@@ -526,7 +658,7 @@ export default function ChatSidebar({
   const handleMenuAction = useCallback(async (action: "delete" | "archive" | "pin" | "lock" | "removeLock", user: User) => {
     try {
       if (action === "lock") {
-        openLockDialog("lock", user);
+        openLockDialog(user.isLocked ? "updateLock" : "lock", user);
         return;
       }
 
@@ -548,7 +680,12 @@ export default function ChatSidebar({
   const handleDialogSubmit = useCallback(async () => {
     if (!lockDialog) return;
 
-    if (lockDialog.mode === "lock") {
+    if (lockDialog.mode === "lock" || lockDialog.mode === "updateLock") {
+      const isUpdateLockMode = lockDialog.mode === "updateLock";
+      if (isUpdateLockMode && !currentPasswordInput.trim()) {
+        setDialogError("Enter your current password to verify this change.");
+        return;
+      }
       if (passwordInput.trim().length < 4) {
         setDialogError("Use at least 4 characters for the chat password.");
         return;
@@ -560,12 +697,24 @@ export default function ChatSidebar({
 
       try {
         setDialogError("");
+        setDialogNotice("");
         setIsDialogSubmitting(true);
-        await onLockChat(lockDialog.user, passwordInput, lockVisibility);
+        await onLockChat(lockDialog.user, {
+          password: passwordInput,
+          currentPassword: isUpdateLockMode ? currentPasswordInput : undefined,
+          visibility: lockVisibility,
+        });
         closeDialog();
       } catch (error) {
         console.error("Lock chat failed:", error);
-        setDialogError("Unable to save this chat lock right now.");
+        setDialogError(
+          getErrorMessage(
+            error,
+            isUpdateLockMode
+              ? "Unable to update this chat lock right now."
+              : "Unable to save this chat lock right now."
+          )
+        );
       } finally {
         setIsDialogSubmitting(false);
       }
@@ -573,19 +722,68 @@ export default function ChatSidebar({
     }
 
     if (lockDialog.mode === "removeLock") {
-      if (!passwordInput.trim()) {
+      if (!currentPasswordInput.trim()) {
         setDialogError("Enter the current password to remove the lock.");
         return;
       }
 
       try {
         setDialogError("");
+        setDialogNotice("");
         setIsDialogSubmitting(true);
-        await onRemoveLock(lockDialog.user, passwordInput);
+        await onRemoveLock(lockDialog.user, currentPasswordInput);
         closeDialog();
       } catch (error) {
         console.error("Remove lock failed:", error);
-        setDialogError("Unable to remove the lock right now.");
+        setDialogError(getErrorMessage(error, "Unable to remove the lock right now."));
+      } finally {
+        setIsDialogSubmitting(false);
+      }
+
+      return;
+    }
+
+    if (lockDialog.mode === "recoverLock") {
+      if (!securityQuestionInput) {
+        setDialogError("Select your security question to continue.");
+        return;
+      }
+
+      if (!securityAnswerInput.trim()) {
+        setDialogError("Enter the answer to your security question.");
+        return;
+      }
+
+      if (passwordInput.trim().length < 4) {
+        setDialogError("Use at least 4 characters for the chat password.");
+        return;
+      }
+
+      if (passwordInput !== confirmPasswordInput) {
+        setDialogError("The password confirmation does not match.");
+        return;
+      }
+
+      try {
+        setDialogError("");
+        setDialogNotice("");
+        setIsDialogSubmitting(true);
+        await onRecoverLock(lockDialog.user, {
+          password: passwordInput,
+          securityQuestion: securityQuestionInput,
+          securityAnswer: securityAnswerInput,
+          visibility: lockVisibility,
+        });
+        openLockDialog(
+          "unlock",
+          lockDialog.user,
+          "Password reset. Enter your new password to unlock this chat."
+        );
+      } catch (error) {
+        console.error("Recover lock failed:", error);
+        setDialogError(
+          getErrorMessage(error, "Unable to reset this chat lock right now.")
+        );
       } finally {
         setIsDialogSubmitting(false);
       }
@@ -599,6 +797,7 @@ export default function ChatSidebar({
     }
 
     setDialogError("");
+    setDialogNotice("");
     setIsDialogSubmitting(true);
     const result = await onUnlockChat(lockDialog.user, passwordInput);
     if (!result.success) {
@@ -610,7 +809,7 @@ export default function ChatSidebar({
     setIsDialogSubmitting(false);
     closeDialog();
     handleUserSelect({ ...lockDialog.user, isUnlocked: true });
-  }, [closeDialog, confirmPasswordInput, handleUserSelect, lockDialog, lockVisibility, onLockChat, onRemoveLock, onUnlockChat, passwordInput]);
+  }, [closeDialog, confirmPasswordInput, currentPasswordInput, handleUserSelect, lockDialog, lockVisibility, onLockChat, onRecoverLock, onRemoveLock, onUnlockChat, openLockDialog, passwordInput, securityAnswerInput, securityQuestionInput]);
 
   const renderUserRow = (user: User) => {
     const unreadCount = getUnreadCount(user.id);
@@ -767,7 +966,7 @@ export default function ChatSidebar({
         <div className={`fixed inset-0 z-40 bg-black/50 transition-opacity duration-300 lg:hidden ${showMobileSidebar ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`} onClick={onToggleMobileSidebar} />
         <aside ref={sidebarRef} className={`fixed inset-y-16 left-0 z-50 flex h-full w-full max-w-sm flex-col border-r border-gray-200 bg-white transition-transform duration-300 ease-in-out dark:border-gray-800 dark:bg-black lg:hidden ${showMobileSidebar ? "translate-x-0" : "-translate-x-full"}`}>{sidebarShell}</aside>
         <ChatActionMenu menu={actionMenu} isMobile busyUserId={activeBusyUserId} onClose={() => setActionMenu(null)} onAction={handleMenuAction} />
-        <ChatPasswordDialog dialog={lockDialog} isMobile password={passwordInput} confirmPassword={confirmPasswordInput} visibility={lockVisibility} error={dialogError} submitting={isDialogSubmitting} onPasswordChange={setPasswordInput} onConfirmPasswordChange={setConfirmPasswordInput} onVisibilityChange={setLockVisibility} onClose={closeDialog} onSubmit={handleDialogSubmit} onRemoveLock={handleDialogSubmit} />
+        <ChatPasswordDialog dialog={lockDialog} isMobile password={passwordInput} currentPassword={currentPasswordInput} confirmPassword={confirmPasswordInput} securityQuestion={securityQuestionInput} securityAnswer={securityAnswerInput} visibility={lockVisibility} error={dialogError} notice={dialogNotice} submitting={isDialogSubmitting} onPasswordChange={setPasswordInput} onCurrentPasswordChange={setCurrentPasswordInput} onConfirmPasswordChange={setConfirmPasswordInput} onSecurityQuestionChange={setSecurityQuestionInput} onSecurityAnswerChange={setSecurityAnswerInput} onVisibilityChange={setLockVisibility} onClose={closeDialog} onSubmit={handleDialogSubmit} onRemoveLock={handleDialogSubmit} onForgotPassword={() => lockDialog && openLockDialog("recoverLock", lockDialog.user)} />
       </>
     );
   }
@@ -776,7 +975,7 @@ export default function ChatSidebar({
     <>
       <aside className="fixed left-0 top-16 hidden h-full w-80 shrink-0 flex-col border-r border-gray-200 bg-white dark:border-gray-800 dark:bg-black lg:flex">{sidebarShell}</aside>
       <ChatActionMenu menu={actionMenu} isMobile={false} busyUserId={activeBusyUserId} onClose={() => setActionMenu(null)} onAction={handleMenuAction} />
-      <ChatPasswordDialog dialog={lockDialog} isMobile={false} password={passwordInput} confirmPassword={confirmPasswordInput} visibility={lockVisibility} error={dialogError} submitting={isDialogSubmitting} onPasswordChange={setPasswordInput} onConfirmPasswordChange={setConfirmPasswordInput} onVisibilityChange={setLockVisibility} onClose={closeDialog} onSubmit={handleDialogSubmit} onRemoveLock={handleDialogSubmit} />
+      <ChatPasswordDialog dialog={lockDialog} isMobile={false} password={passwordInput} currentPassword={currentPasswordInput} confirmPassword={confirmPasswordInput} securityQuestion={securityQuestionInput} securityAnswer={securityAnswerInput} visibility={lockVisibility} error={dialogError} notice={dialogNotice} submitting={isDialogSubmitting} onPasswordChange={setPasswordInput} onCurrentPasswordChange={setCurrentPasswordInput} onConfirmPasswordChange={setConfirmPasswordInput} onSecurityQuestionChange={setSecurityQuestionInput} onSecurityAnswerChange={setSecurityAnswerInput} onVisibilityChange={setLockVisibility} onClose={closeDialog} onSubmit={handleDialogSubmit} onRemoveLock={handleDialogSubmit} onForgotPassword={() => lockDialog && openLockDialog("recoverLock", lockDialog.user)} />
     </>
   );
 }
