@@ -178,7 +178,7 @@ const ChatActionMenu: React.FC<{
                 <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl ${
                   item.danger ? "bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-300" : "bg-white text-blue-600 dark:bg-gray-800 dark:text-blue-300"
                 }`}>
-                  {isBusy ? <Loader2 size={18} className="animate-spin" /> : <item.icon size={18} />}
+                  {isBusy ? <Loader2 size={17} className="animate-spin" /> : <item.icon size={18} />}
                 </div>
                 <div className="font-medium">{item.label}</div>
               </button>
