@@ -123,7 +123,7 @@ function ChatTopBar({
     return (
       <>
         <header
-          className={`fixed top-16 ${positionClasses} z-40 h-16 border-b border-gray-200 bg-white transition-all duration-300 dark:border-gray-800 dark:bg-black`}
+          className={`fixed top-16 ${positionClasses} z-40 h-16 border-b border-gray-200 bg-white transition-colors duration-200 dark:border-gray-800 dark:bg-black`}
         >
           <div className="flex h-full items-center justify-between px-4">
             <div className="flex items-center gap-3">
@@ -183,7 +183,7 @@ function ChatTopBar({
   return (
     <>
       <header
-        className={`fixed top-16 ${positionClasses} z-40 h-16 border-b transition-all duration-300 ${
+        className={`fixed top-16 ${positionClasses} z-40 h-16 border-b transition-colors duration-200 ${
           selectedUser.isPremium
             ? "border-amber-300/20 bg-gradient-to-r from-stone-950/95 via-amber-950/70 to-slate-950/95 text-slate-50"
             : "border-gray-200 bg-white dark:border-gray-800 dark:bg-black"

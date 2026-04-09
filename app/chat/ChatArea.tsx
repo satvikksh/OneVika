@@ -228,7 +228,7 @@ const MessageStatusIndicator = ({
   );
 };
 
-export default function ChatArea({
+function ChatArea({
   selectedUser,
   loadingInitialMessages,
   loadingOlderMessages,
@@ -370,6 +370,9 @@ export default function ChatArea({
 
   useEffect(() => () => cancelLongPress(), [cancelLongPress]);
 
+  const showInitialConversationLoader =
+    Boolean(selectedUser) && loadingInitialMessages && messages.length === 0;
+
   return (
     <div className="flex flex-col h-full w-full bg-white dark:bg-black">
       {/* Connection Status Indicator (optional) */}
@@ -386,12 +389,13 @@ export default function ChatArea({
         className={`flex-1 overflow-y-auto ${selectedUser ? 'pb-24' : ''} lg:ml-80`}
       >
         {selectedUser ? (
-          loadingInitialMessages ? (
-            <div className="flex items-center justify-center h-full">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-            </div>
-          ) : (
             <div className="space-y-3 p-4">
+              {showInitialConversationLoader ? (
+                <div className="flex items-center justify-center gap-2 py-8 text-sm text-gray-500 dark:text-gray-400">
+                  <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                  Loading messages...
+                </div>
+              ) : null}
               {(hasMoreMessages || loadingOlderMessages) && (
                 <div className="flex justify-center">
                   <button
@@ -425,7 +429,7 @@ export default function ChatArea({
                 </div>
               )}
 
-              {messages.length === 0 ? (
+              {!showInitialConversationLoader && messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full py-8">
                   <div className="text-gray-400 mb-4">💬</div>
                   <p className="text-gray-500 dark:text-gray-400">
@@ -562,7 +566,6 @@ export default function ChatArea({
               )}
               <div ref={messagesEndRef} />
             </div>
-          )
         ) : (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
@@ -757,3 +760,5 @@ export default function ChatArea({
     </div>
   );
 }
+
+export default React.memo(ChatArea);

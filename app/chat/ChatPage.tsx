@@ -686,16 +686,27 @@ export default function ChatPage() {
   useEffect(() => {
     if (!users.length) return;
 
-    setUsers((prev) =>
-      prev.map((user) => ({
-        ...user,
-        isOnline: onlineUsers.includes(user.id),
-      }))
-    );
+    setUsers((prev) => {
+      let hasChanges = false;
+      const nextUsers = prev.map((user) => {
+        const nextIsOnline = onlineUsers.includes(user.id);
+        if (user.isOnline === nextIsOnline) {
+          return user;
+        }
+
+        hasChanges = true;
+        return {
+          ...user,
+          isOnline: nextIsOnline,
+        };
+      });
+
+      return hasChanges ? nextUsers : prev;
+    });
   }, [onlineUsers, users.length]);
 
   useEffect(() => {
-    if (!users.length) return;
+    if (!users.length || selectedUserId) return;
 
     const selectedId = chatPageCache?.selectedUserId;
     if (!selectedId) return;
@@ -704,7 +715,7 @@ export default function ChatPage() {
     if (cachedSelection && (!cachedSelection.isLocked || cachedSelection.isUnlocked)) {
       setSelectedUser(cachedSelection);
     }
-  }, [users]);
+  }, [users, selectedUserId]);
 
   useEffect(() => {
     if (users.length === 0) return;
@@ -2338,6 +2349,16 @@ export default function ChatPage() {
     }
 
     if (user.isLocked && !user.isUnlocked) {
+      return;
+    }
+
+    if (
+      selectedUserRef.current?.id === user.id &&
+      selectedUserRef.current?.conversationId === user.conversationId
+    ) {
+      if (isMobile) {
+        setShowMobileSidebar(false);
+      }
       return;
     }
 
