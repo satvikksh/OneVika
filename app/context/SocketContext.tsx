@@ -53,6 +53,91 @@ const SocketContext = createContext<SocketContextType>({
   markChatMessagesSeen: () => {},
 });
 
+const attachmentsAreEqual = (
+  left: ChatAttachment[] = [],
+  right: ChatAttachment[] = []
+) => {
+  if (left.length !== right.length) return false;
+
+  return left.every((attachment, index) => {
+    const candidate = right[index];
+
+    return (
+      attachment.url === candidate?.url &&
+      attachment.type === candidate?.type &&
+      attachment.mimeType === candidate?.mimeType &&
+      attachment.fileName === candidate?.fileName &&
+      attachment.size === candidate?.size &&
+      attachment.targetUrl === candidate?.targetUrl &&
+      attachment.source === candidate?.source
+    );
+  });
+};
+
+const messagesAreEqual = (left: Message, right: Message) =>
+  left.id === right.id &&
+  left.text === right.text &&
+  left.content === right.content &&
+  left.senderId === right.senderId &&
+  left.receiverId === right.receiverId &&
+  left.chatId === right.chatId &&
+  left.conversationId === right.conversationId &&
+  String(left.timestamp) === String(right.timestamp) &&
+  left.read === right.read &&
+  left.status === right.status &&
+  left.type === right.type &&
+  left.replyToId === right.replyToId &&
+  attachmentsAreEqual(left.attachments, right.attachments);
+
+const mergeMessageBatch = (
+  existingMessages: Message[],
+  incomingMessages: Message[]
+) => {
+  const nextIncoming = incomingMessages.filter((message) => Boolean(message?.id));
+
+  if (nextIncoming.length === 0) {
+    return existingMessages;
+  }
+
+  const incomingById = new Map<string, Message>();
+  nextIncoming.forEach((message) => {
+    incomingById.set(message.id, message);
+  });
+
+  let didChange = false;
+
+  const mergedMessages = existingMessages.map((message) => {
+    const replacement = incomingById.get(message.id);
+
+    if (!replacement) {
+      return message;
+    }
+
+    incomingById.delete(message.id);
+
+    const mergedMessage = {
+      ...message,
+      ...replacement,
+    };
+
+    if (messagesAreEqual(message, mergedMessage)) {
+      return message;
+    }
+
+    didChange = true;
+    return mergedMessage;
+  });
+
+  if (incomingById.size === 0) {
+    return didChange ? mergedMessages : existingMessages;
+  }
+
+  didChange = true;
+  mergedMessages.push(...incomingById.values());
+
+  return mergedMessages;
+};
+
 export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
   const { data: session } = useSession();
   const userId = session?.user?.id ?? null;
@@ -64,10 +149,11 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
   const [messages, setMessages] = useState<Message[]>([]);
 
   const upsertMessage = useCallback((msg: Message) => {
-    setMessages((prev) => {
-      const exists = prev.some((m) => m.id === msg.id);
-      return exists ? prev.map((m) => (m.id === msg.id ? msg : m)) : [...prev, msg];
-    });
+    setMessages((prev) => mergeMessageBatch(prev, [msg]));
+  }, []);
+
+  const addMessages = useCallback((incomingMessages: Message[]) => {
+    setMessages((prev) => mergeMessageBatch(prev, incomingMessages));
   }, []);
 
   const removeMessage = useCallback((messageId: string) => {
@@ -342,7 +428,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
       sendMessage,
       removeMessage,
       emitMessageDelete,
-      addMessages: (msgs: Message[]) => msgs.forEach(upsertMessage),
+      addMessages,
       markMessageAsRead,
       joinChat: () => {},
       leaveChat: () => {},
@@ -356,8 +442,8 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
       sendMessage,
       removeMessage,
       emitMessageDelete,
+      addMessages,
       markMessageAsRead,
-      upsertMessage,
     ]
   );
 

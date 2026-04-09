@@ -72,6 +72,33 @@ type DeleteChatRequestBody = {
   scope?: "messages" | "conversation";
 };
 
+type MessagePageInfo = {
+  hasMoreBefore: boolean;
+  hasMoreAfter: boolean;
+  oldestMessageId: string | null;
+  newestMessageId: string | null;
+};
+
+const DEFAULT_MESSAGE_PAGE_SIZE = 40;
+const MAX_MESSAGE_PAGE_SIZE = 100;
+
+const parsePageSize = (rawValue: string | null) => {
+  const parsed = Number.parseInt(rawValue ?? "", 10);
+
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DEFAULT_MESSAGE_PAGE_SIZE;
+  }
+
+  return Math.min(parsed, MAX_MESSAGE_PAGE_SIZE);
+};
+
+const emptyPageInfo = (): MessagePageInfo => ({
+  hasMoreBefore: false,
+  hasMoreAfter: false,
+  oldestMessageId: null,
+  newestMessageId: null,
+});
+
 export async function GET(
   req: NextRequest,
   context: { params: Promise<{ userId: string }> }
@@ -101,7 +128,7 @@ export async function GET(
     }
 
     if (receiverIdRaw === senderIdRaw) {
-      return NextResponse.json({ messages: [] });
+      return NextResponse.json({ messages: [], pageInfo: emptyPageInfo() });
     }
 
     await dbConnect();
@@ -113,6 +140,31 @@ export async function GET(
 
     const senderId = new ObjectId(senderIdRaw);
     const receiverId = new ObjectId(receiverIdRaw);
+    const searchParams = req.nextUrl.searchParams;
+    const limit = parsePageSize(searchParams.get("limit"));
+    const beforeIdRaw = searchParams.get("beforeId");
+    const afterIdRaw = searchParams.get("afterId");
+
+    if (beforeIdRaw && !ObjectId.isValid(beforeIdRaw)) {
+      return NextResponse.json(
+        { error: "Invalid beforeId cursor" },
+        { status: 400 }
+      );
+    }
+
+    if (afterIdRaw && !ObjectId.isValid(afterIdRaw)) {
+      return NextResponse.json(
+        { error: "Invalid afterId cursor" },
+        { status: 400 }
+      );
+    }
+
+    if (beforeIdRaw && afterIdRaw) {
+      return NextResponse.json(
+        { error: "Use either beforeId or afterId, not both" },
+        { status: 400 }
+      );
+    }
 
     const preference = await db.collection<ChatPreferenceDoc>("chatPreferences").findOne(
       { ownerId: senderId, chatUserId: receiverId },
@@ -141,17 +193,37 @@ export async function GET(
     });
 
     if (!conversation) {
-      return NextResponse.json({ messages: [] });
+      return NextResponse.json({ messages: [], pageInfo: emptyPageInfo() });
     }
 
-    const messages = await db
+    const cursorFilter: Record<string, unknown> = {
+      conversationId: conversation._id,
+      deletedForUserIds: { $ne: senderId },
+    };
+
+    if (beforeIdRaw) {
+      cursorFilter._id = { $lt: new ObjectId(beforeIdRaw) };
+    } else if (afterIdRaw) {
+      cursorFilter._id = { $gt: new ObjectId(afterIdRaw) };
+    }
+
+    const sortDirection = afterIdRaw ? 1 : -1;
+    const rawMessages = await db
       .collection("messages")
-      .find({
-        conversationId: conversation._id,
-        deletedForUserIds: { $ne: senderId },
-      })
-      .sort({ createdAt: 1 })
+      .find(cursorFilter)
+      .sort({ _id: sortDirection })
+      .limit(limit + 1)
       .toArray();
+
+    const hasMore =
+      rawMessages.length > limit;
+    const messages = hasMore
+      ? rawMessages.slice(0, limit)
+      : rawMessages;
+
+    if (sortDirection === -1) {
+      messages.reverse();
+    }
 
     const formatted = messages.map((m) => {
       const message = m as StoredMessage;
@@ -197,7 +269,14 @@ export async function GET(
       };
     });
 
-    return NextResponse.json({ messages: formatted });
+    const pageInfo: MessagePageInfo = {
+      hasMoreBefore: beforeIdRaw ? hasMore : sortDirection === -1 ? hasMore : false,
+      hasMoreAfter: afterIdRaw ? hasMore : false,
+      oldestMessageId: formatted[0]?.id ?? null,
+      newestMessageId: formatted[formatted.length - 1]?.id ?? null,
+    };
+
+    return NextResponse.json({ messages: formatted, pageInfo });
   } catch (error) {
     console.error("FETCH MESSAGES ERROR:", error);
     return NextResponse.json(

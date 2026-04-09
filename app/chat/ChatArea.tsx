@@ -1,7 +1,7 @@
 // ChatArea.tsx
 "use client";
 
-import React, { useCallback, useEffect } from "react";
+import React, { useCallback, useEffect, useLayoutEffect } from "react";
 import { ChatAttachment, Message, User } from "../types/socket";
 import { Session } from "next-auth";
 import {
@@ -19,9 +19,14 @@ import {
 
 interface ChatAreaProps {
   selectedUser: User | null;
-  loadingMessages: boolean;
+  loadingInitialMessages: boolean;
+  loadingOlderMessages: boolean;
+  syncingMessages: boolean;
+  hasMoreMessages: boolean;
+  messageError: string | null;
+  onLoadOlderMessages: () => void;
   newMessage: string;
-    messages: Message[];
+  messages: Message[];
   setNewMessage: (message: string) => void;
   sendingMessage: boolean;
   handleTyping: () => void;
@@ -229,7 +234,12 @@ const MessageStatusIndicator = ({
 
 export default function ChatArea({
   selectedUser,
-  loadingMessages,
+  loadingInitialMessages,
+  loadingOlderMessages,
+  syncingMessages,
+  hasMoreMessages,
+  messageError,
+  onLoadOlderMessages,
   messages = [],
   newMessage,
   setNewMessage,
@@ -269,6 +279,14 @@ export default function ChatArea({
   const currentUserId = session?.user?.id;
   const longPressTimerRef = React.useRef<number | null>(null);
   const touchOriginRef = React.useRef<{ x: number; y: number } | null>(null);
+  const scrollContainerRef = React.useRef<HTMLDivElement | null>(null);
+  const previousMessageIdsRef = React.useRef<string[]>([]);
+  const previousSelectedUserIdRef = React.useRef<string | null>(null);
+  const previousScrollMetricsRef = React.useRef({
+    scrollHeight: 0,
+    scrollTop: 0,
+    clientHeight: 0,
+  });
   const [pressedMessageId, setPressedMessageId] = React.useState<string | null>(null);
 
   // Handle enter key for sending
@@ -281,14 +299,70 @@ export default function ChatArea({
     onSendMessage();
   };
 
-  // Auto-scroll to bottom when messages change
-  useEffect(() => {
-    if (messages.length > 0) {
-      setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-      }, 100);
+  const captureScrollMetrics = useCallback(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    previousScrollMetricsRef.current = {
+      scrollHeight: container.scrollHeight,
+      scrollTop: container.scrollTop,
+      clientHeight: container.clientHeight,
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    const container = scrollContainerRef.current;
+    const currentMessageIds = messages.map((message) => message.id);
+    const currentSelectedUserId = selectedUser?.id ?? null;
+
+    if (!container) {
+      previousMessageIdsRef.current = currentMessageIds;
+      previousSelectedUserIdRef.current = currentSelectedUserId;
+      return;
     }
-  }, [messages, messagesEndRef]);
+
+    const previousMessageIds = previousMessageIdsRef.current;
+    const previousSelectedUserId = previousSelectedUserIdRef.current;
+    const previousMetrics = previousScrollMetricsRef.current;
+    const conversationChanged = previousSelectedUserId !== currentSelectedUserId;
+    const prependedMessages =
+      previousMessageIds.length > 0 &&
+      currentMessageIds.length > previousMessageIds.length &&
+      previousMessageIds[0] !== currentMessageIds[0] &&
+      previousMessageIds[previousMessageIds.length - 1] ===
+        currentMessageIds[currentMessageIds.length - 1];
+    const appendedMessages =
+      previousMessageIds.length > 0 &&
+      currentMessageIds.length > previousMessageIds.length &&
+      previousMessageIds[previousMessageIds.length - 1] !==
+        currentMessageIds[currentMessageIds.length - 1];
+    const firstMessageLoad =
+      previousMessageIds.length === 0 && currentMessageIds.length > 0;
+    const distanceFromBottom =
+      previousMetrics.scrollHeight -
+      (previousMetrics.scrollTop + previousMetrics.clientHeight);
+    const wasNearBottom = distanceFromBottom < 120;
+    const latestMessage = messages[messages.length - 1];
+    const shouldStickToBottom =
+      wasNearBottom || latestMessage?.senderId === currentUserId;
+
+    if (conversationChanged || firstMessageLoad) {
+      container.scrollTop = container.scrollHeight;
+    } else if (prependedMessages) {
+      const heightDelta = container.scrollHeight - previousMetrics.scrollHeight;
+      container.scrollTop = previousMetrics.scrollTop + heightDelta;
+    } else if (appendedMessages && shouldStickToBottom) {
+      container.scrollTop = container.scrollHeight;
+    }
+
+    previousMessageIdsRef.current = currentMessageIds;
+    previousSelectedUserIdRef.current = currentSelectedUserId;
+    previousScrollMetricsRef.current = {
+      scrollHeight: container.scrollHeight,
+      scrollTop: container.scrollTop,
+      clientHeight: container.clientHeight,
+    };
+  }, [messages, selectedUser?.id, currentUserId]);
 
   const cancelLongPress = useCallback(() => {
     if (longPressTimerRef.current) {
@@ -311,14 +385,51 @@ export default function ChatArea({
       )}
        */}
       {/* Main Messages Area - Takes remaining space */}
-      <div className={`flex-1 overflow-y-auto ${selectedUser ? 'pb-24' : ''} lg:ml-80`}>
+      <div
+        ref={scrollContainerRef}
+        onScroll={captureScrollMetrics}
+        className={`flex-1 overflow-y-auto ${selectedUser ? 'pb-24' : ''} lg:ml-80`}
+      >
         {selectedUser ? (
-          loadingMessages ? (
+          loadingInitialMessages ? (
             <div className="flex items-center justify-center h-full">
               <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
             </div>
           ) : (
             <div className="space-y-3 p-4">
+              {(hasMoreMessages || loadingOlderMessages) && (
+                <div className="flex justify-center">
+                  <button
+                    type="button"
+                    onClick={onLoadOlderMessages}
+                    disabled={loadingOlderMessages}
+                    className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-xs font-medium text-gray-600 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800"
+                  >
+                    {loadingOlderMessages ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Loading older messages...
+                      </>
+                    ) : (
+                      "Load older messages"
+                    )}
+                  </button>
+                </div>
+              )}
+
+              {messageError && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
+                  {messageError}
+                </div>
+              )}
+
+              {syncingMessages && messages.length > 0 && (
+                <div className="flex items-center justify-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Checking for new messages...
+                </div>
+              )}
+
               {messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full py-8">
                   <div className="text-gray-400 mb-4">💬</div>

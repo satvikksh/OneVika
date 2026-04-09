@@ -236,6 +236,17 @@ type PendingAttachment = {
   size: number;
 };
 
+type MessagePageInfo = {
+  hasMoreBefore: boolean;
+  oldestMessageId: string | null;
+  newestMessageId: string | null;
+};
+
+type MessageFetchMode = "initial" | "older" | "newer";
+
+const INITIAL_MESSAGE_PAGE_SIZE = 40;
+const MESSAGE_SYNC_DEBOUNCE_MS = 300;
+
 let chatPageCache: ChatPageCache | null = null;
 
 export default function ChatPage() {
@@ -262,7 +273,11 @@ export default function ChatPage() {
   const [typingUsers] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
   const [loadingUsers, setLoadingUsers] = useState(true);
-  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [initialLoadingMessageUserId, setInitialLoadingMessageUserId] = useState<string | null>(null);
+  const [loadingOlderMessageUserId, setLoadingOlderMessageUserId] = useState<string | null>(null);
+  const [syncingMessageUserId, setSyncingMessageUserId] = useState<string | null>(null);
+  const [messagePageInfoByUser, setMessagePageInfoByUser] = useState<Record<string, MessagePageInfo>>({});
+  const [messageErrorsByUser, setMessageErrorsByUser] = useState<Record<string, string | null>>({});
   const [sendingMessage, setSendingMessage] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
@@ -301,7 +316,13 @@ export default function ChatPage() {
   const textAreaObserverRef = useRef<MutationObserver | null>(null);
   const focusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const loadedMessagesByUserRef = useRef<Set<string>>(new Set());
+  const socketMessagesRef = useRef<Message[]>(socketMessages);
+  const messageRequestControllersRef = useRef<Map<string, AbortController>>(new Map());
+  const messageSyncTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const previousConnectionStateRef = useRef(isConnected);
   const routeSelectionHandledRef = useRef(false);
+  const currentUserId = session?.user?.id;
+  const selectedUserId = selectedUser?.id ?? null;
 
   const mergeUserState = useCallback((userId: string, updates: Partial<User>) => {
     setUsers((prev) =>
@@ -561,7 +582,7 @@ export default function ChatPage() {
         isOnline: onlineUsers.includes(user.id),
       }))
     );
-  }, [onlineUsers]);
+  }, [onlineUsers, users.length]);
 
   useEffect(() => {
     if (!users.length) return;
@@ -654,9 +675,9 @@ export default function ChatPage() {
 
   /* ------------------------------- JOIN/LEAVE CHAT ROOMS ------------------------------- */
   useEffect(() => {
-    if (!selectedUser || !session?.user?.id) return;
+    if (!selectedUserId || !session?.user?.id) return;
 
-    const users = [session.user.id, selectedUser.id].sort();
+    const users = [session.user.id, selectedUserId].sort();
     const chatId = `chat_${users[0]}_${users[1]}`;
 
     chatIdRef.current = chatId;
@@ -665,21 +686,103 @@ export default function ChatPage() {
     return () => {
       leaveChat(chatId);
     };
-  }, [selectedUser?.id, session?.user?.id, joinChat, leaveChat]);
+  }, [selectedUserId, session?.user?.id, joinChat, leaveChat]);
 
-  /* ---------------------------- FETCH INITIAL MESSAGES ---------------------------- */
-  const fetchInitialMessages = useCallback(
-    async (userId: string) => {
-      if (!session?.user?.id) return;
+  const getConversationMessagesSnapshot = useCallback(
+    (chatUserId: string) => {
+      if (!chatUserId || !currentUserId) return [];
+
+      return socketMessagesRef.current
+        .filter(
+          (msg) =>
+            (msg.senderId === currentUserId && msg.receiverId === chatUserId) ||
+            (msg.senderId === chatUserId && msg.receiverId === currentUserId)
+        )
+        .sort((a, b) => getMessageTimestamp(a) - getMessageTimestamp(b));
+    },
+    [currentUserId]
+  );
+
+  const getPersistedCursorId = useCallback(
+    (messages: Message[], edge: "oldest" | "newest") => {
+      const persistedMessages = messages.filter((message) => isValidObjectId(message.id));
+
+      if (persistedMessages.length === 0) {
+        return null;
+      }
+
+      return edge === "oldest"
+        ? persistedMessages[0]?.id ?? null
+        : persistedMessages[persistedMessages.length - 1]?.id ?? null;
+    },
+    []
+  );
+
+  const abortMessageRequest = useCallback((requestKey: string) => {
+    const existingController = messageRequestControllersRef.current.get(requestKey);
+
+    if (!existingController) {
+      return;
+    }
+
+    existingController.abort();
+    messageRequestControllersRef.current.delete(requestKey);
+  }, []);
+
+  const fetchConversationMessages = useCallback(
+    async (userId: string, mode: MessageFetchMode) => {
+      if (!session?.user?.id) return false;
+
+      const requestKey = `${userId}:${mode}`;
+      const existingMessages = getConversationMessagesSnapshot(userId);
+      const cursorId =
+        mode === "older"
+          ? getPersistedCursorId(existingMessages, "oldest")
+          : mode === "newer"
+            ? getPersistedCursorId(existingMessages, "newest")
+            : null;
+      const isCursorlessSync = mode === "newer" && !cursorId;
+
+      if (mode === "older" && !cursorId) {
+        return false;
+      }
+
+      abortMessageRequest(requestKey);
+
+      const controller = new AbortController();
+      messageRequestControllersRef.current.set(requestKey, controller);
+      setMessageErrorsByUser((prev) => ({ ...prev, [userId]: null }));
+
+      if (mode === "initial") {
+        setInitialLoadingMessageUserId(userId);
+      } else if (mode === "older") {
+        setLoadingOlderMessageUserId(userId);
+      } else {
+        setSyncingMessageUserId(userId);
+      }
 
       try {
-        setLoadingMessages(true);
+        const params = new URLSearchParams({
+          limit: String(INITIAL_MESSAGE_PAGE_SIZE),
+        });
 
-        const res = await fetch(`/api/messages/by-user/${userId}`);
+        if (mode === "older" && cursorId) {
+          params.set("beforeId", cursorId);
+        }
+
+        if (mode === "newer" && cursorId) {
+          params.set("afterId", cursorId);
+        }
+
+        const res = await fetch(`/api/messages/by-user/${userId}?${params.toString()}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
         const data = await res.json().catch(() => ({}));
 
         if (res.status === 423) {
           mergeUserState(userId, { isUnlocked: false });
+          loadedMessagesByUserRef.current.delete(userId);
           return false;
         }
 
@@ -687,59 +790,221 @@ export default function ChatPage() {
           throw new Error(data.error || "Failed to fetch messages");
         }
 
-        addMessages(data.messages);
+        if (Array.isArray(data.messages) && data.messages.length > 0) {
+          addMessages(data.messages);
+        }
+
+        setMessagePageInfoByUser((prev) => ({
+          ...prev,
+          [userId]: {
+            hasMoreBefore:
+              mode === "newer" && !isCursorlessSync
+                ? prev[userId]?.hasMoreBefore ?? false
+                : Boolean(data.pageInfo?.hasMoreBefore),
+            oldestMessageId:
+              mode === "newer" && !isCursorlessSync
+                ? prev[userId]?.oldestMessageId ??
+                  data.pageInfo?.oldestMessageId ??
+                  null
+                : data.pageInfo?.oldestMessageId ??
+              prev[userId]?.oldestMessageId ??
+              null,
+            newestMessageId:
+              mode === "older"
+                ? prev[userId]?.newestMessageId ??
+                  data.pageInfo?.newestMessageId ??
+                  null
+                : data.pageInfo?.newestMessageId ??
+              prev[userId]?.newestMessageId ??
+              null,
+          },
+        }));
+
+        if (mode === "initial") {
+          loadedMessagesByUserRef.current.add(userId);
+        }
+
         return true;
-      } catch (err) {
-        console.error("Fetch initial messages failed:", err);
+      } catch (error) {
+        if ((error as DOMException).name === "AbortError") {
+          return false;
+        }
+
+        console.error(`Fetch ${mode} messages failed:`, error);
+        setMessageErrorsByUser((prev) => ({
+          ...prev,
+          [userId]:
+            error instanceof Error ? error.message : "Failed to update messages",
+        }));
+
+        if (mode === "initial") {
+          loadedMessagesByUserRef.current.delete(userId);
+        }
+
         return false;
       } finally {
-        setLoadingMessages(false);
+        if (messageRequestControllersRef.current.get(requestKey) === controller) {
+          messageRequestControllersRef.current.delete(requestKey);
+        }
+
+        if (mode === "initial") {
+          setInitialLoadingMessageUserId((prev) => (prev === userId ? null : prev));
+        } else if (mode === "older") {
+          setLoadingOlderMessageUserId((prev) => (prev === userId ? null : prev));
+        } else {
+          setSyncingMessageUserId((prev) => (prev === userId ? null : prev));
+        }
       }
     },
-    [session?.user?.id, addMessages, mergeUserState]
+    [
+      session?.user?.id,
+      getConversationMessagesSnapshot,
+      getPersistedCursorId,
+      abortMessageRequest,
+      mergeUserState,
+      addMessages,
+    ]
   );
 
-  useEffect(() => {
-    if (!selectedUser?.id) return;
-    if (loadedMessagesByUserRef.current.has(selectedUser.id)) return;
-
-    let isMounted = true;
-
-    (async () => {
-      const didLoad = await fetchInitialMessages(selectedUser.id);
-
-      if (!isMounted) return;
-
-      if (didLoad) {
-        loadedMessagesByUserRef.current.add(selectedUser.id);
+  const scheduleLatestMessageSync = useCallback(
+    (userId: string) => {
+      if (!loadedMessagesByUserRef.current.has(userId)) {
         return;
       }
 
-      loadedMessagesByUserRef.current.delete(selectedUser.id);
-    })();
+      const existingTimeout = messageSyncTimeoutsRef.current.get(userId);
+      if (existingTimeout) {
+        clearTimeout(existingTimeout);
+      }
+
+      const timeout = setTimeout(() => {
+        messageSyncTimeoutsRef.current.delete(userId);
+        void fetchConversationMessages(userId, "newer");
+      }, MESSAGE_SYNC_DEBOUNCE_MS);
+
+      messageSyncTimeoutsRef.current.set(userId, timeout);
+    },
+    [fetchConversationMessages]
+  );
+
+  const resetConversationFetchState = useCallback(
+    (userId: string) => {
+      (["initial", "older", "newer"] as MessageFetchMode[]).forEach((mode) => {
+        abortMessageRequest(`${userId}:${mode}`);
+      });
+
+      const pendingTimeout = messageSyncTimeoutsRef.current.get(userId);
+      if (pendingTimeout) {
+        clearTimeout(pendingTimeout);
+        messageSyncTimeoutsRef.current.delete(userId);
+      }
+
+      setInitialLoadingMessageUserId((prev) => (prev === userId ? null : prev));
+      setLoadingOlderMessageUserId((prev) => (prev === userId ? null : prev));
+      setSyncingMessageUserId((prev) => (prev === userId ? null : prev));
+      setMessagePageInfoByUser((prev) => {
+        if (!(userId in prev)) {
+          return prev;
+        }
+
+        const next = { ...prev };
+        delete next[userId];
+        return next;
+      });
+      setMessageErrorsByUser((prev) => {
+        if (!(userId in prev)) {
+          return prev;
+        }
+
+        const next = { ...prev };
+        delete next[userId];
+        return next;
+      });
+    },
+    [abortMessageRequest]
+  );
+
+  useEffect(() => {
+    socketMessagesRef.current = socketMessages;
+  }, [socketMessages]);
+
+  useEffect(() => {
+    if (!selectedUser?.id) return;
+
+    if (loadedMessagesByUserRef.current.has(selectedUser.id)) {
+      scheduleLatestMessageSync(selectedUser.id);
+      return;
+    }
+
+    void fetchConversationMessages(selectedUser.id, "initial");
+  }, [selectedUser?.id, fetchConversationMessages, scheduleLatestMessageSync]);
+
+  useEffect(() => {
+    const didReconnect = isConnected && !previousConnectionStateRef.current;
+    previousConnectionStateRef.current = isConnected;
+
+    if (!didReconnect || !selectedUser?.id) {
+      return;
+    }
+
+    scheduleLatestMessageSync(selectedUser.id);
+  }, [isConnected, selectedUser?.id, scheduleLatestMessageSync]);
+
+  useEffect(() => {
+    if (!selectedUser?.id) return;
+
+    const syncCurrentChat = () => {
+      scheduleLatestMessageSync(selectedUser.id);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        syncCurrentChat();
+      }
+    };
+
+    window.addEventListener("focus", syncCurrentChat);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      isMounted = false;
+      window.removeEventListener("focus", syncCurrentChat);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [selectedUser?.id, fetchInitialMessages]);
+  }, [selectedUser?.id, scheduleLatestMessageSync]);
 
+  useEffect(() => {
+    const requestControllers = messageRequestControllersRef.current;
+    const syncTimeouts = messageSyncTimeoutsRef.current;
+
+    return () => {
+      requestControllers.forEach((controller) => {
+        controller.abort();
+      });
+      requestControllers.clear();
+
+      syncTimeouts.forEach((timeout) => {
+        clearTimeout(timeout);
+      });
+      syncTimeouts.clear();
+    };
+  }, []);
+  
   /* ---------------------------- FILTER MESSAGES FOR SELECTED USER ---------------------------- */
-  const currentUserId = session?.user?.id;
   
   // Filter messages for the selected user from SocketContext
   const filteredMessages = useMemo(
     () =>
       socketMessages.filter((msg) => {
-        if (!selectedUser || !currentUserId) return false;
+        if (!selectedUserId || !currentUserId) return false;
 
         return (
           (msg.senderId === currentUserId &&
-            msg.receiverId === selectedUser.id) ||
-          (msg.senderId === selectedUser.id &&
+            msg.receiverId === selectedUserId) ||
+          (msg.senderId === selectedUserId &&
             msg.receiverId === currentUserId)
         );
       }),
-    [socketMessages, selectedUser?.id, currentUserId]
+    [socketMessages, selectedUserId, currentUserId]
   );
 
   // Sort messages by timestamp
@@ -751,6 +1016,30 @@ export default function ChatPage() {
       ),
     [filteredMessages]
   );
+
+  const selectedMessagePageInfo = selectedUserId
+    ? messagePageInfoByUser[selectedUserId]
+    : undefined;
+  const loadingInitialMessages =
+    selectedUserId !== null &&
+    initialLoadingMessageUserId === selectedUserId &&
+    sortedMessages.length === 0;
+  const loadingOlderMessages =
+    selectedUserId !== null && loadingOlderMessageUserId === selectedUserId;
+  const syncingNewMessages =
+    selectedUserId !== null && syncingMessageUserId === selectedUserId;
+  const selectedMessageError = selectedUserId
+    ? messageErrorsByUser[selectedUserId] ?? null
+    : null;
+  const hasOlderMessages = Boolean(selectedMessagePageInfo?.hasMoreBefore);
+
+  const handleLoadOlderMessages = useCallback(() => {
+    if (!selectedUserId || loadingOlderMessages) {
+      return;
+    }
+
+    void fetchConversationMessages(selectedUserId, "older");
+  }, [selectedUserId, loadingOlderMessages, fetchConversationMessages]);
 
   /* ---------------------------- MARK MESSAGES AS READ ---------------------------- */
   useEffect(() => {
@@ -1205,6 +1494,7 @@ export default function ChatPage() {
 
         mergeUserState(user.id, data.preference ?? { isUnlocked: true });
         loadedMessagesByUserRef.current.delete(user.id);
+        resetConversationFetchState(user.id);
 
         return { success: true };
       } catch (error) {
@@ -1214,7 +1504,7 @@ export default function ChatPage() {
         setUpdatingChatUserId(null);
       }
     },
-    [mergeUserState]
+    [mergeUserState, resetConversationFetchState]
   );
 
   const handleRemoveLock = useCallback(
@@ -1357,6 +1647,16 @@ export default function ChatPage() {
               lastMessageAt: null,
               unreadCount: 0,
             });
+            resetConversationFetchState(user.id);
+            loadedMessagesByUserRef.current.add(user.id);
+            setMessagePageInfoByUser((prev) => ({
+              ...prev,
+              [user.id]: {
+                hasMoreBefore: false,
+                oldestMessageId: null,
+                newestMessageId: null,
+              },
+            }));
             setUnreadByUser((prev) => ({ ...prev, [user.id]: 0 }));
             setContextMenu(null);
             setReplyTo(null);
@@ -1369,7 +1669,12 @@ export default function ChatPage() {
         },
       });
     },
-    [mergeUserState, openConfirmDialog, removeMessagesForChat]
+    [
+      mergeUserState,
+      openConfirmDialog,
+      removeMessagesForChat,
+      resetConversationFetchState,
+    ]
   );
 
   const handleSelectUser = (user: User) => {
@@ -1464,6 +1769,7 @@ export default function ChatPage() {
               return next;
             });
             loadedMessagesByUserRef.current.delete(user.id);
+            resetConversationFetchState(user.id);
 
             if (selectedUser?.id === user.id) {
               setSelectedUser(null);
@@ -1488,6 +1794,7 @@ export default function ChatPage() {
       isMobile,
       openConfirmDialog,
       removeMessagesForChat,
+      resetConversationFetchState,
       selectedUser?.id,
     ]
   );
@@ -1530,15 +1837,6 @@ export default function ChatPage() {
       }
     }, 100);
   };
-
-  /* ----------------------------- SCROLL TO BOTTOM ----------------------------- */
-  useEffect(() => {
-    if (sortedMessages.length > 0) {
-      setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-      }, 100);
-    }
-  }, [sortedMessages]);
 
   /* ---------------------------- GET UNREAD COUNT ---------------------------- */
   const getUnreadCount = useCallback((userId: string) => {
@@ -1601,8 +1899,7 @@ export default function ChatPage() {
   }, [users, socketMessages, currentUserId, unreadByUser]);
 
   /* -------------------------------- LOADING -------------------------------- */
-  // UPDATED: Using the new ChatSkeleton instead of the spinner
-  if (status === "loading" || loadingUsers) {
+  if (status === "loading" || (loadingUsers && users.length === 0)) {
     return <ChatSkeleton />;
   }
 
@@ -1741,7 +2038,12 @@ export default function ChatPage() {
           {/* Use ChatArea Component */}
           <ChatArea
             selectedUser={selectedUser}
-            loadingMessages={loadingMessages}
+            loadingInitialMessages={loadingInitialMessages}
+            loadingOlderMessages={loadingOlderMessages}
+            syncingMessages={syncingNewMessages}
+            hasMoreMessages={hasOlderMessages}
+            messageError={selectedMessageError}
+            onLoadOlderMessages={handleLoadOlderMessages}
             messages={sortedMessages}
             newMessage={newMessage}
             setNewMessage={setNewMessage}
