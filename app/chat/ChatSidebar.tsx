@@ -699,7 +699,7 @@ const CreateGroupDialog: React.FC<{
   );
 };
 
-export default function ChatSidebar({
+function ChatSidebar({
   users,
   selectedUser,
   onSelectUser,
@@ -865,14 +865,12 @@ export default function ChatSidebar({
   );
 
   const directChats = filteredUsers.filter((user) => user.chatType !== "group");
-  const groupChats = filteredUsers.filter((user) => user.chatType === "group");
   const creatableUsers = directChats.filter((user) => user.canMessage !== false);
 
   const suggestedUsers = searchQuery.trim() ? filteredUsers.slice(0, 5) : [];
-  const activeUsers = directChats.filter((user) => !user.isArchived);
-  const archivedUsers = directChats.filter((user) => user.isArchived);
-  const activeGroups = groupChats.filter((user) => !user.isArchived);
-  const archivedGroups = groupChats.filter((user) => user.isArchived);
+  const activeChats = filteredUsers.filter((user) => !user.isArchived);
+  const archivedChats = filteredUsers.filter((user) => user.isArchived);
+  const groupCount = filteredUsers.filter((user) => user.chatType === "group").length;
   const highlightedUserId = actionMenu?.user.id ?? pressingUserId;
 
   const handleUserSelect = useCallback((user: User) => {
@@ -1250,35 +1248,17 @@ export default function ChatSidebar({
 
     return (
       <div className="pb-24">
-        {activeGroups.length > 0 ? (
-          <div className="border-b border-gray-200/80 pb-2 dark:border-gray-800">
-            <div className="px-4 py-3">
-              <div className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">Groups</div>
-              <div className="mt-1 text-sm text-gray-600 dark:text-gray-300">{activeGroups.length} group conversation{activeGroups.length === 1 ? "" : "s"}</div>
-            </div>
-            <div>{activeGroups.map((user) => renderUserRow(user))}</div>
-          </div>
-        ) : null}
-        {activeUsers.length > 0 ? <div>{activeUsers.map((user) => renderUserRow(user))}</div> : null}
-        {archivedUsers.length > 0 ? (
+        {activeChats.length > 0 ? <div>{activeChats.map((user) => renderUserRow(user))}</div> : null}
+        {archivedChats.length > 0 ? (
           <div className="border-t border-gray-200/80 pt-2 dark:border-gray-800">
             <button onClick={() => setIsArchivedExpanded((prev) => !prev)} className="flex w-full items-center justify-between px-4 py-3 text-left" aria-expanded={isArchivedExpanded}>
               <div>
                 <div className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">Archive</div>
-                <div className="mt-1 text-sm text-gray-600 dark:text-gray-300">{archivedUsers.length} chat{archivedUsers.length === 1 ? "" : "s"} archived</div>
+                <div className="mt-1 text-sm text-gray-600 dark:text-gray-300">{archivedChats.length} chat{archivedChats.length === 1 ? "" : "s"} archived</div>
               </div>
               {isArchivedExpanded ? <ChevronDown size={18} className="text-gray-400" /> : <ChevronRight size={18} className="text-gray-400" />}
             </button>
-            {isArchivedExpanded ? <div>{archivedUsers.map((user) => renderUserRow(user))}</div> : null}
-          </div>
-        ) : null}
-        {archivedGroups.length > 0 ? (
-          <div className="border-t border-gray-200/80 pt-2 dark:border-gray-800">
-            <div className="px-4 py-3">
-              <div className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">Archived groups</div>
-              <div className="mt-1 text-sm text-gray-600 dark:text-gray-300">{archivedGroups.length} archived group{archivedGroups.length === 1 ? "" : "s"}</div>
-            </div>
-            <div>{archivedGroups.map((user) => renderUserRow(user))}</div>
+            {isArchivedExpanded ? <div>{archivedChats.map((user) => renderUserRow(user))}</div> : null}
           </div>
         ) : null}
       </div>
@@ -1292,7 +1272,7 @@ export default function ChatSidebar({
           {!isMobile ? <div className="rounded-xl bg-blue-100 p-2 text-blue-600 dark:bg-blue-950/40 dark:text-blue-300"><MessageSquare size={20} /></div> : <button onClick={onToggleMobileSidebar} className="rounded-lg p-2 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Close sidebar"><ArrowLeft size={20} /></button>}
           <div>
             <h2 className="text-xl font-bold text-gray-900 dark:text-white">{isMobile ? "Chats" : "Messages"}</h2>
-            {!isMobile ? <p className="text-sm text-gray-500 dark:text-gray-400">{activeUsers.length} direct, {activeGroups.length} groups</p> : null}
+            {!isMobile ? <p className="text-sm text-gray-500 dark:text-gray-400">{activeChats.length} active chats, {groupCount} groups</p> : null}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -1414,6 +1394,8 @@ export default function ChatSidebar({
     </>
   );
 }
+
+export default React.memo(ChatSidebar);
 
 export const MobileSidebarToggle: React.FC<{
   onClick: () => void;

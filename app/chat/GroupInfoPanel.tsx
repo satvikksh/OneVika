@@ -41,7 +41,7 @@ interface GroupInfoPanelProps {
   onExitGroup: () => void;
 }
 
-export default function GroupInfoPanel({
+function GroupInfoPanel({
   isOpen,
   isMobile,
   selectedGroup,
@@ -370,3 +370,5 @@ export default function GroupInfoPanel({
     </>
   );
 }
+
+export default React.memo(GroupInfoPanel);

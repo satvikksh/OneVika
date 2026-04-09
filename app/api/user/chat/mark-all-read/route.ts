@@ -16,6 +16,7 @@ export async function POST() {
 
     const db = await getNativeDb();
     const currentUserId = new ObjectId(session.user.id);
+    const now = new Date();
 
     const result = await db.collection("messages").updateMany(
       {
@@ -30,6 +31,39 @@ export async function POST() {
         },
       }
     );
+
+    const conversations = await db
+      .collection("conversations")
+      .find(
+        { participants: currentUserId },
+        { projection: { _id: 1 } }
+      )
+      .toArray();
+
+    if (conversations.length > 0) {
+      await db.collection("chatReadStates").bulkWrite(
+        conversations.map((conversation) => ({
+          updateOne: {
+            filter: {
+              ownerId: currentUserId,
+              conversationId: conversation._id,
+            },
+            update: {
+              $set: {
+                lastSeenAt: now,
+                updatedAt: now,
+              },
+              $setOnInsert: {
+                ownerId: currentUserId,
+                conversationId: conversation._id,
+                createdAt: now,
+              },
+            },
+            upsert: true,
+          },
+        }))
+      );
+    }
 
     return NextResponse.json({
       success: true,

@@ -299,8 +299,51 @@ export async function GET(req: NextRequest) {
             $match: {
               conversationId: { $in: allConversationIds },
               senderId: { $ne: currentUserId },
-              readByUserIds: { $ne: currentUserId },
               deletedForUserIds: { $ne: currentUserId },
+            },
+          },
+          {
+            $lookup: {
+              from: "chatReadStates",
+              let: { currentConversationId: "$conversationId" },
+              pipeline: [
+                {
+                  $match: {
+                    ownerId: currentUserId,
+                  },
+                },
+                {
+                  $match: {
+                    $expr: {
+                      $eq: ["$conversationId", "$$currentConversationId"],
+                    },
+                  },
+                },
+                {
+                  $project: {
+                    _id: 0,
+                    lastSeenAt: 1,
+                  },
+                },
+              ],
+              as: "readState",
+            },
+          },
+          {
+            $addFields: {
+              lastSeenAt: {
+                $ifNull: [
+                  { $arrayElemAt: ["$readState.lastSeenAt", 0] },
+                  new Date(0),
+                ],
+              },
+            },
+          },
+          {
+            $match: {
+              $expr: {
+                $gt: ["$createdAt", "$lastSeenAt"],
+              },
             },
           },
           {

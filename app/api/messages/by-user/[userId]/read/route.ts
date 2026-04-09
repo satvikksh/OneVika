@@ -111,6 +111,24 @@ export async function POST(
     }
 
     await db?.collection("messages").updateMany(filter, update);
+    await db?.collection("chatReadStates").updateOne(
+      {
+        ownerId: senderObjId,
+        conversationId: conversation._id,
+      },
+      {
+        $set: {
+          lastSeenAt: new Date(),
+          updatedAt: new Date(),
+        },
+        $setOnInsert: {
+          ownerId: senderObjId,
+          conversationId: conversation._id,
+          createdAt: new Date(),
+        },
+      },
+      { upsert: true }
+    );
 
     return NextResponse.json({ success: true });
   } catch (error) {

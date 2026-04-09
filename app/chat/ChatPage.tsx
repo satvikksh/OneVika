@@ -344,6 +344,7 @@ export default function ChatPage() {
   const messageSyncTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
   const previousConnectionStateRef = useRef(isConnected);
   const routeSelectionHandledRef = useRef(false);
+  const selectedUserRef = useRef<User | null>(selectedUser);
   const currentUserId = session?.user?.id;
   const selectedUserId = selectedUser?.id ?? null;
   const selectedConversationId =
@@ -784,12 +785,13 @@ export default function ChatPage() {
 
   /* ------------------------------- JOIN/LEAVE CHAT ROOMS ------------------------------- */
   useEffect(() => {
-    if (!selectedUser || !session?.user?.id) return;
+    const activeUser = selectedUserRef.current;
+    if (!activeUser || !session?.user?.id || !selectedUserId) return;
 
     const chatId =
-      selectedUser.chatType === "group"
-        ? `conversation_${selectedUser.conversationId ?? selectedUser.id}`
-        : `chat_${[session.user.id, selectedUser.id].sort().join("_")}`;
+      activeUser.chatType === "group"
+        ? `conversation_${activeUser.conversationId ?? activeUser.id}`
+        : `chat_${[session.user.id, activeUser.id].sort().join("_")}`;
 
     chatIdRef.current = chatId;
     joinChat(chatId);
@@ -797,7 +799,7 @@ export default function ChatPage() {
     return () => {
       leaveChat(chatId);
     };
-  }, [selectedUser, session?.user?.id, joinChat, leaveChat]);
+  }, [joinChat, leaveChat, selectedConversationId, selectedUserId, session?.user?.id]);
 
   const getConversationMessagesSnapshot = useCallback(
     (chat: User) => {
@@ -1049,32 +1051,45 @@ export default function ChatPage() {
   }, [socketMessages]);
 
   useEffect(() => {
-    if (!selectedUser) return;
+    selectedUserRef.current = selectedUser;
+  }, [selectedUser]);
 
-    if (loadedMessagesByUserRef.current.has(selectedUser.id)) {
-      scheduleLatestMessageSync(selectedUser);
+  useEffect(() => {
+    const activeUser = selectedUserRef.current;
+    if (!activeUser || !selectedUserId) return;
+
+    if (loadedMessagesByUserRef.current.has(activeUser.id)) {
+      scheduleLatestMessageSync(activeUser);
       return;
     }
 
-    void fetchConversationMessages(selectedUser, "initial");
-  }, [selectedUser, fetchConversationMessages, scheduleLatestMessageSync]);
+    void fetchConversationMessages(activeUser, "initial");
+  }, [
+    fetchConversationMessages,
+    scheduleLatestMessageSync,
+    selectedConversationId,
+    selectedUserId,
+  ]);
 
   useEffect(() => {
     const didReconnect = isConnected && !previousConnectionStateRef.current;
     previousConnectionStateRef.current = isConnected;
 
-    if (!didReconnect || !selectedUser) {
+    const activeUser = selectedUserRef.current;
+
+    if (!didReconnect || !activeUser || !selectedUserId) {
       return;
     }
 
-    scheduleLatestMessageSync(selectedUser);
-  }, [isConnected, selectedUser, scheduleLatestMessageSync]);
+    scheduleLatestMessageSync(activeUser);
+  }, [isConnected, scheduleLatestMessageSync, selectedConversationId, selectedUserId]);
 
   useEffect(() => {
-    if (!selectedUser) return;
+    const activeUser = selectedUserRef.current;
+    if (!activeUser || !selectedUserId) return;
 
     const syncCurrentChat = () => {
-      scheduleLatestMessageSync(selectedUser);
+      scheduleLatestMessageSync(activeUser);
     };
 
     const handleVisibilityChange = () => {
@@ -1090,7 +1105,7 @@ export default function ChatPage() {
       window.removeEventListener("focus", syncCurrentChat);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [selectedUser, scheduleLatestMessageSync]);
+  }, [scheduleLatestMessageSync, selectedConversationId, selectedUserId]);
 
   useEffect(() => {
     const requestControllers = messageRequestControllersRef.current;
@@ -1170,6 +1185,7 @@ export default function ChatPage() {
       if (!currentUserId) return;
 
       const resource = getChatResource(chat);
+      const hadUnreadBadge = (unreadByUser[chat.id] ?? chat.unreadCount ?? 0) > 0;
       const unreadIncoming = (messagesToScan ?? socketMessagesRef.current).filter(
         (message) => {
           const belongsToConversation = resource.conversationId
@@ -1193,7 +1209,7 @@ export default function ChatPage() {
 
       clearUnreadForChat(chat.id);
 
-      if (unreadIncoming.length === 0) {
+      if (unreadIncoming.length === 0 && !hadUnreadBadge) {
         return;
       }
 
@@ -1205,15 +1221,22 @@ export default function ChatPage() {
         console.error("Failed to mark chat as read:", error);
       });
     },
-    [clearUnreadForChat, currentUserId, getChatResource, markMessageAsRead]
+    [clearUnreadForChat, currentUserId, getChatResource, markMessageAsRead, unreadByUser]
   );
 
   /* ---------------------------- MARK MESSAGES AS READ ---------------------------- */
   useEffect(() => {
-    if (!selectedUser || !currentUserId) return;
+    const activeUser = selectedUserRef.current;
+    if (!activeUser || !currentUserId || !selectedUserId) return;
 
-    markConversationAsRead(selectedUser, sortedMessages);
-  }, [sortedMessages, selectedUser, currentUserId, markConversationAsRead]);
+    markConversationAsRead(activeUser, sortedMessages);
+  }, [
+    currentUserId,
+    markConversationAsRead,
+    selectedConversationId,
+    selectedUserId,
+    sortedMessages,
+  ]);
 
   useEffect(() => {
     if (!pendingScrollMessageId || !selectedUser) {
@@ -1892,6 +1915,27 @@ export default function ChatPage() {
     );
   }, []);
 
+  const mergeGroupInfoState = useCallback((nextGroup: GroupInfoData) => {
+    setGroupInfo((prev) =>
+      prev &&
+      (prev.id === nextGroup.id ||
+        prev.conversationId === nextGroup.conversationId)
+        ? { ...prev, ...nextGroup }
+        : nextGroup
+    );
+  }, []);
+
+  const mergeGroupInfoMembers = useCallback((nextMembers: GroupInfoMember[]) => {
+    setGroupInfoMembers((prev) => {
+      const previousById = new Map(prev.map((member) => [member.id, member]));
+
+      return nextMembers.map((member) => ({
+        ...previousById.get(member.id),
+        ...member,
+      }));
+    });
+  }, []);
+
   const fetchGroupInfo = useCallback(
     async (groupUser: User) => {
       const groupId =
@@ -1916,8 +1960,8 @@ export default function ChatPage() {
           throw new Error(data?.error || "Failed to fetch group info");
         }
 
-        setGroupInfo(data.group);
-        setGroupInfoMembers(data.members);
+        mergeGroupInfoState(data.group);
+        mergeGroupInfoMembers(data.members);
         syncGroupSummary(data.group);
       } catch (error) {
         console.error("Failed to fetch group info:", error);
@@ -1928,7 +1972,7 @@ export default function ChatPage() {
         setLoadingGroupInfo(false);
       }
     },
-    [syncGroupSummary]
+    [mergeGroupInfoMembers, mergeGroupInfoState, syncGroupSummary]
   );
 
   const handleOpenGroupInfo = useCallback(() => {
@@ -1941,7 +1985,9 @@ export default function ChatPage() {
   }, [fetchGroupInfo, selectedUser]);
 
   useEffect(() => {
-    if (!selectedUser || selectedUser.chatType !== "group") {
+    const activeUser = selectedUserRef.current;
+
+    if (!activeUser || activeUser.chatType !== "group" || !selectedUserId) {
       setShowGroupInfo(false);
       setGroupInfo(null);
       setGroupInfoMembers([]);
@@ -1950,9 +1996,9 @@ export default function ChatPage() {
     }
 
     if (showGroupInfo) {
-      void fetchGroupInfo(selectedUser);
+      void fetchGroupInfo(activeUser);
     }
-  }, [fetchGroupInfo, selectedUser, showGroupInfo]);
+  }, [fetchGroupInfo, selectedConversationId, selectedUserId, showGroupInfo]);
 
   const handleAddGroupMembers = useCallback(
     async (memberIds: string[]) => {
@@ -1977,14 +2023,14 @@ export default function ChatPage() {
           throw new Error(data?.error || "Failed to add group members");
         }
 
-        setGroupInfo(data.group);
-        setGroupInfoMembers(data.members);
+        mergeGroupInfoState(data.group);
+        mergeGroupInfoMembers(data.members);
         syncGroupSummary(data.group);
       } finally {
         setUpdatingGroupInfo(false);
       }
     },
-    [selectedUser, syncGroupSummary]
+    [mergeGroupInfoMembers, mergeGroupInfoState, selectedUser, syncGroupSummary]
   );
 
   const handleExitGroup = useCallback(() => {
@@ -2473,10 +2519,6 @@ export default function ChatPage() {
       const bArchived = Number(Boolean(b.isArchived));
       if (aArchived !== bArchived) return aArchived - bArchived;
 
-      const aPinned = Number(Boolean(a.isPinned));
-      const bPinned = Number(Boolean(b.isPinned));
-      if (aPinned !== bPinned) return bPinned - aPinned;
-
       const aUnread = unreadByUser[a.id] ?? a.unreadCount ?? 0;
       const bUnread = unreadByUser[b.id] ?? b.unreadCount ?? 0;
 
@@ -2493,6 +2535,10 @@ export default function ChatPage() {
       const aTs = Math.max(latestByUser.get(a.id) ?? 0, aInitialTs);
       const bTs = Math.max(latestByUser.get(b.id) ?? 0, bInitialTs);
       if (aTs !== bTs) return bTs - aTs;
+
+      const aPinned = Number(Boolean(a.isPinned));
+      const bPinned = Number(Boolean(b.isPinned));
+      if (aPinned !== bPinned) return bPinned - aPinned;
 
       return (a.name ?? "").localeCompare(b.name ?? "");
     });

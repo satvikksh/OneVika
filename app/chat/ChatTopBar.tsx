@@ -41,7 +41,7 @@ interface ChatTopBarProps {
   isActionBusy?: boolean;
 }
 
-export default function ChatTopBar({
+function ChatTopBar({
   selectedUser,
   onBack,
   typingUsers,
@@ -403,3 +403,5 @@ export default function ChatTopBar({
     </>
   );
 }
+
+export default React.memo(ChatTopBar);
