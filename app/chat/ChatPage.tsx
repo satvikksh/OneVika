@@ -345,6 +345,9 @@ export default function ChatPage() {
   const previousConnectionStateRef = useRef(isConnected);
   const routeSelectionHandledRef = useRef(false);
   const selectedUserRef = useRef<User | null>(selectedUser);
+  const hasHydratedCachedSelectionRef = useRef(false);
+  const hasInitializedMobileHistoryRef = useRef(false);
+  const mobileHistoryChatIdRef = useRef<string | null>(null);
   const currentUserId = session?.user?.id;
   const selectedUserId = selectedUser?.id ?? null;
   const selectedConversationId =
@@ -587,6 +590,88 @@ export default function ChatPage() {
     }
   }, [selectedUser, isMobile]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    if (!isMobile) {
+      hasInitializedMobileHistoryRef.current = false;
+      mobileHistoryChatIdRef.current = null;
+      return;
+    }
+
+    if (!hasInitializedMobileHistoryRef.current) {
+      window.history.replaceState(
+        {
+          ...(window.history.state ?? {}),
+          mobileChatOpen: false,
+          chatId: null,
+        },
+        "",
+        window.location.href
+      );
+      hasInitializedMobileHistoryRef.current = true;
+      mobileHistoryChatIdRef.current = null;
+    }
+  }, [isMobile]);
+
+  useEffect(() => {
+    if (
+      typeof window === "undefined" ||
+      !isMobile ||
+      !hasInitializedMobileHistoryRef.current
+    ) {
+      return;
+    }
+
+    const currentState = window.history.state ?? {};
+
+    if (selectedUserId) {
+      if (mobileHistoryChatIdRef.current === null) {
+        window.history.pushState(
+          {
+            ...currentState,
+            mobileChatOpen: true,
+            chatId: selectedUserId,
+          },
+          "",
+          window.location.href
+        );
+      } else if (
+        mobileHistoryChatIdRef.current !== selectedUserId ||
+        !currentState.mobileChatOpen
+      ) {
+        window.history.replaceState(
+          {
+            ...currentState,
+            mobileChatOpen: true,
+            chatId: selectedUserId,
+          },
+          "",
+          window.location.href
+        );
+      }
+
+      mobileHistoryChatIdRef.current = selectedUserId;
+      return;
+    }
+
+    mobileHistoryChatIdRef.current = null;
+
+    if (currentState.mobileChatOpen) {
+      window.history.replaceState(
+        {
+          ...currentState,
+          mobileChatOpen: false,
+          chatId: null,
+        },
+        "",
+        window.location.href
+      );
+    }
+  }, [isMobile, selectedUserId]);
+
   /* ---------------------------- HIDE NAVBAR ON SCROLL ---------------------------- */
   useEffect(() => {
     if (!isMobile || !selectedUser) return;
@@ -706,7 +791,12 @@ export default function ChatPage() {
   }, [onlineUsers, users.length]);
 
   useEffect(() => {
-    if (!users.length || selectedUserId) return;
+    if (!users.length || hasHydratedCachedSelectionRef.current) return;
+    hasHydratedCachedSelectionRef.current = true;
+
+    if (isMobile || selectedUserId || searchParams.get("userId")) {
+      return;
+    }
 
     const selectedId = chatPageCache?.selectedUserId;
     if (!selectedId) return;
@@ -715,7 +805,7 @@ export default function ChatPage() {
     if (cachedSelection && (!cachedSelection.isLocked || cachedSelection.isUnlocked)) {
       setSelectedUser(cachedSelection);
     }
-  }, [users, selectedUserId]);
+  }, [isMobile, searchParams, selectedUserId, users]);
 
   useEffect(() => {
     if (users.length === 0) return;
@@ -2342,6 +2432,20 @@ export default function ChatPage() {
     ]
   );
 
+  const closeMobileChatView = useCallback(() => {
+    setSelectedUser(null);
+    setReplyTo(null);
+    setContextMenu(null);
+    setShowEmojiPicker(false);
+    setShowGroupInfo(false);
+    setPendingScrollMessageId(null);
+    clearPendingAttachment();
+
+    if (isMobile) {
+      setShowMobileSidebar(true);
+    }
+  }, [clearPendingAttachment, isMobile]);
+
   const handleSelectUser = (user: User) => {
     if (!isValidObjectId(user.id)) {
       console.warn("Invalid user selection:", user);
@@ -2383,16 +2487,54 @@ export default function ChatPage() {
   };
 
   const handleBackToUsers = () => {
-    setSelectedUser(null);
-    setReplyTo(null);
-    setContextMenu(null);
-    setShowEmojiPicker(false);
-    clearPendingAttachment();
-    
-    if (isMobile) {
-      setShowMobileSidebar(true);
+    if (
+      isMobile &&
+      typeof window !== "undefined" &&
+      window.history.state?.mobileChatOpen
+    ) {
+      window.history.back();
+      return;
     }
+
+    closeMobileChatView();
   };
+
+  useEffect(() => {
+    if (
+      typeof window === "undefined" ||
+      !isMobile ||
+      !hasInitializedMobileHistoryRef.current
+    ) {
+      return;
+    }
+
+    const handlePopState = (event: PopStateEvent) => {
+      const nextState = event.state ?? {};
+
+      if (!nextState.mobileChatOpen) {
+        mobileHistoryChatIdRef.current = null;
+        closeMobileChatView();
+        return;
+      }
+
+      const nextChatId =
+        typeof nextState.chatId === "string" ? nextState.chatId : null;
+      if (!nextChatId) {
+        return;
+      }
+
+      const nextUser = users.find((user) => user.id === nextChatId);
+      if (nextUser) {
+        setSelectedUser(nextUser);
+        setShowMobileSidebar(false);
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [closeMobileChatView, isMobile, users]);
 
   const handleDeleteChat = useCallback(
     async (user: User) => {
@@ -2595,7 +2737,7 @@ export default function ChatPage() {
   return (
     <div className="h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950">
       {/* Mobile Sidebar Toggle Button */}
-      {isMobile && !selectedUser && (
+      {isMobile && !selectedUser && !showMobileSidebar && (
         <button
           onClick={toggleMobileSidebar}
           className="fixed top-12 left-4 z-30 p-2 bg-white dark:bg-gray-800 rounded-full shadow-lg lg:hidden"
@@ -2606,45 +2748,47 @@ export default function ChatPage() {
       )}
 
       {/* Fixed Chat Top Bar */}
-      <ChatTopBar
-        selectedUser={selectedUser}
-        onBack={handleBackToUsers}
-        typingUsers={typingUsers}
-        isMobile={isMobile}
-        isNavbarHidden={isNavbarHidden}
-        onClearChat={() => {
-          if (selectedUser) {
-            handleClearChat(selectedUser);
-          }
-        }}
-        onDeleteChat={() => {
-          if (selectedUser) {
-            void handleDeleteChat(selectedUser);
-          }
-        }}
-        onArchiveChat={() => {
-          if (selectedUser) {
-            void handleArchiveChat(selectedUser);
-          }
-        }}
-        onBlockUser={() => {
-          if (selectedUser) {
-            handleBlockUser(selectedUser);
-          }
-        }}
-        onUnblockUser={() => {
-          if (selectedUser) {
-            handleUnblockUser(selectedUser);
-          }
-        }}
-        onOpenGroupInfo={handleOpenGroupInfo}
-        isGroupInfoOpen={showGroupInfo}
-        isActionBusy={Boolean(
-          selectedUser &&
-            (deletingChatUserId === selectedUser.id ||
-              updatingChatUserId === selectedUser.id)
-        )}
-      />
+      {!isMobile || selectedUser ? (
+        <ChatTopBar
+          selectedUser={selectedUser}
+          onBack={handleBackToUsers}
+          typingUsers={typingUsers}
+          isMobile={isMobile}
+          isNavbarHidden={isNavbarHidden}
+          onClearChat={() => {
+            if (selectedUser) {
+              handleClearChat(selectedUser);
+            }
+          }}
+          onDeleteChat={() => {
+            if (selectedUser) {
+              void handleDeleteChat(selectedUser);
+            }
+          }}
+          onArchiveChat={() => {
+            if (selectedUser) {
+              void handleArchiveChat(selectedUser);
+            }
+          }}
+          onBlockUser={() => {
+            if (selectedUser) {
+              handleBlockUser(selectedUser);
+            }
+          }}
+          onUnblockUser={() => {
+            if (selectedUser) {
+              handleUnblockUser(selectedUser);
+            }
+          }}
+          onOpenGroupInfo={handleOpenGroupInfo}
+          isGroupInfoOpen={showGroupInfo}
+          isActionBusy={Boolean(
+            selectedUser &&
+              (deletingChatUserId === selectedUser.id ||
+                updatingChatUserId === selectedUser.id)
+          )}
+        />
+      ) : null}
 
       {/* Main Content Area */}
       <div className="flex h-full pt-16">
@@ -2701,56 +2845,58 @@ export default function ChatPage() {
         />
 
         {/* Chat Area with Scrollable Messages and Fixed Input */}
-        <div 
-          ref={chatAreaRef} 
-          className={`flex-1 flex flex-col h-full transition-all duration-300 ${
-            isMobile && showMobileSidebar ? 'opacity-0 pointer-events-none' : 'opacity-100'
-          }`}
-        >
-          {/* Use ChatArea Component */}
-          <ChatArea
-            selectedUser={selectedUser}
-            loadingInitialMessages={loadingInitialMessages}
-            loadingOlderMessages={loadingOlderMessages}
-            syncingMessages={syncingNewMessages}
-            hasMoreMessages={hasOlderMessages}
-            messageError={selectedMessageError}
-            onLoadOlderMessages={handleLoadOlderMessages}
-            messages={sortedMessages}
-            newMessage={newMessage}
-            setNewMessage={setNewMessage}
-            sendingMessage={sendingMessage}
-            onSendMessage={handleSendMessage}
-            handleTyping={handleTyping}
-            handleInputFocus={handleInputFocus}
-            handleInputBlur={handleInputBlur}
-            inputRef={inputRef}
-            fileInputRef={fileInputRef}
-            handleFileSelect={handleFileSelect}
-            handleFileChange={handleFileChange}
-            pendingAttachment={pendingAttachment}
-            clearPendingAttachment={clearPendingAttachment}
-            showEmojiPicker={showEmojiPicker}
-            setShowEmojiPicker={setShowEmojiPicker}
-            emojiPickerRef={emojiPickerRef}
-            handleEmojiClick={handleEmojiClick}
-            commonEmojis={commonEmojis}
-            handleMessageContextMenu={handleMessageContextMenu}
-            handleDropdownClick={handleDropdownClick}
-            replyTo={replyTo}
-            setReplyTo={setReplyTo}
-            messagesEndRef={messagesEndRef}
-            hoveredMessageId={hoveredMessageId}
-            setHoveredMessageId={setHoveredMessageId}
-            activeDropdownId={activeDropdownId}
-            setActiveDropdownId={setActiveDropdownId}
-            dropdownRef={dropdownRef}
-            session={session}
-            isMobile={isMobile}
-            handleKeyDown={handleKeyDown}
-            isChatBlocked={Boolean(selectedUser?.isBlocked)}
-          />
-        </div>
+        {!isMobile || selectedUser ? (
+          <div 
+            ref={chatAreaRef} 
+            className={`flex-1 flex flex-col h-full transition-opacity duration-200 ${
+              isMobile && showMobileSidebar ? 'opacity-0 pointer-events-none' : 'opacity-100'
+            }`}
+          >
+            {/* Use ChatArea Component */}
+            <ChatArea
+              selectedUser={selectedUser}
+              loadingInitialMessages={loadingInitialMessages}
+              loadingOlderMessages={loadingOlderMessages}
+              syncingMessages={syncingNewMessages}
+              hasMoreMessages={hasOlderMessages}
+              messageError={selectedMessageError}
+              onLoadOlderMessages={handleLoadOlderMessages}
+              messages={sortedMessages}
+              newMessage={newMessage}
+              setNewMessage={setNewMessage}
+              sendingMessage={sendingMessage}
+              onSendMessage={handleSendMessage}
+              handleTyping={handleTyping}
+              handleInputFocus={handleInputFocus}
+              handleInputBlur={handleInputBlur}
+              inputRef={inputRef}
+              fileInputRef={fileInputRef}
+              handleFileSelect={handleFileSelect}
+              handleFileChange={handleFileChange}
+              pendingAttachment={pendingAttachment}
+              clearPendingAttachment={clearPendingAttachment}
+              showEmojiPicker={showEmojiPicker}
+              setShowEmojiPicker={setShowEmojiPicker}
+              emojiPickerRef={emojiPickerRef}
+              handleEmojiClick={handleEmojiClick}
+              commonEmojis={commonEmojis}
+              handleMessageContextMenu={handleMessageContextMenu}
+              handleDropdownClick={handleDropdownClick}
+              replyTo={replyTo}
+              setReplyTo={setReplyTo}
+              messagesEndRef={messagesEndRef}
+              hoveredMessageId={hoveredMessageId}
+              setHoveredMessageId={setHoveredMessageId}
+              activeDropdownId={activeDropdownId}
+              setActiveDropdownId={setActiveDropdownId}
+              dropdownRef={dropdownRef}
+              session={session}
+              isMobile={isMobile}
+              handleKeyDown={handleKeyDown}
+              isChatBlocked={Boolean(selectedUser?.isBlocked)}
+            />
+          </div>
+        ) : null}
       </div>
 
       {/* Context Menu */}

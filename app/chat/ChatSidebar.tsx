@@ -1315,11 +1315,15 @@ function ChatSidebar({
     </>
   );
 
+  const isPrimaryMobileListView = isMobile && !selectedUser;
+  const isMobileSidebarVisible = isPrimaryMobileListView || showMobileSidebar;
+  const showMobileBackdrop = isMobileSidebarVisible && Boolean(selectedUser);
+
   if (isMobile) {
     return (
       <>
-        <div className={`fixed inset-0 z-40 bg-black/50 transition-opacity duration-300 lg:hidden ${showMobileSidebar ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`} onClick={onToggleMobileSidebar} />
-        <aside ref={sidebarRef} className={`fixed inset-y-16 left-0 z-50 flex h-full w-full max-w-sm flex-col border-r border-gray-200 bg-white transition-transform duration-300 ease-in-out dark:border-gray-800 dark:bg-black lg:hidden ${showMobileSidebar ? "translate-x-0" : "-translate-x-full"}`}>{sidebarShell}</aside>
+        <div className={`fixed inset-0 z-40 bg-black/50 transition-opacity duration-300 lg:hidden ${showMobileBackdrop ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`} onClick={onToggleMobileSidebar} />
+        <aside ref={sidebarRef} className={`fixed inset-y-16 left-0 z-50 flex h-full w-full max-w-sm flex-col border-r border-gray-200 bg-white transition-transform duration-300 ease-in-out dark:border-gray-800 dark:bg-black lg:hidden ${isMobileSidebarVisible ? "translate-x-0" : "-translate-x-full"}`}>{sidebarShell}</aside>
         <SidebarQuickMenu
           isOpen={isQuickMenuOpen}
           isMobile
