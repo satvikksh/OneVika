@@ -23,6 +23,22 @@ type PushTargetUser = {
   fcmTokens?: string[] | null;
 };
 
+type ConversationDoc = {
+  _id: mongoose.Types.ObjectId;
+  participants?: mongoose.Types.ObjectId[];
+  isGroup?: boolean;
+  name?: string;
+};
+
+type SocketMessagePayload = {
+  id?: string;
+  senderId?: string;
+  receiverId?: string;
+  conversationId?: string;
+  content?: string;
+  text?: string;
+};
+
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://orbitbyte.vercel.app";
 const PREMIUM_REMINDER_WINDOW_MS = 24 * 60 * 60 * 1000;
 const BACKGROUND_JOB_INTERVAL_MS = Number(
@@ -355,70 +371,89 @@ io.on("connection", (socket) => {
     registerSocketUser(joinedUserId);
   });
 
-  socket.on("send_message", async (message) => {
+  socket.on("send_message", async (message: SocketMessagePayload) => {
     try {
-      io.to(`user_${message.receiverId}`).emit("receive_message", message);
-      io.to(`user_${message.senderId}`).emit("receive_message", message);
+      if (!message.senderId) {
+        return;
+      }
 
-      const receiver = (await User.findById(message.receiverId).select(
-        "fcmToken fcmTokens"
-      )) as PushTargetUser | null;
+      const conversationId =
+        message.conversationId && mongoose.Types.ObjectId.isValid(message.conversationId)
+          ? new mongoose.Types.ObjectId(message.conversationId)
+          : null;
 
-      const tokens = collectPushTokens(receiver);
+      const conversation = conversationId
+        ? ((await mongoose.connection.db
+            ?.collection<ConversationDoc>("conversations")
+            .findOne({ _id: conversationId })) as ConversationDoc | null)
+        : null;
 
-      if (tokens.length > 0) {
-        const response = await admin.messaging().sendEachForMulticast({
-          tokens,
-          notification: {
-            title: "New Message",
-            body: message.content || "You received a new message.",
-          },
-          webpush: {
-            headers: {
-              Urgency: "high",
+      const recipientIds = conversation
+        ? (conversation.participants || [])
+            .map((participant) => participant?.toString?.())
+            .filter(
+              (participantId): participantId is string =>
+                Boolean(participantId) && participantId !== message.senderId
+            )
+        : message.receiverId
+          ? [message.receiverId]
+          : [];
+
+      const audienceIds = Array.from(
+        new Set([message.senderId, ...recipientIds].filter(Boolean))
+      );
+
+      audienceIds.forEach((audienceUserId) => {
+        io.to(`user_${audienceUserId}`).emit("receive_message", message);
+      });
+
+      const deliveredUserIds = recipientIds.filter((recipientId) =>
+        Boolean(activeUsers.get(recipientId)?.size)
+      );
+
+      if (
+        deliveredUserIds.length > 0 &&
+        message.id &&
+        mongoose.Types.ObjectId.isValid(message.id)
+      ) {
+        await mongoose.connection.db?.collection("messages").updateOne(
+          { _id: new mongoose.Types.ObjectId(message.id) },
+          {
+            $addToSet: {
+              deliveredToUserIds: {
+                $each: deliveredUserIds.map(
+                  (recipientId) => new mongoose.Types.ObjectId(recipientId)
+                ),
+              },
             },
-            notification: {
-              icon: `${APP_URL}/icons/icon-192.png`,
-              badge: `${APP_URL}/icons/icon-192.png`,
-              tag: `chat_${message.senderId}`,
-              renotify: true,
-            },
-            fcmOptions: {
-              link: `${APP_URL}/chat`,
-            },
-          },
-          data: {
-            type: "message",
-            senderId: String(message.senderId ?? ""),
-            receiverId: String(message.receiverId ?? ""),
-            url: "/chat",
-          },
-        });
+          }
+        );
 
-        const invalidTokens = response.responses
-          .map((result, index) => ({ result, token: tokens[index] }))
-          .filter(
-            ({ result }) =>
-              !result.success &&
-              (result.error?.code === "messaging/invalid-registration-token" ||
-                result.error?.code ===
-                  "messaging/registration-token-not-registered")
-          )
-          .map(({ token }) => token);
+        const deliveredPayload = {
+          messageId: message.id,
+          userIds: deliveredUserIds,
+        };
 
-        if (invalidTokens.length > 0 && receiver?._id) {
-          await User.findByIdAndUpdate(receiver._id, {
-            $pull: { fcmTokens: { $in: invalidTokens } },
-            ...(invalidTokens.includes(receiver.fcmToken || "")
-              ? { $set: { fcmToken: null } }
-              : {}),
-          });
-        }
-
-        console.log(
-          `Push notifications sent: ${response.successCount}/${tokens.length}`
+        io.to(`user_${message.senderId}`).emit(
+          "message_delivered",
+          deliveredPayload
         );
       }
+
+      await Promise.all(
+        recipientIds.map((recipientId) =>
+          pushNotificationToUser(recipientId, {
+            type: "message",
+            title: "New Message",
+            message:
+              message.content || message.text || "You received a new message.",
+            senderId: message.senderId,
+            url: "/chat",
+          }).catch((error) => {
+            console.error("Push Error:", error);
+          })
+        )
+      );
     } catch (error) {
       console.error("Push Error:", error);
     }
@@ -484,6 +519,26 @@ io.on("connection", (socket) => {
     "mark_as_read",
     ({ messageId, userId }: { messageId?: string; userId?: string }) => {
       if (!messageId || !userId) return;
+
+      if (
+        mongoose.Types.ObjectId.isValid(messageId) &&
+        mongoose.Types.ObjectId.isValid(userId)
+      ) {
+        void mongoose.connection.db
+          ?.collection("messages")
+          .updateOne(
+            { _id: new mongoose.Types.ObjectId(messageId) },
+            {
+              $addToSet: {
+                deliveredToUserIds: new mongoose.Types.ObjectId(userId),
+                readByUserIds: new mongoose.Types.ObjectId(userId),
+              },
+            }
+          )
+          .catch((error) => {
+            console.error("MESSAGE READ UPDATE ERROR:", error);
+          });
+      }
 
       io.emit("message_read", { messageId, userId });
     }

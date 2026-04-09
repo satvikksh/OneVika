@@ -7,6 +7,7 @@ import {
   Download,
   Link,
   MessageSquareReply,
+  Star,
   Trash2,
   X,
 } from "lucide-react";
@@ -71,6 +72,15 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
         action: "copyLink",
         icon: Link,
       },
+      {
+        id: "toggleStar",
+        label: message.isStarred ? "Unstar message" : "Star message",
+        description: message.isStarred
+          ? "Remove this message from your starred list"
+          : "Save this message to your starred list",
+        action: "toggleStar",
+        icon: Star,
+      },
       ...(message.attachments?.[0]?.url
         ? [
             {
@@ -103,7 +113,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
           ]
         : []),
     ],
-    [isCurrentUser, message.attachments]
+    [isCurrentUser, message.attachments, message.isStarred]
   );
 
   const handleClose = useCallback(() => {

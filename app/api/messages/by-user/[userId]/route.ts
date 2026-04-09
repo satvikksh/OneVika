@@ -39,7 +39,7 @@ type StoredMessage = {
   textIv?: string;
   textTag?: string;
   senderId: mongoose.Types.ObjectId;
-  receiverId: mongoose.Types.ObjectId;
+  receiverId?: mongoose.Types.ObjectId | null;
   conversationId: mongoose.Types.ObjectId;
   createdAt: Date;
   read?: boolean;
@@ -47,6 +47,16 @@ type StoredMessage = {
   attachments?: StoredAttachment[];
   replyToId?: mongoose.Types.ObjectId | string;
   deletedForUserIds?: mongoose.Types.ObjectId[];
+  deliveredToUserIds?: mongoose.Types.ObjectId[];
+  readByUserIds?: mongoose.Types.ObjectId[];
+  starredByUserIds?: mongoose.Types.ObjectId[];
+};
+
+type ConversationDoc = {
+  _id: mongoose.Types.ObjectId;
+  participants?: mongoose.Types.ObjectId[];
+  isGroup?: boolean;
+  name?: string;
 };
 
 type PreferenceRequestBody = {
@@ -99,6 +109,11 @@ const emptyPageInfo = (): MessagePageInfo => ({
   newestMessageId: null,
 });
 
+const hasObjectId = (
+  values: mongoose.Types.ObjectId[] | undefined,
+  targetId: string
+) => Boolean(values?.some((value) => value?.toString?.() === targetId));
+
 export async function GET(
   req: NextRequest,
   context: { params: Promise<{ userId: string }> }
@@ -112,6 +127,7 @@ export async function GET(
 
     const { userId: receiverIdRaw } = await context.params;
     const senderIdRaw = session.user.id;
+    const isGroupChat = req.nextUrl.searchParams.get("chatType") === "group";
 
     if (!receiverIdRaw) {
       return NextResponse.json(
@@ -127,7 +143,7 @@ export async function GET(
       );
     }
 
-    if (receiverIdRaw === senderIdRaw) {
+    if (!isGroupChat && receiverIdRaw === senderIdRaw) {
       return NextResponse.json({ messages: [], pageInfo: emptyPageInfo() });
     }
 
@@ -166,35 +182,50 @@ export async function GET(
       );
     }
 
-    const preference = await db.collection<ChatPreferenceDoc>("chatPreferences").findOne(
-      { ownerId: senderId, chatUserId: receiverId },
-      {
-        projection: {
-          isLocked: 1,
-        },
-      }
-    );
+    let conversation: ConversationDoc | null;
 
-    if (
-      preference?.isLocked &&
-      !hasUnlockedChatCookie(req, senderIdRaw, receiverIdRaw)
-    ) {
-      return NextResponse.json(
+    if (isGroupChat) {
+      conversation = await db.collection<ConversationDoc>("conversations").findOne({
+        _id: receiverId,
+        participants: senderId,
+      });
+    } else {
+      const preference = await db.collection<ChatPreferenceDoc>("chatPreferences").findOne(
+        { ownerId: senderId, chatUserId: receiverId },
         {
-          error: "This chat is locked",
-          requiresPassword: true,
-        },
-        { status: 423 }
+          projection: {
+            isLocked: 1,
+          },
+        }
       );
-    }
 
-    const conversation = await db.collection("conversations").findOne({
-      participants: { $all: [senderId, receiverId] },
-    });
+      if (
+        preference?.isLocked &&
+        !hasUnlockedChatCookie(req, senderIdRaw, receiverIdRaw)
+      ) {
+        return NextResponse.json(
+          {
+            error: "This chat is locked",
+            requiresPassword: true,
+          },
+          { status: 423 }
+        );
+      }
+
+      conversation = await db.collection<ConversationDoc>("conversations").findOne({
+        participants: { $all: [senderId, receiverId] },
+      });
+    }
 
     if (!conversation) {
       return NextResponse.json({ messages: [], pageInfo: emptyPageInfo() });
     }
+
+    const participantIds = Array.isArray(conversation.participants)
+      ? conversation.participants
+          .map((participant) => participant?.toString?.())
+          .filter(Boolean) as string[]
+      : [];
 
     const cursorFilter: Record<string, unknown> = {
       conversationId: conversation._id,
@@ -242,14 +273,51 @@ export async function GET(
         }
       }
 
+      const senderIdString = message.senderId.toString();
+      const receiverIdString = message.receiverId?.toString?.() ?? "";
+      const deliveredToUserIds =
+        message.deliveredToUserIds?.map((id) => id.toString()) ?? [];
+      const readByUserIds = message.readByUserIds?.map((id) => id.toString()) ?? [];
+      const isReadForCurrentUser =
+        readByUserIds.includes(senderIdRaw) ||
+        (receiverIdString === senderIdRaw && Boolean(message.read));
+      let status: "sent" | "delivered" | "read" = "sent";
+
+      if (senderIdString === senderIdRaw) {
+        const recipientIds = participantIds.filter((participantId) => participantId !== senderIdRaw);
+        const readCount = recipientIds.filter((participantId) =>
+          readByUserIds.includes(participantId)
+        ).length;
+        const deliveredCount = recipientIds.filter(
+          (participantId) =>
+            deliveredToUserIds.includes(participantId) ||
+            readByUserIds.includes(participantId)
+        ).length;
+
+        if (recipientIds.length > 0 && readCount === recipientIds.length) {
+          status = "read";
+        } else if (deliveredCount > 0) {
+          status = "delivered";
+        }
+      } else if (isReadForCurrentUser) {
+        status = "read";
+      } else if (
+        deliveredToUserIds.includes(senderIdRaw) ||
+        hasObjectId(message.deliveredToUserIds, senderIdRaw)
+      ) {
+        status = "delivered";
+      }
+
       return {
         id: message._id.toString(),
         text,
-        senderId: message.senderId.toString(),
-        receiverId: message.receiverId.toString(),
+        content: text,
+        senderId: senderIdString,
+        receiverId: receiverIdString,
         conversationId: message.conversationId.toString(),
         timestamp: message.createdAt,
-        read: Boolean(message.read),
+        read: isReadForCurrentUser,
+        status,
         type:
           message.type ||
           (Array.isArray(message.attachments) && message.attachments[0]?.type) ||
@@ -266,6 +334,9 @@ export async function GET(
             }))
           : [],
         replyToId: message.replyToId?.toString?.() || undefined,
+        deliveredToUserIds,
+        readByUserIds,
+        isStarred: hasObjectId(message.starredByUserIds, senderIdRaw),
       };
     });
 

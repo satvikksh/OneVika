@@ -15,6 +15,14 @@ type CloudinaryUploadResult = {
   resource_type?: string;
 };
 
+type ConversationDoc = {
+  _id: mongoose.Types.ObjectId;
+  participants?: mongoose.Types.ObjectId[];
+  isGroup?: boolean;
+  name?: string;
+  createdBy?: mongoose.Types.ObjectId;
+};
+
 const getMessageTypeFromMime = (mimeType?: string | null) => {
   if (!mimeType) return "file" as const;
   if (mimeType.startsWith("image/")) return "image" as const;
@@ -34,6 +42,7 @@ export async function POST(req: NextRequest) {
     const contentType = req.headers.get("content-type") || "";
     let text = "";
     let receiverId = "";
+    let conversationId = "";
     let replyToId: string | undefined;
     let uploadedAttachment:
       | {
@@ -51,6 +60,7 @@ export async function POST(req: NextRequest) {
       const formData = await req.formData();
       text = (formData.get("text") ?? formData.get("content") ?? "").toString();
       receiverId = (formData.get("receiverId") ?? "").toString();
+      conversationId = (formData.get("conversationId") ?? "").toString();
       replyToId = (formData.get("replyToId") ?? "").toString() || undefined;
       const file = formData.get("file");
 
@@ -86,6 +96,7 @@ export async function POST(req: NextRequest) {
       const body = await req.json();
       text = (body?.text ?? body?.content ?? "").toString();
       receiverId = body?.receiverId as string;
+      conversationId = body?.conversationId as string;
       replyToId = body?.replyToId as string | undefined;
       const attachments = Array.isArray(body?.attachments) ? body.attachments : [];
       const firstAttachment = attachments[0];
@@ -102,16 +113,20 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    if ((!text?.trim() && !uploadedAttachment) || !receiverId) {
+    if ((!text?.trim() && !uploadedAttachment) || (!receiverId && !conversationId)) {
       return NextResponse.json(
-        { error: "Message content or attachment and receiverId required" },
+        { error: "Message content or attachment and a conversation target are required" },
         { status: 400 }
       );
     }
 
-    if (!ObjectId.isValid(receiverId) || !ObjectId.isValid(session.user.id)) {
+    if (
+      !ObjectId.isValid(session.user.id) ||
+      (receiverId && !ObjectId.isValid(receiverId)) ||
+      (conversationId && !ObjectId.isValid(conversationId))
+    ) {
       return NextResponse.json(
-        { error: "Invalid sender or receiver id" },
+        { error: "Invalid sender or conversation target" },
         { status: 400 }
       );
     }
@@ -119,56 +134,103 @@ export async function POST(req: NextRequest) {
     const db = await getNativeDb();
 
     const senderObjectId = new ObjectId(session.user.id);
-    const receiverObjectId = new ObjectId(receiverId);
+    let receiverObjectId =
+      receiverId && ObjectId.isValid(receiverId) ? new ObjectId(receiverId) : null;
+    let conversation: ConversationDoc | null = null;
+    let isGroupConversation = false;
 
-    const blockRelationship = await db.collection("blockedUsers").findOne({
-      $or: [
-        { blockerId: senderObjectId, blockedId: receiverObjectId },
-        { blockerId: receiverObjectId, blockedId: senderObjectId },
-      ],
-    });
-
-    if (blockRelationship) {
-      return NextResponse.json(
-        { error: "Messaging is disabled for this user" },
-        { status: 403 }
-      );
-    }
-
-    let conversation = await db.collection("conversations").findOne({
-      participants: { $all: [senderObjectId, receiverObjectId] },
-    });
-
-    const [iFollowReceiver, receiverFollowsMe] = await Promise.all([
-      db.collection("follows").findOne({
-        followerId: senderObjectId,
-        followingId: receiverObjectId,
-        status: "active",
-      }),
-      db.collection("follows").findOne({
-        followerId: receiverObjectId,
-        followingId: senderObjectId,
-        status: "active",
-      }),
-    ]);
-
-    const hasMutualFollow = Boolean(iFollowReceiver && receiverFollowsMe);
-    const hasExistingConversation = Boolean(conversation);
-
-    if (!hasMutualFollow && !hasExistingConversation) {
-      return NextResponse.json(
-        { error: "Message allowed only for mutual followers" },
-        { status: 403 }
-      );
-    }
-
-    if (!conversation) {
-      const result = await db.collection("conversations").insertOne({
-        participants: [senderObjectId, receiverObjectId],
-        createdAt: new Date(),
-        updatedAt: new Date(),
+    if (conversationId) {
+      conversation = await db.collection<ConversationDoc>("conversations").findOne({
+        _id: new ObjectId(conversationId),
+        participants: senderObjectId,
       });
-      conversation = { _id: result.insertedId };
+
+      if (!conversation?._id) {
+        return NextResponse.json(
+          { error: "Conversation not found" },
+          { status: 404 }
+        );
+      }
+
+      isGroupConversation = Boolean(conversation.isGroup);
+
+      if (!isGroupConversation && !receiverObjectId) {
+        const otherParticipant = conversation.participants?.find(
+          (participant) => participant?.toString?.() !== session.user.id
+        );
+        receiverObjectId = otherParticipant
+          ? new ObjectId(otherParticipant.toString())
+          : null;
+      }
+    } else {
+      if (!receiverObjectId) {
+        return NextResponse.json(
+          { error: "Receiver is required for direct messages" },
+          { status: 400 }
+        );
+      }
+
+      const blockRelationship = await db.collection("blockedUsers").findOne({
+        $or: [
+          { blockerId: senderObjectId, blockedId: receiverObjectId },
+          { blockerId: receiverObjectId, blockedId: senderObjectId },
+        ],
+      });
+
+      if (blockRelationship) {
+        return NextResponse.json(
+          { error: "Messaging is disabled for this user" },
+          { status: 403 }
+        );
+      }
+
+      conversation = await db.collection<ConversationDoc>("conversations").findOne({
+        participants: { $all: [senderObjectId, receiverObjectId] },
+      });
+
+      const [iFollowReceiver, receiverFollowsMe] = await Promise.all([
+        db.collection("follows").findOne({
+          followerId: senderObjectId,
+          followingId: receiverObjectId,
+          status: "active",
+        }),
+        db.collection("follows").findOne({
+          followerId: receiverObjectId,
+          followingId: senderObjectId,
+          status: "active",
+        }),
+      ]);
+
+      const hasMutualFollow = Boolean(iFollowReceiver && receiverFollowsMe);
+      const hasExistingConversation = Boolean(conversation);
+
+      if (!hasMutualFollow && !hasExistingConversation) {
+        return NextResponse.json(
+          { error: "Message allowed only for mutual followers" },
+          { status: 403 }
+        );
+      }
+
+      if (!conversation) {
+        const now = new Date();
+        const result = await db.collection("conversations").insertOne({
+          participants: [senderObjectId, receiverObjectId],
+          createdAt: now,
+          updatedAt: now,
+        });
+        conversation = {
+          _id: result.insertedId,
+          participants: [senderObjectId, receiverObjectId],
+          isGroup: false,
+        };
+      }
+    }
+
+    if (!conversation?._id) {
+      return NextResponse.json(
+        { error: "Conversation could not be resolved" },
+        { status: 400 }
+      );
     }
 
     const createdAt = new Date();
@@ -184,6 +246,9 @@ export async function POST(req: NextRequest) {
       receiverId: receiverObjectId,
       createdAt,
       read: false,
+      deliveredToUserIds: [senderObjectId],
+      readByUserIds: [senderObjectId],
+      starredByUserIds: [],
       deletedForUserIds: [],
       type: messageType,
       ...(uploadedAttachment ? { attachments: [uploadedAttachment] } : {}),
@@ -201,13 +266,19 @@ export async function POST(req: NextRequest) {
         id: result.insertedId.toString(),
         conversationId: conversation._id.toString(),
         text: trimmedText,
+        content: trimmedText,
         senderId: session.user.id,
-        receiverId,
+        receiverId: receiverObjectId?.toString?.() ?? "",
         timestamp: createdAt.toISOString(),
         read: false,
+        status: "sent",
         type: messageType,
         attachments: uploadedAttachment ? [uploadedAttachment] : [],
         replyToId,
+        deliveredToUserIds: [session.user.id],
+        readByUserIds: [session.user.id],
+        isStarred: false,
+        chatType: isGroupConversation ? "group" : "direct",
       },
     });
   } catch (err) {

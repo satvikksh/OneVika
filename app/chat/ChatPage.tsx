@@ -9,6 +9,7 @@ import ChatSidebar from "./ChatSidebar";
 import ChatTopBar from "./ChatTopBar";
 import ChatArea from "./ChatArea";
 import ContextMenu from "./ContextMenu";
+import StarredMessagesModal from "./StarredMessagesModal";
 import { readCachedChatState, writeCachedChatState } from "./chatLocalCache";
 import { Users, Menu } from "lucide-react";
 import { SecurityKey } from "../lib/securityQuestions";
@@ -236,6 +237,11 @@ type PendingAttachment = {
   size: number;
 };
 
+type StarredMessageItem = Message & {
+  chatName?: string;
+  chatType?: "direct" | "group";
+};
+
 type MessagePageInfo = {
   hasMoreBefore: boolean;
   oldestMessageId: string | null;
@@ -284,6 +290,11 @@ export default function ChatPage() {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isNavbarHidden, setIsNavbarHidden] = useState(false);
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+  const [showStarredMessages, setShowStarredMessages] = useState(false);
+  const [starredMessages, setStarredMessages] = useState<StarredMessageItem[]>([]);
+  const [loadingStarredMessages, setLoadingStarredMessages] = useState(false);
+  const [starredMessagesError, setStarredMessagesError] = useState<string | null>(null);
+  const [pendingScrollMessageId, setPendingScrollMessageId] = useState<string | null>(null);
   
   // Chat UI state
   const [replyTo, setReplyTo] = useState<Message | null>(null);
@@ -298,9 +309,6 @@ export default function ChatPage() {
   const [updatingChatUserId, setUpdatingChatUserId] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>(null);
   const [isConfirmingAction, setIsConfirmingAction] = useState(false);
-
-  // Message status tracking - now tracked locally for UI
-  const [messageStatus, setMessageStatus] = useState<Record<string, 'sending' | 'sent' | 'delivered' | 'read'>>({});
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -323,6 +331,57 @@ export default function ChatPage() {
   const routeSelectionHandledRef = useRef(false);
   const currentUserId = session?.user?.id;
   const selectedUserId = selectedUser?.id ?? null;
+  const selectedConversationId =
+    selectedUser?.conversationId ??
+    (selectedUser?.chatType === "group" ? selectedUser.id : null);
+
+  const getConversationKeyForUser = useCallback(
+    (user: User) =>
+      user.conversationId ?? (user.chatType === "group" ? user.id : null),
+    []
+  );
+
+  const conversationUserIdByKey = useMemo(() => {
+    const map = new Map<string, string>();
+
+    users.forEach((user) => {
+      const key = getConversationKeyForUser(user);
+      if (key) {
+        map.set(key, user.id);
+      }
+    });
+
+    return map;
+  }, [getConversationKeyForUser, users]);
+
+  const resolveChatUserIdForMessage = useCallback(
+    (message: Message) => {
+      if (message.conversationId) {
+        const conversationMatch = conversationUserIdByKey.get(
+          message.conversationId
+        );
+
+        if (conversationMatch) {
+          return conversationMatch;
+        }
+      }
+
+      if (!currentUserId) {
+        return null;
+      }
+
+      if (message.senderId === currentUserId) {
+        return message.receiverId || null;
+      }
+
+      if (message.receiverId === currentUserId) {
+        return message.senderId || null;
+      }
+
+      return null;
+    },
+    [conversationUserIdByKey, currentUserId]
+  );
 
   const mergeUserState = useCallback((userId: string, updates: Partial<User>) => {
     setUsers((prev) =>
@@ -344,6 +403,23 @@ export default function ChatPage() {
           }
         : prev
     );
+  }, []);
+
+  const getChatResource = useCallback((chat: User) => {
+    const conversationId =
+      chat.conversationId ?? (chat.chatType === "group" ? chat.id : null);
+
+    return {
+      chatId: chat.id,
+      conversationId,
+      chatType: chat.chatType ?? "direct",
+      fetchUrl: conversationId && chat.chatType === "group"
+        ? `/api/messages/by-user/${conversationId}?chatType=group`
+        : `/api/messages/by-user/${chat.id}`,
+      readUrl: conversationId && chat.chatType === "group"
+        ? `/api/messages/by-user/${conversationId}/read?chatType=group`
+        : `/api/messages/by-user/${chat.id}/read`,
+    };
   }, []);
 
   const openConfirmDialog = useCallback((dialog: Exclude<ConfirmDialogState, null>) => {
@@ -675,10 +751,12 @@ export default function ChatPage() {
 
   /* ------------------------------- JOIN/LEAVE CHAT ROOMS ------------------------------- */
   useEffect(() => {
-    if (!selectedUserId || !session?.user?.id) return;
+    if (!selectedUser || !session?.user?.id) return;
 
-    const users = [session.user.id, selectedUserId].sort();
-    const chatId = `chat_${users[0]}_${users[1]}`;
+    const chatId =
+      selectedUser.chatType === "group"
+        ? `conversation_${selectedUser.conversationId ?? selectedUser.id}`
+        : `chat_${[session.user.id, selectedUser.id].sort().join("_")}`;
 
     chatIdRef.current = chatId;
     joinChat(chatId);
@@ -686,21 +764,28 @@ export default function ChatPage() {
     return () => {
       leaveChat(chatId);
     };
-  }, [selectedUserId, session?.user?.id, joinChat, leaveChat]);
+  }, [selectedUser, session?.user?.id, joinChat, leaveChat]);
 
   const getConversationMessagesSnapshot = useCallback(
-    (chatUserId: string) => {
-      if (!chatUserId || !currentUserId) return [];
+    (chat: User) => {
+      if (!chat?.id || !currentUserId) return [];
+
+      const resource = getChatResource(chat);
 
       return socketMessagesRef.current
-        .filter(
-          (msg) =>
-            (msg.senderId === currentUserId && msg.receiverId === chatUserId) ||
-            (msg.senderId === chatUserId && msg.receiverId === currentUserId)
-        )
+        .filter((msg) => {
+          if (resource.conversationId) {
+            return msg.conversationId === resource.conversationId;
+          }
+
+          return (
+            (msg.senderId === currentUserId && msg.receiverId === chat.id) ||
+            (msg.senderId === chat.id && msg.receiverId === currentUserId)
+          );
+        })
         .sort((a, b) => getMessageTimestamp(a) - getMessageTimestamp(b));
     },
-    [currentUserId]
+    [currentUserId, getChatResource]
   );
 
   const getPersistedCursorId = useCallback(
@@ -730,11 +815,13 @@ export default function ChatPage() {
   }, []);
 
   const fetchConversationMessages = useCallback(
-    async (userId: string, mode: MessageFetchMode) => {
+    async (chat: User, mode: MessageFetchMode) => {
       if (!session?.user?.id) return false;
 
-      const requestKey = `${userId}:${mode}`;
-      const existingMessages = getConversationMessagesSnapshot(userId);
+      const resource = getChatResource(chat);
+      const chatId = resource.chatId;
+      const requestKey = `${chatId}:${mode}`;
+      const existingMessages = getConversationMessagesSnapshot(chat);
       const cursorId =
         mode === "older"
           ? getPersistedCursorId(existingMessages, "oldest")
@@ -751,38 +838,37 @@ export default function ChatPage() {
 
       const controller = new AbortController();
       messageRequestControllersRef.current.set(requestKey, controller);
-      setMessageErrorsByUser((prev) => ({ ...prev, [userId]: null }));
+      setMessageErrorsByUser((prev) => ({ ...prev, [chatId]: null }));
 
       if (mode === "initial") {
-        setInitialLoadingMessageUserId(userId);
+        setInitialLoadingMessageUserId(chatId);
       } else if (mode === "older") {
-        setLoadingOlderMessageUserId(userId);
+        setLoadingOlderMessageUserId(chatId);
       } else {
-        setSyncingMessageUserId(userId);
+        setSyncingMessageUserId(chatId);
       }
 
       try {
-        const params = new URLSearchParams({
-          limit: String(INITIAL_MESSAGE_PAGE_SIZE),
-        });
+        const url = new URL(resource.fetchUrl, window.location.origin);
+        url.searchParams.set("limit", String(INITIAL_MESSAGE_PAGE_SIZE));
 
         if (mode === "older" && cursorId) {
-          params.set("beforeId", cursorId);
+          url.searchParams.set("beforeId", cursorId);
         }
 
         if (mode === "newer" && cursorId) {
-          params.set("afterId", cursorId);
+          url.searchParams.set("afterId", cursorId);
         }
 
-        const res = await fetch(`/api/messages/by-user/${userId}?${params.toString()}`, {
+        const res = await fetch(url.toString(), {
           cache: "no-store",
           signal: controller.signal,
         });
         const data = await res.json().catch(() => ({}));
 
         if (res.status === 423) {
-          mergeUserState(userId, { isUnlocked: false });
-          loadedMessagesByUserRef.current.delete(userId);
+          mergeUserState(chat.id, { isUnlocked: false });
+          loadedMessagesByUserRef.current.delete(chatId);
           return false;
         }
 
@@ -796,32 +882,32 @@ export default function ChatPage() {
 
         setMessagePageInfoByUser((prev) => ({
           ...prev,
-          [userId]: {
+          [chatId]: {
             hasMoreBefore:
               mode === "newer" && !isCursorlessSync
-                ? prev[userId]?.hasMoreBefore ?? false
+                ? prev[chatId]?.hasMoreBefore ?? false
                 : Boolean(data.pageInfo?.hasMoreBefore),
             oldestMessageId:
               mode === "newer" && !isCursorlessSync
-                ? prev[userId]?.oldestMessageId ??
+                ? prev[chatId]?.oldestMessageId ??
                   data.pageInfo?.oldestMessageId ??
                   null
                 : data.pageInfo?.oldestMessageId ??
-              prev[userId]?.oldestMessageId ??
+              prev[chatId]?.oldestMessageId ??
               null,
             newestMessageId:
               mode === "older"
-                ? prev[userId]?.newestMessageId ??
+                ? prev[chatId]?.newestMessageId ??
                   data.pageInfo?.newestMessageId ??
                   null
                 : data.pageInfo?.newestMessageId ??
-              prev[userId]?.newestMessageId ??
+              prev[chatId]?.newestMessageId ??
               null,
           },
         }));
 
         if (mode === "initial") {
-          loadedMessagesByUserRef.current.add(userId);
+          loadedMessagesByUserRef.current.add(chatId);
         }
 
         return true;
@@ -833,12 +919,12 @@ export default function ChatPage() {
         console.error(`Fetch ${mode} messages failed:`, error);
         setMessageErrorsByUser((prev) => ({
           ...prev,
-          [userId]:
+          [chatId]:
             error instanceof Error ? error.message : "Failed to update messages",
         }));
 
         if (mode === "initial") {
-          loadedMessagesByUserRef.current.delete(userId);
+          loadedMessagesByUserRef.current.delete(chatId);
         }
 
         return false;
@@ -848,11 +934,11 @@ export default function ChatPage() {
         }
 
         if (mode === "initial") {
-          setInitialLoadingMessageUserId((prev) => (prev === userId ? null : prev));
+          setInitialLoadingMessageUserId((prev) => (prev === chatId ? null : prev));
         } else if (mode === "older") {
-          setLoadingOlderMessageUserId((prev) => (prev === userId ? null : prev));
+          setLoadingOlderMessageUserId((prev) => (prev === chatId ? null : prev));
         } else {
-          setSyncingMessageUserId((prev) => (prev === userId ? null : prev));
+          setSyncingMessageUserId((prev) => (prev === chatId ? null : prev));
         }
       }
     },
@@ -861,28 +947,29 @@ export default function ChatPage() {
       getConversationMessagesSnapshot,
       getPersistedCursorId,
       abortMessageRequest,
+      getChatResource,
       mergeUserState,
       addMessages,
     ]
   );
 
   const scheduleLatestMessageSync = useCallback(
-    (userId: string) => {
-      if (!loadedMessagesByUserRef.current.has(userId)) {
+    (chat: User) => {
+      if (!loadedMessagesByUserRef.current.has(chat.id)) {
         return;
       }
 
-      const existingTimeout = messageSyncTimeoutsRef.current.get(userId);
+      const existingTimeout = messageSyncTimeoutsRef.current.get(chat.id);
       if (existingTimeout) {
         clearTimeout(existingTimeout);
       }
 
       const timeout = setTimeout(() => {
-        messageSyncTimeoutsRef.current.delete(userId);
-        void fetchConversationMessages(userId, "newer");
+        messageSyncTimeoutsRef.current.delete(chat.id);
+        void fetchConversationMessages(chat, "newer");
       }, MESSAGE_SYNC_DEBOUNCE_MS);
 
-      messageSyncTimeoutsRef.current.set(userId, timeout);
+      messageSyncTimeoutsRef.current.set(chat.id, timeout);
     },
     [fetchConversationMessages]
   );
@@ -929,32 +1016,32 @@ export default function ChatPage() {
   }, [socketMessages]);
 
   useEffect(() => {
-    if (!selectedUser?.id) return;
+    if (!selectedUser) return;
 
     if (loadedMessagesByUserRef.current.has(selectedUser.id)) {
-      scheduleLatestMessageSync(selectedUser.id);
+      scheduleLatestMessageSync(selectedUser);
       return;
     }
 
-    void fetchConversationMessages(selectedUser.id, "initial");
-  }, [selectedUser?.id, fetchConversationMessages, scheduleLatestMessageSync]);
+    void fetchConversationMessages(selectedUser, "initial");
+  }, [selectedUser, fetchConversationMessages, scheduleLatestMessageSync]);
 
   useEffect(() => {
     const didReconnect = isConnected && !previousConnectionStateRef.current;
     previousConnectionStateRef.current = isConnected;
 
-    if (!didReconnect || !selectedUser?.id) {
+    if (!didReconnect || !selectedUser) {
       return;
     }
 
-    scheduleLatestMessageSync(selectedUser.id);
-  }, [isConnected, selectedUser?.id, scheduleLatestMessageSync]);
+    scheduleLatestMessageSync(selectedUser);
+  }, [isConnected, selectedUser, scheduleLatestMessageSync]);
 
   useEffect(() => {
-    if (!selectedUser?.id) return;
+    if (!selectedUser) return;
 
     const syncCurrentChat = () => {
-      scheduleLatestMessageSync(selectedUser.id);
+      scheduleLatestMessageSync(selectedUser);
     };
 
     const handleVisibilityChange = () => {
@@ -970,7 +1057,7 @@ export default function ChatPage() {
       window.removeEventListener("focus", syncCurrentChat);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [selectedUser?.id, scheduleLatestMessageSync]);
+  }, [selectedUser, scheduleLatestMessageSync]);
 
   useEffect(() => {
     const requestControllers = messageRequestControllersRef.current;
@@ -997,6 +1084,10 @@ export default function ChatPage() {
       socketMessages.filter((msg) => {
         if (!selectedUserId || !currentUserId) return false;
 
+        if (selectedConversationId) {
+          return msg.conversationId === selectedConversationId;
+        }
+
         return (
           (msg.senderId === currentUserId &&
             msg.receiverId === selectedUserId) ||
@@ -1004,7 +1095,7 @@ export default function ChatPage() {
             msg.receiverId === currentUserId)
         );
       }),
-    [socketMessages, selectedUserId, currentUserId]
+    [socketMessages, selectedUserId, currentUserId, selectedConversationId]
   );
 
   // Sort messages by timestamp
@@ -1034,61 +1125,127 @@ export default function ChatPage() {
   const hasOlderMessages = Boolean(selectedMessagePageInfo?.hasMoreBefore);
 
   const handleLoadOlderMessages = useCallback(() => {
-    if (!selectedUserId || loadingOlderMessages) {
+    if (!selectedUser || loadingOlderMessages) {
       return;
     }
 
-    void fetchConversationMessages(selectedUserId, "older");
-  }, [selectedUserId, loadingOlderMessages, fetchConversationMessages]);
+    void fetchConversationMessages(selectedUser, "older");
+  }, [selectedUser, loadingOlderMessages, fetchConversationMessages]);
+
+  const markConversationAsRead = useCallback(
+    (chat: User, messagesToScan?: Message[]) => {
+      if (!currentUserId) return;
+
+      const resource = getChatResource(chat);
+      const unreadIncoming = (messagesToScan ?? socketMessagesRef.current).filter(
+        (message) => {
+          const belongsToConversation = resource.conversationId
+            ? message.conversationId === resource.conversationId
+            : (message.senderId === currentUserId &&
+                message.receiverId === chat.id) ||
+              (message.senderId === chat.id &&
+                message.receiverId === currentUserId);
+
+          if (!belongsToConversation || message.senderId === currentUserId) {
+            return false;
+          }
+
+          return !(
+            message.readByUserIds?.includes(currentUserId) ||
+            message.status === "read" ||
+            message.read === true
+          );
+        }
+      );
+
+      setUnreadByUser((prev) =>
+        prev[chat.id] === 0 ? prev : { ...prev, [chat.id]: 0 }
+      );
+
+      if (unreadIncoming.length === 0) {
+        return;
+      }
+
+      unreadIncoming.forEach((message) => markMessageAsRead(message.id));
+
+      fetch(resource.readUrl, {
+        method: "POST",
+      }).catch((error) => {
+        console.error("Failed to mark chat as read:", error);
+      });
+    },
+    [currentUserId, getChatResource, markMessageAsRead]
+  );
 
   /* ---------------------------- MARK MESSAGES AS READ ---------------------------- */
   useEffect(() => {
     if (!selectedUser || !currentUserId) return;
 
-    const unreadIncoming = sortedMessages.filter((m) => {
-      const isIncoming =
-        m.senderId === selectedUser.id && m.receiverId === currentUserId;
-      const isRead = m.status === "read" || m.read === true;
-      return isIncoming && !isRead;
-    });
+    markConversationAsRead(selectedUser, sortedMessages);
+  }, [sortedMessages, selectedUser, currentUserId, markConversationAsRead]);
 
-    if (unreadIncoming.length === 0) return;
+  useEffect(() => {
+    if (!pendingScrollMessageId || !selectedUser) {
+      return;
+    }
 
-    setUnreadByUser((prev) => ({ ...prev, [selectedUser.id]: 0 }));
+    const targetExists = sortedMessages.some(
+      (message) => message.id === pendingScrollMessageId
+    );
 
-    unreadIncoming.forEach((m) => markMessageAsRead(m.id));
+    if (targetExists) {
+      const frame = window.requestAnimationFrame(() => {
+        document
+          .getElementById(`message-${pendingScrollMessageId}`)
+          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+        setPendingScrollMessageId(null);
+      });
 
-    fetch(`/api/messages/by-user/${selectedUser.id}/read`, {
-      method: "POST",
-    }).catch((error) => {
-      console.error("Failed to mark chat as read:", error);
-    });
-  }, [sortedMessages, selectedUser, currentUserId, markMessageAsRead]);
+      return () => window.cancelAnimationFrame(frame);
+    }
+
+    if (!loadingInitialMessages && !loadingOlderMessages && hasOlderMessages) {
+      void fetchConversationMessages(selectedUser, "older");
+      return;
+    }
+
+    if (!loadingInitialMessages && !loadingOlderMessages && !hasOlderMessages) {
+      setPendingScrollMessageId(null);
+    }
+  }, [
+    fetchConversationMessages,
+    hasOlderMessages,
+    loadingInitialMessages,
+    loadingOlderMessages,
+    pendingScrollMessageId,
+    selectedUser,
+    sortedMessages,
+  ]);
 
   useEffect(() => {
     const handleRealtimeMessage = (event: Event) => {
       const detail = (event as CustomEvent<Message>).detail;
       if (!detail || !currentUserId) return;
-      if (detail.receiverId !== currentUserId) return;
+      if (detail.senderId === currentUserId) return;
 
-      const senderId = detail.senderId;
-      if (!senderId) return;
+      const chatUserId = resolveChatUserIdForMessage(detail);
+      if (!chatUserId) return;
 
       const messageTs = new Date(detail.timestamp).toISOString();
 
       setUsers((prev) =>
         prev.map((user) =>
-          user.id === senderId
+          user.id === chatUserId
             ? { ...user, lastMessageAt: messageTs }
             : user
         )
       );
 
-      if (selectedUser?.id === senderId) return;
+      if (selectedUser?.id === chatUserId) return;
 
       setUnreadByUser((prev) => ({
         ...prev,
-        [senderId]: (prev[senderId] ?? 0) + 1,
+        [chatUserId]: (prev[chatUserId] ?? 0) + 1,
       }));
     };
 
@@ -1103,7 +1260,7 @@ export default function ChatPage() {
         handleRealtimeMessage as EventListener
       );
     };
-  }, [currentUserId, selectedUser?.id]);
+  }, [currentUserId, resolveChatUserIdForMessage, selectedUser?.id]);
 
   /* -------------------------------- TYPING -------------------------------- */
   const handleTyping = useCallback(() => {
@@ -1219,6 +1376,7 @@ export default function ChatPage() {
       return;
     }
     const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const resource = getChatResource(selectedUser);
 
     try {
       setSendingMessage(true);
@@ -1226,7 +1384,9 @@ export default function ChatPage() {
       socketSendMessage({
         id: tempId,
         content: messageText,
-        receiverId: selectedUser.id,
+        receiverId:
+          selectedUser.chatType === "group" ? undefined : selectedUser.id,
+        conversationId: resource.conversationId ?? undefined,
         senderId: currentUserId,
         replyToId: replyTo?.id,
         file: pendingAttachment?.file ?? null,
@@ -1258,31 +1418,34 @@ export default function ChatPage() {
     (chatUserId: string) => {
       if (!currentUserId) return;
 
+      const targetChat =
+        users.find((user) => user.id === chatUserId) ?? null;
+      const conversationId =
+        targetChat?.conversationId ??
+        (targetChat?.chatType === "group" ? targetChat.id : null);
+
       const relatedMessageIds = socketMessages
         .filter(
-          (msg) =>
-            (msg.senderId === currentUserId && msg.receiverId === chatUserId) ||
-            (msg.senderId === chatUserId && msg.receiverId === currentUserId)
+          (msg) => {
+            if (conversationId) {
+              return msg.conversationId === conversationId;
+            }
+
+            return (
+              (msg.senderId === currentUserId && msg.receiverId === chatUserId) ||
+              (msg.senderId === chatUserId && msg.receiverId === currentUserId)
+            );
+          }
         )
         .map((msg) => msg.id);
 
       relatedMessageIds.forEach((id) => removeMessage(id));
 
-      setMessageStatus((prev) => {
-        if (relatedMessageIds.length === 0) return prev;
-
-        const next = { ...prev };
-        relatedMessageIds.forEach((id) => {
-          delete next[id];
-        });
-        return next;
-      });
-
       setReplyTo((prev) =>
         prev && relatedMessageIds.includes(prev.id) ? null : prev
       );
     },
-    [currentUserId, removeMessage, socketMessages]
+    [currentUserId, removeMessage, socketMessages, users]
   );
 
   const handleDeleteMessage = useCallback(
@@ -1318,11 +1481,6 @@ export default function ChatPage() {
         }
 
         setReplyTo((prev) => (prev?.id === message.id ? null : prev));
-        setMessageStatus((prev) => {
-          const updated = { ...prev };
-          delete updated[message.id];
-          return updated;
-        });
       } catch (error) {
         console.error("Error deleting message:", error);
         alert("Failed to delete message. Please try again.");
@@ -1382,7 +1540,8 @@ export default function ChatPage() {
   };
 
   const handleMenuAction = async (action: string, message: Message) => {
-    switch (action) {
+    try {
+      switch (action) {
       case "reply":
         setReplyTo(message);
         inputRef.current?.focus();
@@ -1396,9 +1555,59 @@ export default function ChatPage() {
       case "copyLink": {
         if (!currentUserId) break;
         const chatUserId =
-          message.senderId === currentUserId ? message.receiverId : message.senderId;
+          resolveChatUserIdForMessage(message) ?? selectedUser?.id;
+        if (!chatUserId) break;
         const link = `${window.location.origin}/chat?userId=${chatUserId}#message-${message.id}`;
         await navigator.clipboard.writeText(link);
+        break;
+      }
+      case "toggleStar": {
+        if (message.id.startsWith("temp_")) break;
+
+        const nextStarred = !message.isStarred;
+        const response = await fetch(
+          `/api/messages/by-message/${message.id}/star`,
+          {
+            method: nextStarred ? "POST" : "DELETE",
+          }
+        );
+
+        const data = (await response.json().catch(() => ({}))) as {
+          error?: string;
+          isStarred?: boolean;
+        };
+
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to update starred message");
+        }
+
+        const updatedMessage = {
+          ...message,
+          isStarred: data.isStarred ?? nextStarred,
+        };
+
+        addMessages([updatedMessage]);
+        setStarredMessages((prev) => {
+          const withoutCurrent = prev.filter((item) => item.id !== message.id);
+
+          if (!(data.isStarred ?? nextStarred)) {
+            return withoutCurrent;
+          }
+
+          const existingEntry = prev.find((item) => item.id === message.id);
+
+          return [
+            {
+              ...updatedMessage,
+              chatName: selectedUser?.name || existingEntry?.chatName,
+              chatType:
+                selectedUser?.chatType ||
+                existingEntry?.chatType ||
+                "direct",
+            },
+            ...withoutCurrent,
+          ];
+        });
         break;
       }
       case "download": {
@@ -1438,9 +1647,179 @@ export default function ChatPage() {
           },
         });
         break;
+      }
+    } catch (error) {
+      console.error("Message action failed:", error);
+      alert("Unable to update this message right now. Please try again.");
+    } finally {
+      setContextMenu(null);
     }
-    setContextMenu(null);
   };
+
+  const handleCreateGroup = useCallback(
+    async ({ name, memberIds }: { name: string; memberIds: string[] }) => {
+      const response = await fetch("/api/user/chat/groups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, memberIds }),
+      });
+
+      const data = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        chat?: RawChatUser;
+      };
+
+      if (!response.ok || !data.chat) {
+        throw new Error(data.error || "Failed to create group");
+      }
+
+      const normalizedGroup = normalizeUsers([data.chat])[0];
+      if (!normalizedGroup) {
+        throw new Error("Failed to prepare the new group chat");
+      }
+
+      setUsers((prev) => {
+        const withoutDuplicate = prev.filter((user) => user.id !== normalizedGroup.id);
+        return [normalizedGroup, ...withoutDuplicate];
+      });
+      setUnreadByUser((prev) => ({ ...prev, [normalizedGroup.id]: 0 }));
+      setSelectedUser(normalizedGroup);
+      setShowStarredMessages(false);
+
+      if (isMobile) {
+        setShowMobileSidebar(false);
+      }
+    },
+    [isMobile]
+  );
+
+  const handleOpenStarredMessages = useCallback(async () => {
+    setShowStarredMessages(true);
+    setStarredMessagesError(null);
+    setLoadingStarredMessages(true);
+
+    try {
+      const response = await fetch("/api/user/chat/starred", {
+        cache: "no-store",
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        messages?: StarredMessageItem[];
+      };
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to fetch starred messages");
+      }
+
+      setStarredMessages(Array.isArray(data.messages) ? data.messages : []);
+    } catch (error) {
+      console.error("Failed to fetch starred messages:", error);
+      setStarredMessagesError(
+        error instanceof Error
+          ? error.message
+          : "Failed to fetch starred messages"
+      );
+    } finally {
+      setLoadingStarredMessages(false);
+    }
+  }, []);
+
+  const handleMarkAllAsRead = useCallback(async () => {
+    if (!currentUserId) return;
+
+    const unreadMessages = socketMessagesRef.current.filter(
+      (message) =>
+        message.senderId !== currentUserId &&
+        !(
+          message.readByUserIds?.includes(currentUserId) ||
+          message.status === "read" ||
+          message.read === true
+        )
+    );
+
+    if (unreadMessages.length > 0) {
+      addMessages(
+        unreadMessages.map((message) => ({
+          ...message,
+          status: "read",
+          read: true,
+          deliveredToUserIds: Array.from(
+            new Set([...(message.deliveredToUserIds ?? []), currentUserId])
+          ),
+          readByUserIds: Array.from(
+            new Set([...(message.readByUserIds ?? []), currentUserId])
+          ),
+        }))
+      );
+    }
+
+    setUnreadByUser((prev) =>
+      Object.fromEntries(
+        Object.keys(prev).map((key) => [key, 0])
+      ) as Record<string, number>
+    );
+    setUsers((prev) =>
+      prev.map((user) => ({
+        ...user,
+        unreadCount: 0,
+      }))
+    );
+
+    try {
+      const response = await fetch("/api/user/chat/mark-all-read", {
+        method: "POST",
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to mark all chats as read");
+      }
+    } catch (error) {
+      console.error("Failed to mark all chats as read:", error);
+      alert("Unable to mark all chats as read right now. Please try again.");
+    }
+  }, [addMessages, currentUserId]);
+
+  const handleSelectStarredMessage = useCallback(
+    (message: StarredMessageItem) => {
+      const matchingChat =
+        users.find(
+          (user) =>
+            getConversationKeyForUser(user) === message.conversationId
+        ) ??
+        (currentUserId
+          ? users.find((user) => {
+              const otherUserId =
+                message.senderId === currentUserId
+                  ? message.receiverId
+                  : message.senderId;
+
+              return user.id === otherUserId;
+            })
+          : undefined);
+
+      if (!matchingChat) {
+        setStarredMessagesError("That conversation is no longer available.");
+        return;
+      }
+
+      setUnreadByUser((prev) => ({ ...prev, [matchingChat.id]: 0 }));
+      setSelectedUser(matchingChat);
+      setReplyTo(null);
+      setContextMenu(null);
+      setShowEmojiPicker(false);
+      clearPendingAttachment();
+      setPendingScrollMessageId(message.id);
+      setShowStarredMessages(false);
+
+      if (isMobile) {
+        setShowMobileSidebar(false);
+      }
+    },
+    [clearPendingAttachment, currentUserId, getConversationKeyForUser, isMobile, users]
+  );
 
   /* ---------------------------- UI HANDLERS --------------------------- */
   const updateChatPreferences = useCallback(
@@ -1687,26 +2066,7 @@ export default function ChatPage() {
       return;
     }
 
-    // Clear unread badge immediately when opening a chat.
-    if (currentUserId) {
-      const unreadForUser = socketMessages.filter((msg) => {
-        const isIncoming =
-          msg.senderId === user.id && msg.receiverId === currentUserId;
-        const isRead = msg.status === "read" || msg.read === true;
-        return isIncoming && !isRead;
-      });
-
-      if (unreadForUser.length > 0) {
-        unreadForUser.forEach((msg) => markMessageAsRead(msg.id));
-        fetch(`/api/messages/by-user/${user.id}/read`, {
-          method: "POST",
-        }).catch((error) => {
-          console.error("Failed to mark chat as read:", error);
-        });
-      }
-
-      setUnreadByUser((prev) => ({ ...prev, [user.id]: 0 }));
-    }
+    setUnreadByUser((prev) => ({ ...prev, [user.id]: 0 }));
 
     setSelectedUser(user);
     setReplyTo(null);
@@ -1850,13 +2210,7 @@ export default function ChatPage() {
     const latestByUser = new Map<string, number>();
 
     socketMessages.forEach((msg) => {
-      let otherUserId: string | null = null;
-      if (msg.senderId === currentUserId) {
-        otherUserId = msg.receiverId;
-      } else if (msg.receiverId === currentUserId) {
-        otherUserId = msg.senderId;
-      }
-
+      const otherUserId = resolveChatUserIdForMessage(msg);
       if (!otherUserId) return;
 
       const ts = getMessageTimestamp(msg);
@@ -1896,7 +2250,7 @@ export default function ChatPage() {
 
       return (a.name ?? "").localeCompare(b.name ?? "");
     });
-  }, [users, socketMessages, currentUserId, unreadByUser]);
+  }, [users, socketMessages, currentUserId, resolveChatUserIdForMessage, unreadByUser]);
 
   /* -------------------------------- LOADING -------------------------------- */
   if (status === "loading" || (loadingUsers && users.length === 0)) {
@@ -2026,6 +2380,9 @@ export default function ChatPage() {
           isMobile={isMobile}
           showMobileSidebar={showMobileSidebar}
           onToggleMobileSidebar={toggleMobileSidebar}
+          onCreateGroup={handleCreateGroup}
+          onOpenStarredMessages={handleOpenStarredMessages}
+          onMarkAllAsRead={handleMarkAllAsRead}
         />
 
         {/* Chat Area with Scrollable Messages and Fixed Input */}
@@ -2074,7 +2431,6 @@ export default function ChatPage() {
             setActiveDropdownId={setActiveDropdownId}
             dropdownRef={dropdownRef}
             session={session}
-            messageStatus={messageStatus}
             isMobile={isMobile}
             handleKeyDown={handleKeyDown}
             isChatBlocked={Boolean(selectedUser?.isBlocked)}
@@ -2099,6 +2455,15 @@ export default function ChatPage() {
         isSubmitting={isConfirmingAction}
         onClose={closeConfirmDialog}
         onConfirm={handleConfirmAction}
+      />
+
+      <StarredMessagesModal
+        isOpen={showStarredMessages}
+        loading={loadingStarredMessages}
+        messages={starredMessages}
+        error={starredMessagesError}
+        onClose={() => setShowStarredMessages(false)}
+        onSelectMessage={handleSelectStarredMessage}
       />
 
       {/* Global Styles */}

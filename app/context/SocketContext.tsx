@@ -74,6 +74,12 @@ const attachmentsAreEqual = (
   });
 };
 
+const stringListsAreEqual = (left: string[] = [], right: string[] = []) => {
+  if (left.length !== right.length) return false;
+
+  return left.every((value, index) => value === right[index]);
+};
+
 const messagesAreEqual = (left: Message, right: Message) =>
   left.id === right.id &&
   left.text === right.text &&
@@ -87,6 +93,9 @@ const messagesAreEqual = (left: Message, right: Message) =>
   left.status === right.status &&
   left.type === right.type &&
   left.replyToId === right.replyToId &&
+  left.isStarred === right.isStarred &&
+  stringListsAreEqual(left.deliveredToUserIds, right.deliveredToUserIds) &&
+  stringListsAreEqual(left.readByUserIds, right.readByUserIds) &&
   attachmentsAreEqual(left.attachments, right.attachments);
 
 const mergeMessageBatch = (
@@ -172,7 +181,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
   const sendMessage = useCallback(
     (message: OutgoingMessageInput) => {
       const socket = socketRef.current;
-      if (!socket || !userId || !message.receiverId) return;
+      if (!socket || !userId || (!message.receiverId && !message.conversationId)) return;
 
       const messageText = (message.content ?? "").trim();
       const attachments = Array.isArray(message.attachments)
@@ -190,8 +199,9 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
         content: messageText,
         text: messageText,
         senderId: userId,
-        receiverId: message.receiverId,
-        chatId: message.chatId,
+        receiverId: message.receiverId ?? "",
+        chatId: message.chatId ?? message.conversationId,
+        conversationId: message.conversationId,
         timestamp: new Date().toISOString(),
         status: "sending",
         type:
@@ -227,6 +237,9 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
                 ]
               : [],
         replyToId: message.replyToId,
+        deliveredToUserIds: [userId],
+        readByUserIds: [userId],
+        isStarred: false,
       };
 
       upsertMessage(tempMessage);
@@ -237,7 +250,12 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
 
           if (pendingFile) {
             const formData = new FormData();
-            formData.append("receiverId", message.receiverId);
+            if (message.receiverId) {
+              formData.append("receiverId", message.receiverId);
+            }
+            if (message.conversationId) {
+              formData.append("conversationId", message.conversationId);
+            }
             if (messageText) {
               formData.append("text", messageText);
             }
@@ -257,6 +275,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
               body: JSON.stringify({
                 text: messageText,
                 receiverId: message.receiverId,
+                conversationId: message.conversationId,
                 replyToId: message.replyToId,
                 attachments,
               }),
@@ -273,15 +292,23 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
             content: data.message.text ?? messageText,
             text: data.message.text ?? messageText,
             senderId: data.message.senderId ?? userId,
-            receiverId: data.message.receiverId ?? message.receiverId,
+            receiverId: data.message.receiverId ?? message.receiverId ?? "",
             chatId: data.message.conversationId,
+            conversationId: data.message.conversationId ?? message.conversationId,
             timestamp: data.message.timestamp ?? new Date().toISOString(),
-            status: "sent",
+            status: data.message.status ?? "sent",
             type: data.message.type ?? tempMessage.type ?? "text",
             attachments: Array.isArray(data.message.attachments)
               ? data.message.attachments
               : [],
             replyToId: data.message.replyToId ?? message.replyToId,
+            deliveredToUserIds: Array.isArray(data.message.deliveredToUserIds)
+              ? data.message.deliveredToUserIds
+              : [userId],
+            readByUserIds: Array.isArray(data.message.readByUserIds)
+              ? data.message.readByUserIds
+              : [userId],
+            isStarred: Boolean(data.message.isStarred),
           };
 
           // Replace optimistic temp message with saved DB message
@@ -317,7 +344,17 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
       setMessages((prev) =>
         prev.map((m) =>
           m.id === messageId
-            ? { ...m, read: true, status: "read" }
+            ? {
+                ...m,
+                read: true,
+                status: "read",
+                deliveredToUserIds: Array.from(
+                  new Set([...(m.deliveredToUserIds ?? []), userId])
+                ),
+                readByUserIds: Array.from(
+                  new Set([...(m.readByUserIds ?? []), userId])
+                ),
+              }
             : m
         )
       );
@@ -380,7 +417,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     socket.on("receive_message", (msg: Message) => {
       upsertMessage(msg);
 
-      if (msg.receiverId === userId) {
+      if (msg.senderId !== userId) {
         window.dispatchEvent(
           new CustomEvent("orbitbyte:newMessageNotification", {
             detail: msg,
@@ -394,14 +431,57 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     });
 
     socket.on(
-      "message_read",
-      ({ messageId }: { messageId: string }) => {
+      "message_delivered",
+      ({ messageId, userIds }: { messageId: string; userIds?: string[] }) => {
         if (!messageId) return;
         setMessages((prev) =>
-          prev.map((m) =>
-            m.id === messageId
-              ? { ...m, read: true, status: "read" }
-              : m
+          prev.map((message) => {
+            if (message.id !== messageId || message.status === "read") {
+              return message;
+            }
+
+            const deliveredToUserIds = Array.from(
+              new Set([
+                ...(message.deliveredToUserIds ?? []),
+                ...(Array.isArray(userIds) ? userIds : []),
+              ])
+            );
+
+            return {
+              ...message,
+              deliveredToUserIds,
+              status: "delivered",
+            };
+          })
+        );
+      }
+    );
+
+    socket.on(
+      "message_read",
+      ({ messageId, userId: readByUserId }: { messageId: string; userId: string }) => {
+        if (!messageId) return;
+        setMessages((prev) =>
+          prev.map((message) =>
+            message.id === messageId
+              ? {
+                  ...message,
+                  read: true,
+                  status: "read",
+                  deliveredToUserIds: Array.from(
+                    new Set([
+                      ...(message.deliveredToUserIds ?? []),
+                      ...(readByUserId ? [readByUserId] : []),
+                    ])
+                  ),
+                  readByUserIds: Array.from(
+                    new Set([
+                      ...(message.readByUserIds ?? []),
+                      ...(readByUserId ? [readByUserId] : []),
+                    ])
+                  ),
+                }
+              : message
           )
         );
       }
@@ -415,6 +495,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     return () => {
       socket.off("receive_message");
       socket.off("message_sent");
+      socket.off("message_delivered");
       socket.off("message_read");
       socket.off("message_deleted");
     };

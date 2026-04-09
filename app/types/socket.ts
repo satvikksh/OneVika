@@ -28,6 +28,9 @@ export interface Message {
   attachments?: ChatAttachment[];
   replyToId?: string;
   seenBy?: string[];
+  deliveredToUserIds?: string[];
+  readByUserIds?: string[];
+  isStarred?: boolean;
 }
 
 export interface ChatAttachment {
@@ -60,6 +63,12 @@ export interface User {
   isBlockedByCurrentUser?: boolean;
   hasBlockedCurrentUser?: boolean;
   canMessage?: boolean;
+  chatType?: "direct" | "group";
+  conversationId?: string;
+  memberIds?: string[];
+  memberCount?: number;
+  isGroupOwner?: boolean;
+  subtitle?: string | null;
 }
 
 

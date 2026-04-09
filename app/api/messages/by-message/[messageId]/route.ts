@@ -9,8 +9,14 @@ const { Types } = mongoose;
 type StoredMessage = {
   _id: mongoose.Types.ObjectId;
   senderId: mongoose.Types.ObjectId;
-  receiverId: mongoose.Types.ObjectId;
+  receiverId?: mongoose.Types.ObjectId | null;
+  conversationId?: mongoose.Types.ObjectId;
   deletedForUserIds?: mongoose.Types.ObjectId[];
+};
+
+type ConversationDoc = {
+  _id: mongoose.Types.ObjectId;
+  participants?: mongoose.Types.ObjectId[];
 };
 
 export async function DELETE(
@@ -49,9 +55,26 @@ export async function DELETE(
       );
     }
 
-    const isParticipant =
+    const isDirectParticipant =
       message.senderId.toString() === session.user.id ||
-      message.receiverId.toString() === session.user.id;
+      message.receiverId?.toString?.() === session.user.id;
+
+    let isParticipant = isDirectParticipant;
+
+    if (!isParticipant && message.conversationId) {
+      const conversation = await db
+        ?.collection<ConversationDoc>("conversations")
+        .findOne(
+          { _id: message.conversationId },
+          { projection: { participants: 1 } }
+        );
+
+      isParticipant = Boolean(
+        conversation?.participants?.some(
+          (participant) => participant.toString() === session.user.id
+        )
+      );
+    }
 
     if (!isParticipant) {
       return NextResponse.json(

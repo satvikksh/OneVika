@@ -64,9 +64,10 @@ export default function ChatTopBar({
   const desktopLeft = "lg:left-80";
   const mobileClasses = isMobile ? "left-0 right-0" : "";
   const positionClasses = isMobile ? mobileClasses : `${desktopLeft} right-0`;
+  const isGroupChat = selectedUser?.chatType === "group";
 
   const isUserOnline = selectedUser?.id
-    ? onlineUsers.includes(selectedUser.id)
+    ? !isGroupChat && onlineUsers.includes(selectedUser.id)
     : false;
 
   useEffect(() => {
@@ -95,7 +96,7 @@ export default function ChatTopBar({
   }, [isMenuOpen]);
 
   const handleUserProfileClick = () => {
-    if (selectedUser) {
+    if (selectedUser && !isGroupChat) {
       router.push(`/profile/${selectedUser.id}`);
     }
   };
@@ -164,7 +165,7 @@ export default function ChatTopBar({
       onClick: onDeleteChat,
       danger: true,
     },
-  ].filter((item) => Boolean(item.onClick));
+  ].filter((item) => !isGroupChat && Boolean(item.onClick));
 
   return (
     <>
@@ -199,44 +200,67 @@ export default function ChatTopBar({
               <div className="relative flex-shrink-0">
                 <button
                   onClick={handleUserProfileClick}
-                  className="rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  aria-label="View user profile"
+                  disabled={isGroupChat}
+                  className="rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-default disabled:ring-0"
+                  aria-label={isGroupChat ? "Group conversation" : "View user profile"}
                 >
                   <PremiumAvatar
                     src={typeof selectedUser.avatar === "string" ? selectedUser.avatar : null}
-                    alt={selectedUser.name || "User"}
-                    fallback={selectedUser.name || "U"}
+                    alt={selectedUser.name || (isGroupChat ? "Group" : "User")}
+                    fallback={selectedUser.name || (isGroupChat ? "G" : "U")}
                     size={40}
                     isPremium={Boolean(selectedUser.isPremium)}
                   />
                 </button>
-                {isUserOnline ? (
+                {isGroupChat ? (
+                  <div className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border-2 border-white bg-blue-600 text-white dark:border-gray-900">
+                    <Users size={11} />
+                  </div>
+                ) : isUserOnline ? (
                   <div className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white bg-green-500 dark:border-gray-900" />
                 ) : null}
               </div>
 
               <button
                 onClick={handleUserProfileClick}
-                className="text-left transition-opacity hover:opacity-80"
-                aria-label="View user profile"
+                disabled={isGroupChat}
+                className="text-left transition-opacity hover:opacity-80 disabled:cursor-default disabled:hover:opacity-100"
+                aria-label={isGroupChat ? "Group conversation" : "View user profile"}
               >
-                <PremiumName
-                  name={selectedUser.name}
-                  isPremium={Boolean(selectedUser.isPremium)}
-                  badgeLabel="Premium"
-                  badgeClassName="px-1.5 py-0.5 text-[9px]"
-                  textClassName={`text-sm font-bold sm:text-base ${
-                    selectedUser.isPremium
-                      ? "text-slate-50"
-                      : "text-gray-900 dark:text-white"
-                  }`}
-                />
+                {isGroupChat ? (
+                  <div
+                    className={`text-sm font-bold sm:text-base ${
+                      selectedUser.isPremium
+                        ? "text-slate-50"
+                        : "text-gray-900 dark:text-white"
+                    }`}
+                  >
+                    {selectedUser.name || "Group chat"}
+                  </div>
+                ) : (
+                  <PremiumName
+                    name={selectedUser.name}
+                    isPremium={Boolean(selectedUser.isPremium)}
+                    badgeLabel="Premium"
+                    badgeClassName="px-1.5 py-0.5 text-[9px]"
+                    textClassName={`text-sm font-bold sm:text-base ${
+                      selectedUser.isPremium
+                        ? "text-slate-50"
+                        : "text-gray-900 dark:text-white"
+                    }`}
+                  />
+                )}
                 <p
                   className={`text-xs sm:text-sm ${
                     selectedUser.isPremium ? "text-slate-300" : "text-gray-500 dark:text-gray-400"
                   }`}
                 >
-                  {selectedUser.isBlocked ? (
+                  {isGroupChat ? (
+                    <span className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400">
+                      <span className="h-2 w-2 rounded-full bg-blue-500" />
+                      {selectedUser.memberCount ?? selectedUser.memberIds?.length ?? 0} members
+                    </span>
+                  ) : selectedUser.isBlocked ? (
                     <span className="inline-flex items-center gap-1 text-red-500 dark:text-red-400">
                       <span className="h-2 w-2 rounded-full bg-red-500" />
                       Messaging blocked
@@ -260,43 +284,49 @@ export default function ChatTopBar({
           </div>
 
           <div className="flex items-center gap-2" ref={menuRef}>
-            <button
-              onClick={startCall}
-              disabled={!isReady || loading || Boolean(selectedUser.isBlocked)}
-              className="rounded-xl p-2 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-gray-800"
-              aria-label="Voice call"
-            >
-              <Phone size={18} />
-            </button>
+            {!isGroupChat ? (
+              <>
+                <button
+                  onClick={startCall}
+                  disabled={!isReady || loading || Boolean(selectedUser.isBlocked)}
+                  className="rounded-xl p-2 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-gray-800"
+                  aria-label="Voice call"
+                >
+                  <Phone size={18} />
+                </button>
 
-            <button
-              disabled={Boolean(selectedUser.isBlocked)}
-              className="rounded-xl p-2 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-gray-800"
-              aria-label="Video call"
-            >
-              <Video size={18} />
-            </button>
+                <button
+                  disabled={Boolean(selectedUser.isBlocked)}
+                  className="rounded-xl p-2 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-gray-800"
+                  aria-label="Video call"
+                >
+                  <Video size={18} />
+                </button>
 
-            <button
-              onClick={handleUserProfileClick}
-              className="hidden rounded-xl p-2 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 sm:block"
-              aria-label="User info"
-            >
-              <Info size={20} />
-            </button>
+                <button
+                  onClick={handleUserProfileClick}
+                  className="hidden rounded-xl p-2 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 sm:block"
+                  aria-label="User info"
+                >
+                  <Info size={20} />
+                </button>
+              </>
+            ) : null}
 
-            <button
-              onClick={() => setIsMenuOpen((prev) => !prev)}
-              disabled={isActionBusy}
-              className="rounded-xl p-2 transition-colors hover:bg-gray-100 disabled:opacity-60 dark:hover:bg-gray-800"
-              aria-label="Chat options"
-              aria-expanded={isMenuOpen}
-              aria-haspopup="menu"
-            >
-              <MoreVertical size={18} />
-            </button>
+            {menuItems.length > 0 ? (
+              <button
+                onClick={() => setIsMenuOpen((prev) => !prev)}
+                disabled={isActionBusy}
+                className="rounded-xl p-2 transition-colors hover:bg-gray-100 disabled:opacity-60 dark:hover:bg-gray-800"
+                aria-label="Chat options"
+                aria-expanded={isMenuOpen}
+                aria-haspopup="menu"
+              >
+                <MoreVertical size={18} />
+              </button>
+            ) : null}
 
-            {isMenuOpen ? (
+            {isMenuOpen && menuItems.length > 0 ? (
               <>
                 {isMobile ? (
                   <>

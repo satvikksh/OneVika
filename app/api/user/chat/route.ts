@@ -20,6 +20,9 @@ type FollowRow = {
 type ConversationRow = {
   _id: mongoose.Types.ObjectId;
   participants?: mongoose.Types.ObjectId[];
+  isGroup?: boolean;
+  name?: string;
+  createdBy?: mongoose.Types.ObjectId;
 };
 
 type LastMessageRow = {
@@ -99,10 +102,18 @@ export async function GET(req: NextRequest) {
     // 2) Any existing conversation interaction
     const conversations = await db
       .collection<ConversationRow>("conversations")
-      .find({ participants: currentUserId }, { projection: { participants: 1 } })
+      .find(
+        { participants: currentUserId },
+        { projection: { participants: 1, isGroup: 1, name: 1, createdBy: 1 } }
+      )
       .toArray();
 
-    conversations.forEach((conv) => {
+    const directConversations = conversations.filter(
+      (conv) => !conv.isGroup
+    );
+    const groupConversations = conversations.filter((conv) => Boolean(conv.isGroup));
+
+    directConversations.forEach((conv) => {
       (conv.participants || []).forEach((p) => {
         const id = p?.toString?.();
         if (id && id !== session.user?.id) {
@@ -111,11 +122,23 @@ export async function GET(req: NextRequest) {
       });
     });
 
-    if (allowedUserIds.size === 0) {
+    if (allowedUserIds.size === 0 && groupConversations.length === 0) {
       return NextResponse.json({ users: [] });
     }
 
-    const objectIds = [...allowedUserIds].map((id) => new ObjectId(id));
+    const groupMemberIds = new Set<string>();
+    groupConversations.forEach((conversation) => {
+      (conversation.participants || []).forEach((participant) => {
+        const participantId = participant?.toString?.();
+        if (participantId && participantId !== session.user.id) {
+          groupMemberIds.add(participantId);
+        }
+      });
+    });
+
+    const objectIds = Array.from(
+      new Set([...allowedUserIds, ...groupMemberIds])
+    ).map((id) => new ObjectId(id));
     const blocks = await db
       .collection<BlockRow>("blockedUsers")
       .find({
@@ -200,7 +223,7 @@ export async function GET(req: NextRequest) {
       { conversationId: mongoose.Types.ObjectId; otherUserId: string }
     >();
 
-    conversations.forEach((conv) => {
+    directConversations.forEach((conv) => {
       const participants = Array.isArray(conv.participants)
         ? conv.participants
         : [];
@@ -217,24 +240,29 @@ export async function GET(req: NextRequest) {
       });
     });
 
-    const conversationIds = Array.from(
+    const allConversationIds = Array.from(
       new Set(
-        Array.from(conversationByOtherUserId.values()).map((row) =>
-          row.conversationId?.toString?.()
-        )
+        [
+          ...Array.from(conversationByOtherUserId.values()).map((row) =>
+            row.conversationId?.toString?.()
+          ),
+          ...groupConversations.map((conversation) =>
+            conversation._id?.toString?.()
+          ),
+        ]
       )
     )
       .filter(Boolean)
       .map((id) => new ObjectId(id as string));
 
     const lastMessageByConversationId = new Map<string, string>();
-    const unreadBySenderId = new Map<string, number>();
+    const unreadByConversationId = new Map<string, number>();
 
-    if (conversationIds.length > 0) {
+    if (allConversationIds.length > 0) {
       const lastMessages = await db
         .collection("messages")
         .aggregate([
-          { $match: { conversationId: { $in: conversationIds } } },
+          { $match: { conversationId: { $in: allConversationIds } } },
           { $match: { deletedForUserIds: { $ne: currentUserId } } },
           { $sort: { createdAt: -1 } },
           {
@@ -260,15 +288,15 @@ export async function GET(req: NextRequest) {
         .aggregate([
           {
             $match: {
-              conversationId: { $in: conversationIds },
-              receiverId: currentUserId,
-              read: { $ne: true },
+              conversationId: { $in: allConversationIds },
+              senderId: { $ne: currentUserId },
+              readByUserIds: { $ne: currentUserId },
               deletedForUserIds: { $ne: currentUserId },
             },
           },
           {
             $group: {
-              _id: "$senderId",
+              _id: "$conversationId",
               count: { $sum: 1 },
             },
           },
@@ -276,9 +304,9 @@ export async function GET(req: NextRequest) {
         .toArray() as UnreadCountRow[];
 
       unreadCounts.forEach((row) => {
-        const senderId = row?._id?.toString?.();
-        if (!senderId) return;
-        unreadBySenderId.set(senderId, Number(row.count) || 0);
+        const conversationId = row?._id?.toString?.();
+        if (!conversationId) return;
+        unreadByConversationId.set(conversationId, Number(row.count) || 0);
       });
     }
 
@@ -302,7 +330,9 @@ export async function GET(req: NextRequest) {
         isPremium: isPremiumActive(user),
         isOnline: false,
         lastSeen: user.lastSeen ? new Date(user.lastSeen).toISOString() : null,
-        unreadCount: unreadBySenderId.get(userId) ?? 0,
+        unreadCount: conversationId
+          ? unreadByConversationId.get(conversationId) ?? 0
+          : 0,
         lastMessageAt: conversationId
           ? lastMessageByConversationId.get(conversationId) ?? null
           : null,
@@ -315,10 +345,65 @@ export async function GET(req: NextRequest) {
         isBlockedByCurrentUser,
         hasBlockedCurrentUser,
         canMessage: !(isBlockedByCurrentUser || hasBlockedCurrentUser),
+        chatType: "direct",
+        conversationId: conversationId ?? null,
       };
     });
 
-    return NextResponse.json({ users: usersWithStatus });
+    const userById = new Map(
+      users.map((user) => [
+        user._id.toString(),
+        {
+          name: user.name,
+          avatar: user.avatar || user.image,
+        },
+      ])
+    );
+
+    const groupChats = groupConversations.map((conversation) => {
+      const conversationId = conversation._id.toString();
+      const memberIds = (conversation.participants || [])
+        .map((participant) => participant?.toString?.())
+        .filter(Boolean) as string[];
+      const otherMemberIds = memberIds.filter((memberId) => memberId !== session.user.id);
+      const previewNames = otherMemberIds
+        .map((memberId) => userById.get(memberId)?.name)
+        .filter(Boolean)
+        .slice(0, 3);
+
+      return {
+        _id: conversationId,
+        name:
+          conversation.name?.trim() ||
+          previewNames.join(", ") ||
+          "Untitled group",
+        email: null,
+        avatar: null,
+        isPremium: false,
+        isOnline: false,
+        lastSeen: null,
+        unreadCount: unreadByConversationId.get(conversationId) ?? 0,
+        lastMessageAt: lastMessageByConversationId.get(conversationId) ?? null,
+        isPinned: false,
+        isArchived: false,
+        isLocked: false,
+        lockVisibility: "blur",
+        isUnlocked: true,
+        isBlocked: false,
+        isBlockedByCurrentUser: false,
+        hasBlockedCurrentUser: false,
+        canMessage: true,
+        chatType: "group",
+        conversationId,
+        memberIds,
+        memberCount: memberIds.length,
+        isGroupOwner:
+          conversation.createdBy?.toString?.() === session.user.id,
+        subtitle: `${memberIds.length} members`,
+      };
+    });
+
+    return NextResponse.json({ users: [...groupChats, ...usersWithStatus] });
   } catch (error) {
     console.error("FETCH CHAT USERS ERROR:", error);
     return NextResponse.json(

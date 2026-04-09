@@ -5,6 +5,7 @@ import { User } from "../types/socket";
 import {
   Archive,
   ArrowLeft,
+  CheckCheck,
   ChevronDown,
   ChevronRight,
   EyeOff,
@@ -12,12 +13,16 @@ import {
   Lock,
   Menu,
   MessageSquare,
+  MoreVertical,
   Pin,
   PinOff,
   Search,
   Shield,
+  Star,
   Trash2,
   User as UserIcon,
+  UserPlus,
+  Users,
   X,
 } from "lucide-react";
 import { PremiumAvatar, PremiumName } from "../components/premium-ui";
@@ -34,6 +39,11 @@ type RecoverLockInput = {
   securityQuestion: SecurityKey;
   securityAnswer: string;
   visibility: "blur" | "hidden";
+};
+
+type CreateGroupInput = {
+  name: string;
+  memberIds: string[];
 };
 
 interface ChatSidebarProps {
@@ -63,6 +73,9 @@ interface ChatSidebarProps {
   showMobileSidebar: boolean;
   onBackToSidebar?: () => void;
   onToggleMobileSidebar?: () => void;
+  onCreateGroup: (input: CreateGroupInput) => Promise<void> | void;
+  onOpenStarredMessages: () => Promise<void> | void;
+  onMarkAllAsRead: () => Promise<void> | void;
 }
 
 type ActionMenuState = { user: User; rect: DOMRect };
@@ -451,6 +464,241 @@ const ChatPasswordDialog: React.FC<{
   );
 };
 
+const SidebarQuickMenu: React.FC<{
+  isOpen: boolean;
+  isMobile: boolean;
+  anchorRect: DOMRect | null;
+  busy: boolean;
+  onClose: () => void;
+  onCreateGroup: () => void;
+  onOpenStarredMessages: () => void;
+  onMarkAllAsRead: () => void;
+}> = ({
+  isOpen,
+  isMobile,
+  anchorRect,
+  busy,
+  onClose,
+  onCreateGroup,
+  onOpenStarredMessages,
+  onMarkAllAsRead,
+}) => {
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  const items = [
+    {
+      id: "create-group",
+      label: "Create Group",
+      icon: UserPlus,
+      onClick: onCreateGroup,
+    },
+    {
+      id: "starred",
+      label: "Starred Messages",
+      icon: Star,
+      onClick: onOpenStarredMessages,
+    },
+    {
+      id: "mark-all-read",
+      label: "Mark All as Read",
+      icon: CheckCheck,
+      onClick: onMarkAllAsRead,
+    },
+  ];
+
+  if (isMobile) {
+    return (
+      <>
+        <div className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-[2px]" onClick={onClose} />
+        <div className="fixed inset-x-0 bottom-0 z-[71] animate-chatSheet rounded-t-[28px] border border-white/10 bg-white px-4 pb-6 pt-3 shadow-2xl dark:bg-gray-950">
+          <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-gray-300 dark:bg-gray-700" />
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">Sidebar menu</p>
+              <h3 className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">Chat tools</h3>
+            </div>
+            <button onClick={onClose} className="rounded-full p-2 text-gray-500 transition-colors hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800" aria-label="Close menu">
+              <X size={18} />
+            </button>
+          </div>
+          <div className="space-y-2">
+            {items.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => {
+                  onClose();
+                  item.onClick();
+                }}
+                disabled={busy}
+                className="flex w-full items-center gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-left text-gray-900 transition-all disabled:opacity-60 dark:border-gray-800 dark:bg-gray-900 dark:text-white"
+              >
+                <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-white text-blue-600 dark:bg-gray-800 dark:text-blue-300">
+                  {busy ? <Loader2 size={18} className="animate-spin" /> : <item.icon size={18} />}
+                </div>
+                <div className="font-medium">{item.label}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  const left = Math.min(anchorRect?.left ?? 0, window.innerWidth - 260);
+  const top = Math.min((anchorRect?.bottom ?? 0) + 8, window.innerHeight - 220);
+
+  return (
+    <>
+      <div className="fixed inset-0 z-[70]" onClick={onClose} />
+      <div
+        className="fixed z-[71] min-w-[240px] rounded-2xl border border-gray-200 bg-white p-2 shadow-2xl dark:border-gray-800 dark:bg-gray-950"
+        style={{ left, top }}
+        role="menu"
+      >
+        {items.map((item) => (
+          <button
+            key={item.id}
+            onClick={() => {
+              onClose();
+              item.onClick();
+            }}
+            disabled={busy}
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-gray-900 transition-colors hover:bg-gray-100 disabled:opacity-60 dark:text-white dark:hover:bg-gray-900"
+            role="menuitem"
+          >
+            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-300">
+              {busy ? <Loader2 size={16} className="animate-spin" /> : <item.icon size={16} />}
+            </div>
+            <div className="font-medium">{item.label}</div>
+          </button>
+        ))}
+      </div>
+    </>
+  );
+};
+
+const CreateGroupDialog: React.FC<{
+  isOpen: boolean;
+  isMobile: boolean;
+  users: User[];
+  groupName: string;
+  selectedMemberIds: string[];
+  error: string;
+  submitting: boolean;
+  onClose: () => void;
+  onGroupNameChange: (value: string) => void;
+  onToggleMember: (userId: string) => void;
+  onSubmit: () => void;
+}> = ({
+  isOpen,
+  isMobile,
+  users,
+  groupName,
+  selectedMemberIds,
+  error,
+  submitting,
+  onClose,
+  onGroupNameChange,
+  onToggleMember,
+  onSubmit,
+}) => {
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !submitting) onClose();
+    };
+
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [isOpen, onClose, submitting]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/55 p-4 sm:items-center">
+      <button className="absolute inset-0 cursor-default" onClick={onClose} aria-label="Close create group dialog" />
+      <div className={`relative z-[81] w-full max-w-lg overflow-hidden rounded-[28px] border border-gray-200 bg-white shadow-2xl dark:border-gray-800 dark:bg-gray-950 ${isMobile ? "animate-chatSheet" : "animate-chatPopover"}`}>
+        <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-5 py-4 dark:border-gray-800">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">Create group</p>
+            <h3 className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">Start a group conversation</h3>
+          </div>
+          <button onClick={onClose} disabled={submitting} className="rounded-full p-2 text-gray-500 transition-colors hover:bg-gray-100 disabled:opacity-50 dark:text-gray-400 dark:hover:bg-gray-800" aria-label="Close dialog">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="space-y-4 px-5 py-5">
+          <label className="block">
+            <span className="mb-2 block text-sm font-medium text-gray-800 dark:text-gray-200">Group name</span>
+            <input
+              type="text"
+              value={groupName}
+              onChange={(event) => onGroupNameChange(event.target.value)}
+              className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+              placeholder="Weekend crew"
+              autoFocus
+            />
+          </label>
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-sm font-medium text-gray-800 dark:text-gray-200">Add people</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">{selectedMemberIds.length} selected</span>
+            </div>
+            <div className="max-h-72 space-y-2 overflow-y-auto rounded-2xl border border-gray-200 p-2 dark:border-gray-800">
+              {users.length === 0 ? (
+                <p className="px-3 py-4 text-sm text-gray-500 dark:text-gray-400">No available contacts for a new group yet.</p>
+              ) : (
+                users.map((user) => {
+                  const isSelected = selectedMemberIds.includes(user.id);
+                  return (
+                    <button
+                      key={user.id}
+                      type="button"
+                      onClick={() => onToggleMember(user.id)}
+                      className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition ${
+                        isSelected
+                          ? "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
+                          : "hover:bg-gray-100 dark:hover:bg-gray-900"
+                      }`}
+                    >
+                      <div className={`flex h-10 w-10 items-center justify-center rounded-2xl ${isSelected ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-300"}`}>
+                        {isSelected ? <CheckCheck size={18} /> : <Users size={18} />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-medium text-gray-900 dark:text-white">{getChatDisplayName(user)}</div>
+                        <div className="truncate text-sm text-gray-500 dark:text-gray-400">{user.email || user.subtitle || "Direct chat contact"}</div>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+          {error ? <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">{error}</div> : null}
+        </div>
+        <div className="flex flex-col-reverse gap-3 border-t border-gray-100 px-5 py-4 sm:flex-row sm:justify-end dark:border-gray-800">
+          <button onClick={onClose} disabled={submitting} className="rounded-2xl border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900">Cancel</button>
+          <button onClick={onSubmit} disabled={submitting} className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-60">
+            {submitting ? <span className="inline-flex items-center gap-2"><Loader2 size={16} className="animate-spin" />Creating...</span> : "Create group"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function ChatSidebar({
   users,
   selectedUser,
@@ -474,9 +722,19 @@ export default function ChatSidebar({
   isMobile = false,
   showMobileSidebar = true,
   onToggleMobileSidebar,
+  onCreateGroup,
+  onOpenStarredMessages,
+  onMarkAllAsRead,
 }: ChatSidebarProps) {
   const [isSearching, setIsSearching] = useState(false);
   const [isArchivedExpanded, setIsArchivedExpanded] = useState(true);
+  const [isQuickMenuOpen, setIsQuickMenuOpen] = useState(false);
+  const [quickMenuRect, setQuickMenuRect] = useState<DOMRect | null>(null);
+  const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
+  const [createGroupName, setCreateGroupName] = useState("");
+  const [selectedGroupMemberIds, setSelectedGroupMemberIds] = useState<string[]>([]);
+  const [createGroupError, setCreateGroupError] = useState("");
+  const [isCreatingGroup, setIsCreatingGroup] = useState(false);
   const [pressingUserId, setPressingUserId] = useState<string | null>(null);
   const [pressProgress, setPressProgress] = useState(0);
   const [actionMenu, setActionMenu] = useState<ActionMenuState | null>(null);
@@ -492,6 +750,7 @@ export default function ChatSidebar({
   const [isDialogSubmitting, setIsDialogSubmitting] = useState(false);
 
   const sidebarRef = useRef<HTMLDivElement>(null);
+  const quickMenuButtonRef = useRef<HTMLButtonElement | null>(null);
   const pressTimerRef = useRef<number | null>(null);
   const pressAnimationFrameRef = useRef<number | null>(null);
   const pressStartTimeRef = useRef(0);
@@ -541,6 +800,14 @@ export default function ChatSidebar({
     resetDialogInputs();
   }, [isDialogSubmitting, resetDialogInputs]);
 
+  const closeCreateGroupDialog = useCallback(() => {
+    if (isCreatingGroup) return;
+    setIsCreateGroupOpen(false);
+    setCreateGroupName("");
+    setSelectedGroupMemberIds([]);
+    setCreateGroupError("");
+  }, [isCreatingGroup]);
+
   useEffect(() => {
     if (!searchQuery.trim()) return;
     setIsArchivedExpanded(true);
@@ -579,6 +846,12 @@ export default function ChatSidebar({
 
   useEffect(() => () => resetPressState(), [resetPressState]);
 
+  useEffect(() => {
+    if (!showMobileSidebar) {
+      setIsQuickMenuOpen(false);
+    }
+  }, [showMobileSidebar]);
+
   const filteredUsers = useMemo(
     () =>
       users.filter(
@@ -591,9 +864,15 @@ export default function ChatSidebar({
     [searchQuery, users]
   );
 
+  const directChats = filteredUsers.filter((user) => user.chatType !== "group");
+  const groupChats = filteredUsers.filter((user) => user.chatType === "group");
+  const creatableUsers = directChats.filter((user) => user.canMessage !== false);
+
   const suggestedUsers = searchQuery.trim() ? filteredUsers.slice(0, 5) : [];
-  const activeUsers = filteredUsers.filter((user) => !user.isArchived);
-  const archivedUsers = filteredUsers.filter((user) => user.isArchived);
+  const activeUsers = directChats.filter((user) => !user.isArchived);
+  const archivedUsers = directChats.filter((user) => user.isArchived);
+  const activeGroups = groupChats.filter((user) => !user.isArchived);
+  const archivedGroups = groupChats.filter((user) => user.isArchived);
   const highlightedUserId = actionMenu?.user.id ?? pressingUserId;
 
   const handleUserSelect = useCallback((user: User) => {
@@ -657,6 +936,11 @@ export default function ChatSidebar({
 
   const handleMenuAction = useCallback(async (action: "delete" | "archive" | "pin" | "lock" | "removeLock", user: User) => {
     try {
+      if (user.chatType === "group") {
+        setActionMenu(null);
+        return;
+      }
+
       if (action === "lock") {
         openLockDialog(user.isLocked ? "updateLock" : "lock", user);
         return;
@@ -811,10 +1095,51 @@ export default function ChatSidebar({
     handleUserSelect({ ...lockDialog.user, isUnlocked: true });
   }, [closeDialog, confirmPasswordInput, currentPasswordInput, handleUserSelect, lockDialog, lockVisibility, onLockChat, onRecoverLock, onRemoveLock, onUnlockChat, openLockDialog, passwordInput, securityAnswerInput, securityQuestionInput]);
 
+  const toggleSelectedGroupMember = useCallback((userId: string) => {
+    setSelectedGroupMemberIds((prev) =>
+      prev.includes(userId)
+        ? prev.filter((id) => id !== userId)
+        : [...prev, userId]
+    );
+  }, []);
+
+  const handleCreateGroupSubmit = useCallback(async () => {
+    if (createGroupName.trim().length < 2) {
+      setCreateGroupError("Enter a group name with at least 2 characters.");
+      return;
+    }
+
+    if (selectedGroupMemberIds.length < 2) {
+      setCreateGroupError("Select at least 2 people for this group.");
+      return;
+    }
+
+    try {
+      setCreateGroupError("");
+      setIsCreatingGroup(true);
+      await onCreateGroup({
+        name: createGroupName.trim(),
+        memberIds: selectedGroupMemberIds,
+      });
+      closeCreateGroupDialog();
+    } catch (error) {
+      console.error("Create group failed:", error);
+      setCreateGroupError(getErrorMessage(error, "Unable to create this group right now."));
+    } finally {
+      setIsCreatingGroup(false);
+    }
+  }, [
+    closeCreateGroupDialog,
+    createGroupName,
+    onCreateGroup,
+    selectedGroupMemberIds,
+  ]);
+
   const renderUserRow = (user: User) => {
     const unreadCount = getUnreadCount(user.id);
     const isSelected = selectedUser?.id === user.id;
     const isOnline = onlineUsers.includes(user.id) || Boolean(user.isOnline);
+    const isGroupChat = user.chatType === "group";
     const isLockedHidden = user.isLocked && !user.isUnlocked && user.lockVisibility === "hidden";
     const isLockedBlurred = user.isLocked && !user.isUnlocked && user.lockVisibility !== "hidden";
     const isHighlighted = highlightedUserId === user.id;
@@ -823,14 +1148,20 @@ export default function ChatSidebar({
     return (
       <div
         key={user.id}
-        onPointerDown={(event) => beginLongPress(event, user)}
+        onPointerDown={(event) => {
+          if (!isGroupChat) {
+            beginLongPress(event, user);
+          }
+        }}
         onPointerUp={() => cancelLongPress(true)}
         onPointerLeave={() => cancelLongPress()}
         onPointerCancel={() => cancelLongPress()}
         onPointerMove={handlePointerMove}
         onContextMenu={(event) => {
-          event.preventDefault();
-          openActionMenu(user, event.currentTarget);
+          if (!isGroupChat) {
+            event.preventDefault();
+            openActionMenu(user, event.currentTarget);
+          }
         }}
         className={`group relative overflow-hidden transition-all duration-200 ${
           isSelected ? "bg-blue-100/90 dark:bg-blue-950/40" : "hover:bg-gray-100 dark:hover:bg-gray-900"
@@ -842,7 +1173,7 @@ export default function ChatSidebar({
             handleUserSelect(user);
           }}
           onKeyDown={(event) => {
-            if ((event.shiftKey && event.key === "F10") || event.key === "ContextMenu") {
+            if (!isGroupChat && ((event.shiftKey && event.key === "F10") || event.key === "ContextMenu")) {
               event.preventDefault();
               openActionMenu(user, event.currentTarget);
             }
@@ -855,15 +1186,19 @@ export default function ChatSidebar({
           disabled={isBusy}
         >
           <div className="relative flex-shrink-0">
-            {isLockedHidden ? (
+            {isGroupChat ? (
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-100 text-blue-600 dark:bg-blue-950/40 dark:text-blue-300">
+                <Users size={20} />
+              </div>
+            ) : isLockedHidden ? (
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gray-200 text-gray-600 dark:bg-gray-800 dark:text-gray-300"><Lock size={18} /></div>
             ) : (
               <div className={isLockedBlurred ? "blur-[3px]" : ""}>
                 <PremiumAvatar src={typeof user.avatar === "string" ? user.avatar : null} alt={getChatDisplayName(user)} fallback={getChatDisplayName(user)} size={48} isPremium={Boolean(user.isPremium)} />
               </div>
             )}
-            {isOnline && !isLockedHidden ? <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-white bg-green-500 dark:border-gray-950" /> : null}
-            {user.isLocked ? <span className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border border-white bg-gray-900 text-white dark:border-gray-950 dark:bg-gray-100 dark:text-gray-900"><Lock size={12} /></span> : null}
+            {isOnline && !isLockedHidden && !isGroupChat ? <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-white bg-green-500 dark:border-gray-950" /> : null}
+            {user.isLocked && !isGroupChat ? <span className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border border-white bg-gray-900 text-white dark:border-gray-950 dark:bg-gray-100 dark:text-gray-900"><Lock size={12} /></span> : null}
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between gap-2">
@@ -878,7 +1213,16 @@ export default function ChatSidebar({
             </div>
             <div className="mt-1 flex items-center justify-between gap-3">
               <p className="min-w-0 truncate text-sm text-gray-500 dark:text-gray-400">
-                {typingUsers.has(user.id) && !user.isLocked ? <span className="italic text-blue-600 dark:text-blue-400">typing...</span> : <span className={isOnline && !user.isLocked ? "text-green-600 dark:text-green-400" : undefined}>{getPresentedStatus(user, typingUsers, isOnline)}</span>}
+                {isGroupChat ? (
+                  <span className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400">
+                    <Users size={12} />
+                    {user.subtitle || `${user.memberCount ?? user.memberIds?.length ?? 0} members`}
+                  </span>
+                ) : typingUsers.has(user.id) && !user.isLocked ? (
+                  <span className="italic text-blue-600 dark:text-blue-400">typing...</span>
+                ) : (
+                  <span className={isOnline && !user.isLocked ? "text-green-600 dark:text-green-400" : undefined}>{getPresentedStatus(user, typingUsers, isOnline)}</span>
+                )}
               </p>
               {unreadCount > 0 ? <span className="flex min-w-[24px] flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-pink-600 px-2 py-1 text-xs font-bold text-white shadow-lg">{unreadCount > 99 ? "99+" : unreadCount}</span> : null}
             </div>
@@ -906,6 +1250,15 @@ export default function ChatSidebar({
 
     return (
       <div className="pb-24">
+        {activeGroups.length > 0 ? (
+          <div className="border-b border-gray-200/80 pb-2 dark:border-gray-800">
+            <div className="px-4 py-3">
+              <div className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">Groups</div>
+              <div className="mt-1 text-sm text-gray-600 dark:text-gray-300">{activeGroups.length} group conversation{activeGroups.length === 1 ? "" : "s"}</div>
+            </div>
+            <div>{activeGroups.map((user) => renderUserRow(user))}</div>
+          </div>
+        ) : null}
         {activeUsers.length > 0 ? <div>{activeUsers.map((user) => renderUserRow(user))}</div> : null}
         {archivedUsers.length > 0 ? (
           <div className="border-t border-gray-200/80 pt-2 dark:border-gray-800">
@@ -919,6 +1272,15 @@ export default function ChatSidebar({
             {isArchivedExpanded ? <div>{archivedUsers.map((user) => renderUserRow(user))}</div> : null}
           </div>
         ) : null}
+        {archivedGroups.length > 0 ? (
+          <div className="border-t border-gray-200/80 pt-2 dark:border-gray-800">
+            <div className="px-4 py-3">
+              <div className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">Archived groups</div>
+              <div className="mt-1 text-sm text-gray-600 dark:text-gray-300">{archivedGroups.length} archived group{archivedGroups.length === 1 ? "" : "s"}</div>
+            </div>
+            <div>{archivedGroups.map((user) => renderUserRow(user))}</div>
+          </div>
+        ) : null}
       </div>
     );
   };
@@ -930,12 +1292,25 @@ export default function ChatSidebar({
           {!isMobile ? <div className="rounded-xl bg-blue-100 p-2 text-blue-600 dark:bg-blue-950/40 dark:text-blue-300"><MessageSquare size={20} /></div> : <button onClick={onToggleMobileSidebar} className="rounded-lg p-2 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Close sidebar"><ArrowLeft size={20} /></button>}
           <div>
             <h2 className="text-xl font-bold text-gray-900 dark:text-white">{isMobile ? "Chats" : "Messages"}</h2>
-            {!isMobile ? <p className="text-sm text-gray-500 dark:text-gray-400">{activeUsers.length} active, {archivedUsers.length} archived</p> : null}
+            {!isMobile ? <p className="text-sm text-gray-500 dark:text-gray-400">{activeUsers.length} direct, {activeGroups.length} groups</p> : null}
           </div>
         </div>
         <div className="flex items-center gap-2">
           {isConnected ? <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" /> : null}
           {isMobile ? <button onClick={() => setIsSearching((prev) => !prev)} className="rounded-lg p-2 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={isSearching ? "Close search" : "Search chats"}><Search size={20} /></button> : <span className="text-sm text-gray-500 dark:text-gray-400">{users.length}</span>}
+          <button
+            ref={quickMenuButtonRef}
+            onClick={(event) => {
+              setQuickMenuRect(event.currentTarget.getBoundingClientRect());
+              setIsQuickMenuOpen((prev) => !prev);
+            }}
+            className="rounded-lg p-2 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+            aria-label="Sidebar options"
+            aria-expanded={isQuickMenuOpen}
+            aria-haspopup="menu"
+          >
+            <MoreVertical size={18} />
+          </button>
         </div>
       </div>
       {isMobile && isSearching ? (
@@ -965,8 +1340,38 @@ export default function ChatSidebar({
       <>
         <div className={`fixed inset-0 z-40 bg-black/50 transition-opacity duration-300 lg:hidden ${showMobileSidebar ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`} onClick={onToggleMobileSidebar} />
         <aside ref={sidebarRef} className={`fixed inset-y-16 left-0 z-50 flex h-full w-full max-w-sm flex-col border-r border-gray-200 bg-white transition-transform duration-300 ease-in-out dark:border-gray-800 dark:bg-black lg:hidden ${showMobileSidebar ? "translate-x-0" : "-translate-x-full"}`}>{sidebarShell}</aside>
+        <SidebarQuickMenu
+          isOpen={isQuickMenuOpen}
+          isMobile
+          anchorRect={quickMenuRect}
+          busy={isCreatingGroup}
+          onClose={() => setIsQuickMenuOpen(false)}
+          onCreateGroup={() => {
+            setIsQuickMenuOpen(false);
+            setIsCreateGroupOpen(true);
+          }}
+          onOpenStarredMessages={() => {
+            void onOpenStarredMessages();
+          }}
+          onMarkAllAsRead={() => {
+            void onMarkAllAsRead();
+          }}
+        />
         <ChatActionMenu menu={actionMenu} isMobile busyUserId={activeBusyUserId} onClose={() => setActionMenu(null)} onAction={handleMenuAction} />
         <ChatPasswordDialog dialog={lockDialog} isMobile password={passwordInput} currentPassword={currentPasswordInput} confirmPassword={confirmPasswordInput} securityQuestion={securityQuestionInput} securityAnswer={securityAnswerInput} visibility={lockVisibility} error={dialogError} notice={dialogNotice} submitting={isDialogSubmitting} onPasswordChange={setPasswordInput} onCurrentPasswordChange={setCurrentPasswordInput} onConfirmPasswordChange={setConfirmPasswordInput} onSecurityQuestionChange={setSecurityQuestionInput} onSecurityAnswerChange={setSecurityAnswerInput} onVisibilityChange={setLockVisibility} onClose={closeDialog} onSubmit={handleDialogSubmit} onRemoveLock={handleDialogSubmit} onForgotPassword={() => lockDialog && openLockDialog("recoverLock", lockDialog.user)} />
+        <CreateGroupDialog
+          isOpen={isCreateGroupOpen}
+          isMobile
+          users={creatableUsers}
+          groupName={createGroupName}
+          selectedMemberIds={selectedGroupMemberIds}
+          error={createGroupError}
+          submitting={isCreatingGroup}
+          onClose={closeCreateGroupDialog}
+          onGroupNameChange={setCreateGroupName}
+          onToggleMember={toggleSelectedGroupMember}
+          onSubmit={handleCreateGroupSubmit}
+        />
       </>
     );
   }
@@ -974,8 +1379,38 @@ export default function ChatSidebar({
   return (
     <>
       <aside className="fixed left-0 top-16 hidden h-full w-80 shrink-0 flex-col border-r border-gray-200 bg-white dark:border-gray-800 dark:bg-black lg:flex">{sidebarShell}</aside>
+      <SidebarQuickMenu
+        isOpen={isQuickMenuOpen}
+        isMobile={false}
+        anchorRect={quickMenuRect}
+        busy={isCreatingGroup}
+        onClose={() => setIsQuickMenuOpen(false)}
+        onCreateGroup={() => {
+          setIsQuickMenuOpen(false);
+          setIsCreateGroupOpen(true);
+        }}
+        onOpenStarredMessages={() => {
+          void onOpenStarredMessages();
+        }}
+        onMarkAllAsRead={() => {
+          void onMarkAllAsRead();
+        }}
+      />
       <ChatActionMenu menu={actionMenu} isMobile={false} busyUserId={activeBusyUserId} onClose={() => setActionMenu(null)} onAction={handleMenuAction} />
       <ChatPasswordDialog dialog={lockDialog} isMobile={false} password={passwordInput} currentPassword={currentPasswordInput} confirmPassword={confirmPasswordInput} securityQuestion={securityQuestionInput} securityAnswer={securityAnswerInput} visibility={lockVisibility} error={dialogError} notice={dialogNotice} submitting={isDialogSubmitting} onPasswordChange={setPasswordInput} onCurrentPasswordChange={setCurrentPasswordInput} onConfirmPasswordChange={setConfirmPasswordInput} onSecurityQuestionChange={setSecurityQuestionInput} onSecurityAnswerChange={setSecurityAnswerInput} onVisibilityChange={setLockVisibility} onClose={closeDialog} onSubmit={handleDialogSubmit} onRemoveLock={handleDialogSubmit} onForgotPassword={() => lockDialog && openLockDialog("recoverLock", lockDialog.user)} />
+      <CreateGroupDialog
+        isOpen={isCreateGroupOpen}
+        isMobile={false}
+        users={creatableUsers}
+        groupName={createGroupName}
+        selectedMemberIds={selectedGroupMemberIds}
+        error={createGroupError}
+        submitting={isCreatingGroup}
+        onClose={closeCreateGroupDialog}
+        onGroupNameChange={setCreateGroupName}
+        onToggleMember={toggleSelectedGroupMember}
+        onSubmit={handleCreateGroupSubmit}
+      />
     </>
   );
 }

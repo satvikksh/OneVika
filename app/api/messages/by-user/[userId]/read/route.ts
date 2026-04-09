@@ -24,6 +24,7 @@ export async function POST(
 
     const { userId: receiverId } = await context.params;
     const senderId = session.user.id;
+    const isGroupChat = req.nextUrl.searchParams.get("chatType") === "group";
 
     /* ---------------- VALIDATION ---------------- */
     if (
@@ -36,7 +37,7 @@ export async function POST(
       );
     }
 
-    if (senderId === receiverId) {
+    if (!isGroupChat && senderId === receiverId) {
       return NextResponse.json({ success: true });
     }
 
@@ -47,43 +48,69 @@ export async function POST(
     const senderObjId = new Types.ObjectId(senderId);
     const receiverObjId = new Types.ObjectId(receiverId);
 
-    const preference = await db?.collection<ChatPreferenceDoc>("chatPreferences").findOne(
-      { ownerId: senderObjId, chatUserId: receiverObjId },
-      {
-        projection: {
-          isLocked: 1,
-        },
-      }
-    );
+    let conversation;
 
-    if (
-      preference?.isLocked &&
-      !hasUnlockedChatCookie(req, senderId, receiverId)
-    ) {
-      return NextResponse.json(
-        { error: "This chat is locked", requiresPassword: true },
-        { status: 423 }
+    if (isGroupChat) {
+      conversation = await db?.collection("conversations").findOne({
+        _id: receiverObjId,
+        participants: senderObjId,
+      });
+    } else {
+      const preference = await db?.collection<ChatPreferenceDoc>("chatPreferences").findOne(
+        { ownerId: senderObjId, chatUserId: receiverObjId },
+        {
+          projection: {
+            isLocked: 1,
+          },
+        }
       );
-    }
 
-    /* ---------------- FIND CONVERSATION ---------------- */
-    const conversation = await db?.collection("conversations").findOne({
-      participants: { $all: [senderObjId, receiverObjId] },
-    });
+      if (
+        preference?.isLocked &&
+        !hasUnlockedChatCookie(req, senderId, receiverId)
+      ) {
+        return NextResponse.json(
+          { error: "This chat is locked", requiresPassword: true },
+          { status: 423 }
+        );
+      }
+
+      conversation = await db?.collection("conversations").findOne({
+        participants: { $all: [senderObjId, receiverObjId] },
+      });
+    }
 
     if (!conversation) {
       return NextResponse.json({ success: true });
     }
 
     /* ---------------- MARK AS READ ---------------- */
-    await db?.collection("messages").updateMany(
-      {
-        conversationId: conversation._id,
-        senderId: receiverObjId,
-        read: { $ne: true },
+    const filter = isGroupChat
+      ? {
+          conversationId: conversation._id,
+          senderId: { $ne: senderObjId },
+          deletedForUserIds: { $ne: senderObjId },
+          readByUserIds: { $ne: senderObjId },
+        }
+      : {
+          conversationId: conversation._id,
+          senderId: receiverObjId,
+          deletedForUserIds: { $ne: senderObjId },
+          readByUserIds: { $ne: senderObjId },
+        };
+
+    const update: Record<string, unknown> = {
+      $addToSet: {
+        deliveredToUserIds: senderObjId,
+        readByUserIds: senderObjId,
       },
-      { $set: { read: true } }
-    );
+    };
+
+    if (!isGroupChat) {
+      update.$set = { read: true };
+    }
+
+    await db?.collection("messages").updateMany(filter, update);
 
     return NextResponse.json({ success: true });
   } catch (error) {

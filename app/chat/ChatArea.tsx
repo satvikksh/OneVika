@@ -63,7 +63,6 @@ interface ChatAreaProps {
   setActiveDropdownId: (id: string | null) => void;
   dropdownRef: React.RefObject<HTMLDivElement | null>;
   session: Session | null;
-  messageStatus: Record<string, "sending" | "sent" | "delivered" | "read">;
   isMobile: boolean;
   handleKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   onSendMessage: () => void;
@@ -193,38 +192,35 @@ const renderAttachment = (attachment?: ChatAttachment) => {
   );
 };
 
-const MessageStatusIndicator = ({ 
-  messageId, 
-  isCurrentUser, 
-  messageStatus 
-}: { 
-  messageId: string, 
-  isCurrentUser: boolean,
-  messageStatus: Record<string, 'sending' | 'sent' | 'delivered' | 'read'>
+const MessageStatusIndicator = ({
+  status,
+  isCurrentUser,
+}: {
+  status?: "sending" | "sent" | "delivered" | "read";
+  isCurrentUser: boolean;
 }) => {
-  const status = messageStatus[messageId];
   
   if (!isCurrentUser || !status) return null;
 
   return (
     <div className="flex items-center justify-end ml-2">
       {status === 'sending' && (
-        <div className="flex items-center text-gray-400">
+        <div className="flex items-center text-sky-600">
           <Check size={12} />
         </div>
       )}
       {status === 'sent' && (
-        <div className="flex items-center text-gray-400">
+        <div className="flex items-center text-sky-600">
           <Check size={12} />
         </div>
       )}
       {status === 'delivered' && (
-        <div className="flex items-center text-gray-400">
+        <div className="flex items-center text-amber-700 dark:text-amber-500">
           <CheckCheck size={12} />
         </div>
       )}
       {status === 'read' && (
-        <div className="flex items-center text-blue-500">
+        <div className="flex items-center text-emerald-600 dark:text-emerald-400">
           <CheckCheck size={12} />
         </div>
       )}
@@ -269,7 +265,6 @@ export default function ChatArea({
   setActiveDropdownId,
   dropdownRef,
   session,
-  messageStatus,
   isMobile,
   handleKeyDown,
   onSendMessage,
@@ -535,9 +530,8 @@ export default function ChatArea({
                             {/* Read/unread indicators */}
                             {isCurrentUser && (
                               <MessageStatusIndicator 
-                                messageId={msg.id}
                                 isCurrentUser={isCurrentUser}
-                                messageStatus={messageStatus}
+                                status={msg.status}
                               />
                             )}
                           </div>
