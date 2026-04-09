@@ -69,6 +69,7 @@ export async function POST(req: NextRequest) {
     const now = new Date();
     const result = await db.collection("conversations").insertOne({
       participants: participantIds,
+      admins: [currentUserId],
       isGroup: true,
       name,
       createdBy: currentUserId,
@@ -99,7 +100,9 @@ export async function POST(req: NextRequest) {
         conversationId: result.insertedId.toString(),
         memberIds: participantIds.map((participantId) => participantId.toString()),
         memberCount: participantIds.length,
+        adminIds: [currentUserId.toString()],
         isGroupOwner: true,
+        isGroupAdmin: true,
         subtitle: `${participantIds.length} members`,
       },
     });

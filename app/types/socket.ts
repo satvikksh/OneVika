@@ -67,7 +67,9 @@ export interface User {
   conversationId?: string;
   memberIds?: string[];
   memberCount?: number;
+  adminIds?: string[];
   isGroupOwner?: boolean;
+  isGroupAdmin?: boolean;
   subtitle?: string | null;
 }
 

@@ -36,6 +36,8 @@ interface ChatTopBarProps {
   onArchiveChat?: () => void;
   onBlockUser?: () => void;
   onUnblockUser?: () => void;
+  onOpenGroupInfo?: () => void;
+  isGroupInfoOpen?: boolean;
   isActionBusy?: boolean;
 }
 
@@ -50,6 +52,8 @@ export default function ChatTopBar({
   onArchiveChat,
   onBlockUser,
   onUnblockUser,
+  onOpenGroupInfo,
+  isGroupInfoOpen = false,
   isActionBusy = false,
 }: ChatTopBarProps) {
   const { data: session } = useSession();
@@ -99,6 +103,15 @@ export default function ChatTopBar({
     if (selectedUser && !isGroupChat) {
       router.push(`/profile/${selectedUser.id}`);
     }
+  };
+
+  const handleHeaderPrimaryAction = () => {
+    if (isGroupChat) {
+      onOpenGroupInfo?.();
+      return;
+    }
+
+    handleUserProfileClick();
   };
 
   const handleMenuAction = (callback?: () => void) => {
@@ -176,12 +189,12 @@ export default function ChatTopBar({
             : "border-gray-200 bg-white dark:border-gray-800 dark:bg-black"
         }`}
       >
-        <div className="flex h-full items-center justify-between px-4">
-          <div className="flex items-center gap-3">
+        <div className="flex h-full items-center justify-between gap-2 px-3 sm:px-4">
+          <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
             {isMobile ? (
               <button
                 onClick={onBack}
-                className="rounded-xl p-2 transition-colors hover:bg-gray-100 dark:hover:bg-black"
+                className="flex-shrink-0 rounded-xl p-2 transition-colors hover:bg-gray-100 dark:hover:bg-black"
                 aria-label="Back to chats"
               >
                 <ArrowLeft size={20} />
@@ -196,40 +209,38 @@ export default function ChatTopBar({
               </button>
             ) : null}
 
-            <div className="flex items-center gap-3">
-              <div className="relative flex-shrink-0">
-                <button
-                  onClick={handleUserProfileClick}
-                  disabled={isGroupChat}
-                  className="rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-default disabled:ring-0"
-                  aria-label={isGroupChat ? "Group conversation" : "View user profile"}
-                >
+            <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+              <button
+                onClick={handleHeaderPrimaryAction}
+                className="relative flex-shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+                aria-label={isGroupChat ? "Open group info" : "View user profile"}
+              >
+                <div className="relative">
                   <PremiumAvatar
                     src={typeof selectedUser.avatar === "string" ? selectedUser.avatar : null}
                     alt={selectedUser.name || (isGroupChat ? "Group" : "User")}
                     fallback={selectedUser.name || (isGroupChat ? "G" : "U")}
-                    size={40}
+                    size={isMobile ? 36 : 40}
                     isPremium={Boolean(selectedUser.isPremium)}
                   />
-                </button>
-                {isGroupChat ? (
-                  <div className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border-2 border-white bg-blue-600 text-white dark:border-gray-900">
-                    <Users size={11} />
-                  </div>
-                ) : isUserOnline ? (
-                  <div className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white bg-green-500 dark:border-gray-900" />
-                ) : null}
-              </div>
+                  {isGroupChat ? (
+                    <div className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border-2 border-white bg-blue-600 text-white dark:border-gray-900">
+                      <Users size={11} />
+                    </div>
+                  ) : isUserOnline ? (
+                    <div className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white bg-green-500 dark:border-gray-900" />
+                  ) : null}
+                </div>
+              </button>
 
               <button
-                onClick={handleUserProfileClick}
-                disabled={isGroupChat}
-                className="text-left transition-opacity hover:opacity-80 disabled:cursor-default disabled:hover:opacity-100"
-                aria-label={isGroupChat ? "Group conversation" : "View user profile"}
+                onClick={handleHeaderPrimaryAction}
+                className="min-w-0 flex-1 text-left transition-opacity hover:opacity-80"
+                aria-label={isGroupChat ? "Open group info" : "View user profile"}
               >
                 {isGroupChat ? (
                   <div
-                    className={`text-sm font-bold sm:text-base ${
+                    className={`truncate text-sm font-bold sm:text-base ${
                       selectedUser.isPremium
                         ? "text-slate-50"
                         : "text-gray-900 dark:text-white"
@@ -248,10 +259,11 @@ export default function ChatTopBar({
                         ? "text-slate-50"
                         : "text-gray-900 dark:text-white"
                     }`}
+                    className="min-w-0"
                   />
                 )}
                 <p
-                  className={`text-xs sm:text-sm ${
+                  className={`truncate text-xs sm:text-sm ${
                     selectedUser.isPremium ? "text-slate-300" : "text-gray-500 dark:text-gray-400"
                   }`}
                 >
@@ -283,7 +295,7 @@ export default function ChatTopBar({
             </div>
           </div>
 
-          <div className="flex items-center gap-2" ref={menuRef}>
+          <div className="flex flex-shrink-0 items-center gap-1 sm:gap-2" ref={menuRef}>
             {!isGroupChat ? (
               <>
                 <button
@@ -297,7 +309,7 @@ export default function ChatTopBar({
 
                 <button
                   disabled={Boolean(selectedUser.isBlocked)}
-                  className="rounded-xl p-2 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-gray-800"
+                  className="hidden rounded-xl p-2 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-gray-800 sm:inline-flex"
                   aria-label="Video call"
                 >
                   <Video size={18} />
@@ -305,13 +317,24 @@ export default function ChatTopBar({
 
                 <button
                   onClick={handleUserProfileClick}
-                  className="hidden rounded-xl p-2 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 sm:block"
+                  className="hidden rounded-xl p-2 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 md:inline-flex"
                   aria-label="User info"
                 >
                   <Info size={20} />
                 </button>
               </>
-            ) : null}
+            ) : (
+              <button
+                onClick={onOpenGroupInfo}
+                disabled={!onOpenGroupInfo}
+                className={`rounded-xl p-2 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-gray-800 ${
+                  isGroupInfoOpen ? "bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300" : ""
+                }`}
+                aria-label="Open group info"
+              >
+                <Info size={18} />
+              </button>
+            )}
 
             {menuItems.length > 0 ? (
               <button

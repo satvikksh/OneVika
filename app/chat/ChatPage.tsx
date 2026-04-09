@@ -9,6 +9,10 @@ import ChatSidebar from "./ChatSidebar";
 import ChatTopBar from "./ChatTopBar";
 import ChatArea from "./ChatArea";
 import ContextMenu from "./ContextMenu";
+import GroupInfoPanel, {
+  GroupInfoData,
+  GroupInfoMember,
+} from "./GroupInfoPanel";
 import StarredMessagesModal from "./StarredMessagesModal";
 import { readCachedChatState, writeCachedChatState } from "./chatLocalCache";
 import { Users, Menu } from "lucide-react";
@@ -242,6 +246,11 @@ type StarredMessageItem = Message & {
   chatType?: "direct" | "group";
 };
 
+type GroupInfoResponse = {
+  group: GroupInfoData;
+  members: GroupInfoMember[];
+};
+
 type MessagePageInfo = {
   hasMoreBefore: boolean;
   oldestMessageId: string | null;
@@ -295,6 +304,12 @@ export default function ChatPage() {
   const [loadingStarredMessages, setLoadingStarredMessages] = useState(false);
   const [starredMessagesError, setStarredMessagesError] = useState<string | null>(null);
   const [pendingScrollMessageId, setPendingScrollMessageId] = useState<string | null>(null);
+  const [showGroupInfo, setShowGroupInfo] = useState(false);
+  const [groupInfo, setGroupInfo] = useState<GroupInfoData | null>(null);
+  const [groupInfoMembers, setGroupInfoMembers] = useState<GroupInfoMember[]>([]);
+  const [loadingGroupInfo, setLoadingGroupInfo] = useState(false);
+  const [groupInfoError, setGroupInfoError] = useState<string | null>(null);
+  const [updatingGroupInfo, setUpdatingGroupInfo] = useState(false);
   
   // Chat UI state
   const [replyTo, setReplyTo] = useState<Message | null>(null);
@@ -334,6 +349,24 @@ export default function ChatPage() {
   const selectedConversationId =
     selectedUser?.conversationId ??
     (selectedUser?.chatType === "group" ? selectedUser.id : null);
+
+  const clearUnreadForChat = useCallback((chatId: string) => {
+    setUnreadByUser((prev) =>
+      prev[chatId] === 0 ? prev : { ...prev, [chatId]: 0 }
+    );
+    setUsers((prev) =>
+      prev.map((user) =>
+        user.id === chatId && (user.unreadCount ?? 0) !== 0
+          ? { ...user, unreadCount: 0 }
+          : user
+      )
+    );
+    setSelectedUser((prev) =>
+      prev?.id === chatId && (prev.unreadCount ?? 0) !== 0
+        ? { ...prev, unreadCount: 0 }
+        : prev
+    );
+  }, []);
 
   const getConversationKeyForUser = useCallback(
     (user: User) =>
@@ -1158,9 +1191,7 @@ export default function ChatPage() {
         }
       );
 
-      setUnreadByUser((prev) =>
-        prev[chat.id] === 0 ? prev : { ...prev, [chat.id]: 0 }
-      );
+      clearUnreadForChat(chat.id);
 
       if (unreadIncoming.length === 0) {
         return;
@@ -1174,7 +1205,7 @@ export default function ChatPage() {
         console.error("Failed to mark chat as read:", error);
       });
     },
-    [currentUserId, getChatResource, markMessageAsRead]
+    [clearUnreadForChat, currentUserId, getChatResource, markMessageAsRead]
   );
 
   /* ---------------------------- MARK MESSAGES AS READ ---------------------------- */
@@ -1236,12 +1267,22 @@ export default function ChatPage() {
       setUsers((prev) =>
         prev.map((user) =>
           user.id === chatUserId
-            ? { ...user, lastMessageAt: messageTs }
+            ? {
+                ...user,
+                lastMessageAt: messageTs,
+                unreadCount:
+                  selectedUser?.id === chatUserId
+                    ? 0
+                    : (user.unreadCount ?? 0) + 1,
+              }
             : user
         )
       );
 
-      if (selectedUser?.id === chatUserId) return;
+      if (selectedUser?.id === chatUserId) {
+        clearUnreadForChat(chatUserId);
+        return;
+      }
 
       setUnreadByUser((prev) => ({
         ...prev,
@@ -1260,7 +1301,7 @@ export default function ChatPage() {
         handleRealtimeMessage as EventListener
       );
     };
-  }, [currentUserId, resolveChatUserIdForMessage, selectedUser?.id]);
+  }, [clearUnreadForChat, currentUserId, resolveChatUserIdForMessage, selectedUser?.id]);
 
   /* -------------------------------- TYPING -------------------------------- */
   const handleTyping = useCallback(() => {
@@ -1821,6 +1862,194 @@ export default function ChatPage() {
     [clearPendingAttachment, currentUserId, getConversationKeyForUser, isMobile, users]
   );
 
+  const syncGroupSummary = useCallback((summary: GroupInfoData) => {
+    const updates: Partial<User> = {
+      name: summary.name,
+      conversationId: summary.conversationId,
+      memberIds: summary.memberIds,
+      memberCount: summary.memberCount,
+      adminIds: summary.adminIds,
+      isGroupOwner: summary.isGroupOwner,
+      isGroupAdmin: summary.isGroupAdmin,
+      subtitle: summary.subtitle ?? `${summary.memberCount} members`,
+    };
+
+    setUsers((prev) =>
+      prev.map((user) =>
+        user.chatType === "group" &&
+        (user.id === summary.id || user.conversationId === summary.conversationId)
+          ? { ...user, ...updates }
+          : user
+      )
+    );
+
+    setSelectedUser((prev) =>
+      prev &&
+      prev.chatType === "group" &&
+      (prev.id === summary.id || prev.conversationId === summary.conversationId)
+        ? { ...prev, ...updates }
+        : prev
+    );
+  }, []);
+
+  const fetchGroupInfo = useCallback(
+    async (groupUser: User) => {
+      const groupId =
+        groupUser.conversationId ?? (groupUser.chatType === "group" ? groupUser.id : null);
+
+      if (!groupId) {
+        return;
+      }
+
+      setLoadingGroupInfo(true);
+      setGroupInfoError(null);
+
+      try {
+        const response = await fetch(`/api/user/chat/groups/${groupId}`, {
+          cache: "no-store",
+        });
+        const data = (await response.json().catch(() => ({}))) as
+          | ({ error?: string } & Partial<GroupInfoResponse>)
+          | null;
+
+        if (!response.ok || !data?.group || !Array.isArray(data.members)) {
+          throw new Error(data?.error || "Failed to fetch group info");
+        }
+
+        setGroupInfo(data.group);
+        setGroupInfoMembers(data.members);
+        syncGroupSummary(data.group);
+      } catch (error) {
+        console.error("Failed to fetch group info:", error);
+        setGroupInfoError(
+          error instanceof Error ? error.message : "Failed to fetch group info"
+        );
+      } finally {
+        setLoadingGroupInfo(false);
+      }
+    },
+    [syncGroupSummary]
+  );
+
+  const handleOpenGroupInfo = useCallback(() => {
+    if (!selectedUser || selectedUser.chatType !== "group") {
+      return;
+    }
+
+    setShowGroupInfo(true);
+    void fetchGroupInfo(selectedUser);
+  }, [fetchGroupInfo, selectedUser]);
+
+  useEffect(() => {
+    if (!selectedUser || selectedUser.chatType !== "group") {
+      setShowGroupInfo(false);
+      setGroupInfo(null);
+      setGroupInfoMembers([]);
+      setGroupInfoError(null);
+      return;
+    }
+
+    if (showGroupInfo) {
+      void fetchGroupInfo(selectedUser);
+    }
+  }, [fetchGroupInfo, selectedUser, showGroupInfo]);
+
+  const handleAddGroupMembers = useCallback(
+    async (memberIds: string[]) => {
+      if (!selectedUser || selectedUser.chatType !== "group") {
+        return;
+      }
+
+      const groupId = selectedUser.conversationId ?? selectedUser.id;
+      setUpdatingGroupInfo(true);
+
+      try {
+        const response = await fetch(`/api/user/chat/groups/${groupId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ memberIds }),
+        });
+        const data = (await response.json().catch(() => ({}))) as
+          | ({ error?: string } & Partial<GroupInfoResponse>)
+          | null;
+
+        if (!response.ok || !data?.group || !Array.isArray(data.members)) {
+          throw new Error(data?.error || "Failed to add group members");
+        }
+
+        setGroupInfo(data.group);
+        setGroupInfoMembers(data.members);
+        syncGroupSummary(data.group);
+      } finally {
+        setUpdatingGroupInfo(false);
+      }
+    },
+    [selectedUser, syncGroupSummary]
+  );
+
+  const handleExitGroup = useCallback(() => {
+    if (!selectedUser || selectedUser.chatType !== "group") {
+      return;
+    }
+
+    openConfirmDialog({
+      title: `Exit ${selectedUser.name || "this group"}?`,
+      description:
+        "You will stop receiving messages from this group. You can only be added again by an admin.",
+      confirmLabel: "Exit group",
+      tone: "danger",
+      onConfirm: async () => {
+        const groupId = selectedUser.conversationId ?? selectedUser.id;
+
+        try {
+          setUpdatingGroupInfo(true);
+
+          const response = await fetch(`/api/user/chat/groups/${groupId}`, {
+            method: "DELETE",
+          });
+          const data = (await response.json().catch(() => ({}))) as {
+            error?: string;
+          };
+
+          if (!response.ok) {
+            throw new Error(data.error || "Failed to exit group");
+          }
+
+          removeMessagesForChat(selectedUser.id);
+          loadedMessagesByUserRef.current.delete(selectedUser.id);
+          resetConversationFetchState(selectedUser.id);
+          setUsers((prev) => prev.filter((user) => user.id !== selectedUser.id));
+          setUnreadByUser((prev) => {
+            const next = { ...prev };
+            delete next[selectedUser.id];
+            return next;
+          });
+          setGroupInfo(null);
+          setGroupInfoMembers([]);
+          setGroupInfoError(null);
+          setShowGroupInfo(false);
+          setSelectedUser(null);
+          setReplyTo(null);
+          setContextMenu(null);
+          clearPendingAttachment();
+
+          if (isMobile) {
+            setShowMobileSidebar(true);
+          }
+        } finally {
+          setUpdatingGroupInfo(false);
+        }
+      },
+    });
+  }, [
+    clearPendingAttachment,
+    isMobile,
+    openConfirmDialog,
+    removeMessagesForChat,
+    resetConversationFetchState,
+    selectedUser,
+  ]);
+
   /* ---------------------------- UI HANDLERS --------------------------- */
   const updateChatPreferences = useCallback(
     async (user: User, updates: ChatPreferenceUpdate) => {
@@ -2066,7 +2295,8 @@ export default function ChatPage() {
       return;
     }
 
-    setUnreadByUser((prev) => ({ ...prev, [user.id]: 0 }));
+    clearUnreadForChat(user.id);
+    markConversationAsRead(user);
 
     setSelectedUser(user);
     setReplyTo(null);
@@ -2204,6 +2434,22 @@ export default function ChatPage() {
     return unreadByUser[userId] ?? 0;
   }, [unreadByUser, selectedUser?.id]);
 
+  const eligibleGroupMembers = useMemo(() => {
+    if (!selectedUser || selectedUser.chatType !== "group") {
+      return [] as User[];
+    }
+
+    const existingMemberIds = new Set(
+      groupInfo?.memberIds ??
+        selectedUser.memberIds ??
+        []
+    );
+
+    return users.filter(
+      (user) => user.chatType !== "group" && !existingMemberIds.has(user.id)
+    );
+  }, [groupInfo?.memberIds, selectedUser, users]);
+
   const usersSortedByRecentMessage = useMemo(() => {
     if (!currentUserId) return users;
 
@@ -2324,6 +2570,8 @@ export default function ChatPage() {
             handleUnblockUser(selectedUser);
           }
         }}
+        onOpenGroupInfo={handleOpenGroupInfo}
+        isGroupInfoOpen={showGroupInfo}
         isActionBusy={Boolean(
           selectedUser &&
             (deletingChatUserId === selectedUser.id ||
@@ -2455,6 +2703,22 @@ export default function ChatPage() {
         isSubmitting={isConfirmingAction}
         onClose={closeConfirmDialog}
         onConfirm={handleConfirmAction}
+      />
+
+      <GroupInfoPanel
+        key={`${selectedUser?.conversationId ?? selectedUser?.id ?? "none"}-${showGroupInfo ? "open" : "closed"}`}
+        isOpen={showGroupInfo}
+        isMobile={isMobile}
+        selectedGroup={selectedUser?.chatType === "group" ? selectedUser : null}
+        group={groupInfo}
+        members={groupInfoMembers}
+        loading={loadingGroupInfo}
+        error={groupInfoError}
+        saving={updatingGroupInfo}
+        eligibleUsers={eligibleGroupMembers}
+        onClose={() => setShowGroupInfo(false)}
+        onAddMembers={handleAddGroupMembers}
+        onExitGroup={handleExitGroup}
       />
 
       <StarredMessagesModal

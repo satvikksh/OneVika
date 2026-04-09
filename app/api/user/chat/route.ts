@@ -20,6 +20,7 @@ type FollowRow = {
 type ConversationRow = {
   _id: mongoose.Types.ObjectId;
   participants?: mongoose.Types.ObjectId[];
+  admins?: mongoose.Types.ObjectId[];
   isGroup?: boolean;
   name?: string;
   createdBy?: mongoose.Types.ObjectId;
@@ -104,7 +105,15 @@ export async function GET(req: NextRequest) {
       .collection<ConversationRow>("conversations")
       .find(
         { participants: currentUserId },
-        { projection: { participants: 1, isGroup: 1, name: 1, createdBy: 1 } }
+        {
+          projection: {
+            participants: 1,
+            admins: 1,
+            isGroup: 1,
+            name: 1,
+            createdBy: 1,
+          },
+        }
       )
       .toArray();
 
@@ -370,6 +379,15 @@ export async function GET(req: NextRequest) {
         .map((memberId) => userById.get(memberId)?.name)
         .filter(Boolean)
         .slice(0, 3);
+      const adminIds = (
+        conversation.admins?.length
+          ? conversation.admins
+          : conversation.createdBy
+            ? [conversation.createdBy]
+            : []
+      )
+        .map((adminId) => adminId?.toString?.())
+        .filter(Boolean) as string[];
 
       return {
         _id: conversationId,
@@ -397,8 +415,10 @@ export async function GET(req: NextRequest) {
         conversationId,
         memberIds,
         memberCount: memberIds.length,
+        adminIds,
         isGroupOwner:
           conversation.createdBy?.toString?.() === session.user.id,
+        isGroupAdmin: adminIds.includes(session.user.id),
         subtitle: `${memberIds.length} members`,
       };
     });
