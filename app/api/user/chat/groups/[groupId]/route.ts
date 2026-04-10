@@ -22,8 +22,11 @@ type UserPreview = {
   image?: string;
 };
 
-type AddMembersRequestBody = {
+type UpdateGroupRequestBody = {
+  action?: "addMembers" | "removeMember" | "renameGroup";
   memberIds?: string[];
+  memberId?: string;
+  name?: string;
 };
 
 const getAdminIds = (conversation: ConversationDoc) =>
@@ -164,62 +167,150 @@ export async function PATCH(
     const adminIds = getAdminIds(conversation);
     if (!adminIds.includes(session.user.id)) {
       return NextResponse.json(
-        { error: "Only group admins can add members" },
+        { error: "Only group admins can manage this group" },
         { status: 403 }
       );
     }
 
-    const body = (await req.json().catch(() => null)) as AddMembersRequestBody | null;
-    const existingParticipantIds = new Set(
-      (conversation.participants || [])
-        .map((participant) => participant?.toString?.())
-        .filter(Boolean)
-    );
+    const body = (await req.json().catch(() => null)) as UpdateGroupRequestBody | null;
+    const action = body?.action ?? "addMembers";
+    const existingParticipantIds = (conversation.participants || [])
+      .map((participant) => participant?.toString?.())
+      .filter(Boolean) as string[];
+    const existingParticipantIdSet = new Set(existingParticipantIds);
 
-    const memberIds = Array.from(
-      new Set(
-        (body?.memberIds || [])
-          .map((memberId) => memberId?.trim())
-          .filter(
-            (memberId): memberId is string =>
-              Boolean(memberId) &&
-              ObjectId.isValid(memberId) &&
-              !existingParticipantIds.has(memberId)
-          )
-      )
-    );
+    if (action === "renameGroup") {
+      const nextName = body?.name?.trim() ?? "";
 
-    if (memberIds.length === 0) {
-      return NextResponse.json(
-        { error: "Select at least one new member to add" },
-        { status: 400 }
-      );
-    }
-
-    const memberObjectIds = memberIds.map((memberId) => new ObjectId(memberId));
-    const existingUsers = await db
-      .collection("users")
-      .find({ _id: { $in: memberObjectIds } }, { projection: { _id: 1 } })
-      .toArray();
-
-    if (existingUsers.length !== memberObjectIds.length) {
-      return NextResponse.json(
-        { error: "One or more selected members could not be found" },
-        { status: 400 }
-      );
-    }
-
-    await db.collection("conversations").updateOne(
-      { _id: conversation._id },
-      {
-        $addToSet: {
-          participants: { $each: memberObjectIds },
-        },
-        $set: {
-          updatedAt: new Date(),
-        },
+      if (nextName.length < 2) {
+        return NextResponse.json(
+          { error: "Group name must be at least 2 characters long" },
+          { status: 400 }
+        );
       }
-    );
+
+      await db.collection("conversations").updateOne(
+        { _id: conversation._id },
+        {
+          $set: {
+            name: nextName,
+            updatedAt: new Date(),
+          },
+        }
+      );
+    } else if (action === "removeMember") {
+      const memberId = body?.memberId?.trim() ?? "";
+
+      if (!ObjectId.isValid(memberId)) {
+        return NextResponse.json(
+          { error: "Select a valid member to remove" },
+          { status: 400 }
+        );
+      }
+
+      if (memberId === session.user.id) {
+        return NextResponse.json(
+          { error: "Use exit group if you want to leave this group" },
+          { status: 400 }
+        );
+      }
+
+      if (!existingParticipantIdSet.has(memberId)) {
+        return NextResponse.json(
+          { error: "Selected member is not part of this group" },
+          { status: 404 }
+        );
+      }
+
+      const remainingParticipantIds = existingParticipantIds.filter(
+        (participantId) => participantId !== memberId
+      );
+      const remainingAdminIds = adminIds.filter(
+        (adminId) =>
+          adminId !== memberId && remainingParticipantIds.includes(adminId)
+      );
+      const nextAdminIds =
+        remainingAdminIds.length > 0
+          ? remainingAdminIds
+          : remainingParticipantIds.length > 0
+            ? [remainingParticipantIds[0]]
+            : [];
+
+      await db.collection("conversations").updateOne(
+        { _id: conversation._id },
+        {
+          $set: {
+            participants: remainingParticipantIds.map(
+              (participantId) => new ObjectId(participantId)
+            ),
+            admins: nextAdminIds.map((adminId) => new ObjectId(adminId)),
+            createdBy: nextAdminIds[0]
+              ? new ObjectId(nextAdminIds[0])
+              : conversation.createdBy,
+            updatedAt: new Date(),
+          },
+        }
+      );
+
+      await db.collection("messages").updateMany(
+        { conversationId: conversation._id },
+        {
+          $addToSet: {
+            deletedForUserIds: new ObjectId(memberId),
+          },
+        }
+      );
+    } else if (action === "addMembers") {
+      const memberIds = Array.from(
+        new Set(
+          (body?.memberIds || [])
+            .map((memberId) => memberId?.trim())
+            .filter(
+              (memberId): memberId is string =>
+                Boolean(memberId) &&
+                ObjectId.isValid(memberId) &&
+                !existingParticipantIdSet.has(memberId)
+            )
+        )
+      );
+
+      if (memberIds.length === 0) {
+        return NextResponse.json(
+          { error: "Select at least one new member to add" },
+          { status: 400 }
+        );
+      }
+
+      const memberObjectIds = memberIds.map((memberId) => new ObjectId(memberId));
+      const existingUsers = await db
+        .collection("users")
+        .find({ _id: { $in: memberObjectIds } }, { projection: { _id: 1 } })
+        .toArray();
+
+      if (existingUsers.length !== memberObjectIds.length) {
+        return NextResponse.json(
+          { error: "One or more selected members could not be found" },
+          { status: 400 }
+        );
+      }
+
+      await db.collection("conversations").updateOne(
+        { _id: conversation._id },
+        {
+          $addToSet: {
+            participants: { $each: memberObjectIds },
+          },
+          $set: {
+            updatedAt: new Date(),
+          },
+        }
+      );
+    } else {
+      return NextResponse.json(
+        { error: "Unsupported group action" },
+        { status: 400 }
+      );
+    }
 
     const updatedConversation = await db
       .collection<ConversationDoc>("conversations")
@@ -236,9 +327,9 @@ export async function PATCH(
       await buildGroupResponse(db, updatedConversation, session.user.id)
     );
   } catch (error) {
-    console.error("ADD GROUP MEMBER ERROR:", error);
+    console.error("UPDATE GROUP ERROR:", error);
     return NextResponse.json(
-      { error: "Failed to add group members" },
+      { error: "Failed to update group" },
       { status: 500 }
     );
   }

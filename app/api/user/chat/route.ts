@@ -145,24 +145,30 @@ export async function GET(req: NextRequest) {
       });
     });
 
-    const objectIds = Array.from(
+    const directObjectIds = Array.from(allowedUserIds).map(
+      (id) => new ObjectId(id)
+    );
+    const profileLookupObjectIds = Array.from(
       new Set([...allowedUserIds, ...groupMemberIds])
     ).map((id) => new ObjectId(id));
-    const blocks = await db
-      .collection<BlockRow>("blockedUsers")
-      .find({
-        $or: [
-          {
-            blockerId: currentUserId,
-            blockedId: { $in: objectIds },
-          },
-          {
-            blockerId: { $in: objectIds },
-            blockedId: currentUserId,
-          },
-        ],
-      })
-      .toArray();
+    const blocks =
+      directObjectIds.length > 0
+        ? await db
+            .collection<BlockRow>("blockedUsers")
+            .find({
+              $or: [
+                {
+                  blockerId: currentUserId,
+                  blockedId: { $in: directObjectIds },
+                },
+                {
+                  blockerId: { $in: directObjectIds },
+                  blockedId: currentUserId,
+                },
+              ],
+            })
+            .toArray()
+        : [];
 
     const blockedByCurrentUser = new Set<string>();
     const blockedCurrentUser = new Set<string>();
@@ -181,24 +187,27 @@ export async function GET(req: NextRequest) {
       }
     });
 
-    const preferences = await db
-      .collection<ChatPreferenceDoc>("chatPreferences")
-      .find(
-        {
-          ownerId: currentUserId,
-          chatUserId: { $in: objectIds },
-        },
-        {
-          projection: {
-            chatUserId: 1,
-            isPinned: 1,
-            isArchived: 1,
-            isLocked: 1,
-            lockVisibility: 1,
-          },
-        }
-      )
-      .toArray();
+    const preferences =
+      directObjectIds.length > 0
+        ? await db
+            .collection<ChatPreferenceDoc>("chatPreferences")
+            .find(
+              {
+                ownerId: currentUserId,
+                chatUserId: { $in: directObjectIds },
+              },
+              {
+                projection: {
+                  chatUserId: 1,
+                  isPinned: 1,
+                  isArchived: 1,
+                  isLocked: 1,
+                  lockVisibility: 1,
+                },
+              }
+            )
+            .toArray()
+        : [];
 
     const preferenceByUserId = new Map<string, ChatPreferenceDoc>();
     preferences.forEach((preference) => {
@@ -208,24 +217,30 @@ export async function GET(req: NextRequest) {
       }
     });
 
-    const users = await db
-      .collection<ChatUserRow>("users")
-      .find(
-        { _id: { $in: objectIds } },
-        {
-          projection: {
-            name: 1,
-            email: 1,
-            avatar: 1,
-            image: 1,
-            lastSeen: 1,
-            isPremium: 1,
-            premiumExpiresAt: 1,
-          },
-        }
-      )
-      .sort({ name: 1 })
-      .toArray();
+    const referencedUsers =
+      profileLookupObjectIds.length > 0
+        ? await db
+            .collection<ChatUserRow>("users")
+            .find(
+              { _id: { $in: profileLookupObjectIds } },
+              {
+                projection: {
+                  name: 1,
+                  email: 1,
+                  avatar: 1,
+                  image: 1,
+                  lastSeen: 1,
+                  isPremium: 1,
+                  premiumExpiresAt: 1,
+                },
+              }
+            )
+            .sort({ name: 1 })
+            .toArray()
+        : [];
+    const directUsers = referencedUsers.filter((user) =>
+      allowedUserIds.has(user._id.toString())
+    );
 
     const conversationByOtherUserId = new Map<
       string,
@@ -362,7 +377,7 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const usersWithStatus = users.map((user) => {
+    const usersWithStatus = directUsers.map((user) => {
       const userId = user._id.toString();
       const conv = conversationByOtherUserId.get(userId);
       const conversationId = conv?.conversationId?.toString?.();
@@ -403,7 +418,7 @@ export async function GET(req: NextRequest) {
     });
 
     const userById = new Map(
-      users.map((user) => [
+      referencedUsers.map((user) => [
         user._id.toString(),
         {
           name: user.name,

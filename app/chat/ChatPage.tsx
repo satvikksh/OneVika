@@ -2037,6 +2037,15 @@ export default function ChatPage() {
     });
   }, []);
 
+  const applyGroupInfoResponse = useCallback(
+    (data: GroupInfoResponse) => {
+      mergeGroupInfoState(data.group);
+      mergeGroupInfoMembers(data.members);
+      syncGroupSummary(data.group);
+    },
+    [mergeGroupInfoMembers, mergeGroupInfoState, syncGroupSummary]
+  );
+
   const fetchGroupInfo = useCallback(
     async (groupUser: User) => {
       const groupId =
@@ -2061,9 +2070,7 @@ export default function ChatPage() {
           throw new Error(data?.error || "Failed to fetch group info");
         }
 
-        mergeGroupInfoState(data.group);
-        mergeGroupInfoMembers(data.members);
-        syncGroupSummary(data.group);
+        applyGroupInfoResponse(data as GroupInfoResponse);
       } catch (error) {
         console.error("Failed to fetch group info:", error);
         setGroupInfoError(
@@ -2073,7 +2080,7 @@ export default function ChatPage() {
         setLoadingGroupInfo(false);
       }
     },
-    [mergeGroupInfoMembers, mergeGroupInfoState, syncGroupSummary]
+    [applyGroupInfoResponse]
   );
 
   const handleOpenGroupInfo = useCallback(() => {
@@ -2114,7 +2121,7 @@ export default function ChatPage() {
         const response = await fetch(`/api/user/chat/groups/${groupId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ memberIds }),
+          body: JSON.stringify({ action: "addMembers", memberIds }),
         });
         const data = (await response.json().catch(() => ({}))) as
           | ({ error?: string } & Partial<GroupInfoResponse>)
@@ -2124,14 +2131,92 @@ export default function ChatPage() {
           throw new Error(data?.error || "Failed to add group members");
         }
 
-        mergeGroupInfoState(data.group);
-        mergeGroupInfoMembers(data.members);
-        syncGroupSummary(data.group);
+        applyGroupInfoResponse(data as GroupInfoResponse);
       } finally {
         setUpdatingGroupInfo(false);
       }
     },
-    [mergeGroupInfoMembers, mergeGroupInfoState, selectedUser, syncGroupSummary]
+    [applyGroupInfoResponse, selectedUser]
+  );
+
+  const handleRenameGroup = useCallback(
+    async (name: string) => {
+      if (!selectedUser || selectedUser.chatType !== "group") {
+        return;
+      }
+
+      const nextName = name.trim();
+      if (nextName.length < 2) {
+        throw new Error("Group name must be at least 2 characters long");
+      }
+
+      const groupId = selectedUser.conversationId ?? selectedUser.id;
+      setUpdatingGroupInfo(true);
+
+      try {
+        const response = await fetch(`/api/user/chat/groups/${groupId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "renameGroup", name: nextName }),
+        });
+        const data = (await response.json().catch(() => ({}))) as
+          | ({ error?: string } & Partial<GroupInfoResponse>)
+          | null;
+
+        if (!response.ok || !data?.group || !Array.isArray(data.members)) {
+          throw new Error(data?.error || "Failed to rename group");
+        }
+
+        applyGroupInfoResponse(data as GroupInfoResponse);
+      } finally {
+        setUpdatingGroupInfo(false);
+      }
+    },
+    [applyGroupInfoResponse, selectedUser]
+  );
+
+  const handleRemoveGroupMember = useCallback(
+    (member: GroupInfoMember) => {
+      if (!selectedUser || selectedUser.chatType !== "group" || member.isYou) {
+        return;
+      }
+
+      const groupId = selectedUser.conversationId ?? selectedUser.id;
+
+      openConfirmDialog({
+        title: `Remove ${member.name}?`,
+        description:
+          "They will immediately lose access to this group and its messages unless an admin adds them again.",
+        confirmLabel: "Remove member",
+        tone: "danger",
+        onConfirm: async () => {
+          setUpdatingGroupInfo(true);
+
+          try {
+            const response = await fetch(`/api/user/chat/groups/${groupId}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                action: "removeMember",
+                memberId: member.id,
+              }),
+            });
+            const data = (await response.json().catch(() => ({}))) as
+              | ({ error?: string } & Partial<GroupInfoResponse>)
+              | null;
+
+            if (!response.ok || !data?.group || !Array.isArray(data.members)) {
+              throw new Error(data?.error || "Failed to remove member");
+            }
+
+            applyGroupInfoResponse(data as GroupInfoResponse);
+          } finally {
+            setUpdatingGroupInfo(false);
+          }
+        },
+      });
+    },
+    [applyGroupInfoResponse, openConfirmDialog, selectedUser]
   );
 
   const handleExitGroup = useCallback(() => {
@@ -2931,6 +3016,8 @@ export default function ChatPage() {
         eligibleUsers={eligibleGroupMembers}
         onClose={() => setShowGroupInfo(false)}
         onAddMembers={handleAddGroupMembers}
+        onRenameGroup={handleRenameGroup}
+        onRemoveMember={handleRemoveGroupMember}
         onExitGroup={handleExitGroup}
       />
 

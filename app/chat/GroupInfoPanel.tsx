@@ -1,7 +1,18 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { Check, Crown, Loader2, LogOut, UserPlus, Users, X } from "lucide-react";
+import {
+  Check,
+  Crown,
+  Loader2,
+  LogOut,
+  Pencil,
+  Save,
+  UserMinus,
+  UserPlus,
+  Users,
+  X,
+} from "lucide-react";
 import { PremiumAvatar } from "../components/premium-ui";
 import { User } from "../types/socket";
 
@@ -38,6 +49,8 @@ interface GroupInfoPanelProps {
   eligibleUsers: User[];
   onClose: () => void;
   onAddMembers: (memberIds: string[]) => Promise<void> | void;
+  onRenameGroup: (name: string) => Promise<void> | void;
+  onRemoveMember: (member: GroupInfoMember) => Promise<void> | void;
   onExitGroup: () => void;
 }
 
@@ -53,11 +66,16 @@ function GroupInfoPanel({
   eligibleUsers,
   onClose,
   onAddMembers,
+  onRenameGroup,
+  onRemoveMember,
   onExitGroup,
 }: GroupInfoPanelProps) {
   const [isAddMembersOpen, setIsAddMembersOpen] = useState(false);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [groupNameInput, setGroupNameInput] = useState("");
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [submitError, setSubmitError] = useState<string>("");
+  const [renameError, setRenameError] = useState<string>("");
 
   const currentGroup = group ?? (selectedGroup
     ? {
@@ -105,6 +123,32 @@ function GroupInfoPanel({
       console.error("Add member action failed:", error);
       setSubmitError(
         error instanceof Error ? error.message : "Unable to add members right now."
+      );
+    }
+  };
+
+  const handleRenameSubmit = async () => {
+    const nextName = groupNameInput.trim();
+
+    if (nextName.length < 2) {
+      setRenameError("Enter a group name with at least 2 characters.");
+      return;
+    }
+
+    if (nextName === (currentGroup?.name ?? "").trim()) {
+      setRenameError("");
+      setIsEditingName(false);
+      return;
+    }
+
+    try {
+      setRenameError("");
+      await onRenameGroup(nextName);
+      setIsEditingName(false);
+    } catch (error) {
+      console.error("Rename group action failed:", error);
+      setRenameError(
+        error instanceof Error ? error.message : "Unable to rename this group right now."
       );
     }
   };
@@ -172,6 +216,70 @@ function GroupInfoPanel({
           </div>
 
           <div className="mt-6">
+            <div className="rounded-[24px] border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-900">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
+                    Group name
+                  </h4>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    {currentGroup?.isGroupAdmin
+                      ? "Admins can update the group name for everyone."
+                      : "Only admins can change the group name."}
+                  </p>
+                </div>
+                {currentGroup?.isGroupAdmin ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGroupNameInput(currentGroup?.name ?? "");
+                      setRenameError("");
+                      setIsEditingName((prev) => !prev);
+                    }}
+                    disabled={saving}
+                    className="inline-flex items-center gap-2 rounded-xl border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                  >
+                    <Pencil size={15} />
+                    {isEditingName ? "Cancel" : "Edit"}
+                  </button>
+                ) : null}
+              </div>
+
+              {isEditingName ? (
+                <div className="mt-4 space-y-3">
+                  <input
+                    type="text"
+                    value={groupNameInput}
+                    onChange={(event) => setGroupNameInput(event.target.value)}
+                    placeholder="Enter group name"
+                    className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
+                  />
+                  {renameError ? (
+                    <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300">
+                      {renameError}
+                    </div>
+                  ) : null}
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={handleRenameSubmit}
+                      disabled={saving}
+                      className="inline-flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
+                    >
+                      {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save size={16} />}
+                      Save name
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-4 rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-medium text-gray-900 dark:border-gray-800 dark:bg-gray-950 dark:text-white">
+                  {currentGroup?.name || "Untitled group"}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-6">
             <div className="mb-3 flex items-center justify-between">
               <div>
                 <h4 className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-gray-400">
@@ -233,6 +341,17 @@ function GroupInfoPanel({
                         </div>
                       </div>
                     </div>
+                    {currentGroup?.isGroupAdmin && !member.isYou && member.role !== "admin" ? (
+                      <button
+                        type="button"
+                        onClick={() => void onRemoveMember(member)}
+                        disabled={saving}
+                        className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300 dark:hover:bg-red-950/60"
+                      >
+                        <UserMinus size={15} />
+                        Remove
+                      </button>
+                    ) : null}
                   </div>
                 ))}
               </div>

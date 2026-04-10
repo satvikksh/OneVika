@@ -483,6 +483,18 @@ const SidebarQuickMenu: React.FC<{
   onOpenStarredMessages,
   onMarkAllAsRead,
 }) => {
+  const handleItemSelect = (action: () => void | Promise<void>) => {
+    if (busy) return;
+
+    try {
+      void Promise.resolve(action()).catch(() => undefined);
+    } finally {
+      window.requestAnimationFrame(() => {
+        onClose();
+      });
+    }
+  };
+
   useEffect(() => {
     if (!isOpen) return;
 
@@ -521,24 +533,28 @@ const SidebarQuickMenu: React.FC<{
     return (
       <>
         <div className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-[2px]" onClick={onClose} />
-        <div className="fixed inset-x-0 bottom-0 z-[71] animate-chatSheet rounded-t-[28px] border border-white/10 bg-white px-4 pb-6 pt-3 shadow-2xl dark:bg-gray-950">
+        <div
+          className="fixed inset-x-0 bottom-0 z-[96] animate-chatSheet touch-manipulation rounded-t-[28px] border border-white/10 bg-white px-4 pb-6 pt-3 shadow-2xl dark:bg-gray-950"
+          onClick={(event) => event.stopPropagation()}
+        >
           <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-gray-300 dark:bg-gray-700" />
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">Sidebar menu</p>
               <h3 className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">Chat tools</h3>
             </div>
-            <button onClick={onClose} className="rounded-full p-2 text-gray-500 transition-colors hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800" aria-label="Close menu">
+            <button type="button" onClick={onClose} className="rounded-full p-2 text-gray-500 transition-colors hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800" aria-label="Close menu">
               <X size={18} />
             </button>
           </div>
           <div className="space-y-2">
             {items.map((item) => (
               <button
+                type="button"
                 key={item.id}
-                onClick={() => {
-                  onClose();
-                  item.onClick();
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleItemSelect(item.onClick);
                 }}
                 disabled={busy}
                 className="flex w-full items-center gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-left text-gray-900 transition-all disabled:opacity-60 dark:border-gray-800 dark:bg-gray-900 dark:text-white"
@@ -562,16 +578,18 @@ const SidebarQuickMenu: React.FC<{
     <>
       <div className="fixed inset-0 z-[70]" onClick={onClose} />
       <div
-        className="fixed z-[71] min-w-[240px] rounded-2xl border border-gray-200 bg-white p-2 shadow-2xl dark:border-gray-800 dark:bg-gray-950"
+        className="fixed z-[96] min-w-[240px] rounded-2xl border border-gray-200 bg-white p-2 shadow-2xl dark:border-gray-800 dark:bg-gray-950"
         style={{ left, top }}
         role="menu"
+        onClick={(event) => event.stopPropagation()}
       >
         {items.map((item) => (
           <button
+            type="button"
             key={item.id}
-            onClick={() => {
-              onClose();
-              item.onClick();
+            onClick={(event) => {
+              event.stopPropagation();
+              handleItemSelect(item.onClick);
             }}
             disabled={busy}
             className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-gray-900 transition-colors hover:bg-gray-100 disabled:opacity-60 dark:text-white dark:hover:bg-gray-900"
@@ -814,7 +832,17 @@ function ChatSidebar({
   }, [searchQuery]);
 
   useEffect(() => {
-    if (!isMobile || !showMobileSidebar || !sidebarRef.current || actionMenu || lockDialog) return;
+    if (
+      !isMobile ||
+      !showMobileSidebar ||
+      !sidebarRef.current ||
+      actionMenu ||
+      lockDialog ||
+      isQuickMenuOpen ||
+      isCreateGroupOpen
+    ) {
+      return;
+    }
 
     const handleClickOutside = (event: MouseEvent | TouchEvent) => {
       if (sidebarRef.current && !sidebarRef.current.contains(event.target as Node)) {
@@ -828,7 +856,15 @@ function ChatSidebar({
       document.removeEventListener("mousedown", handleClickOutside);
       document.removeEventListener("touchstart", handleClickOutside);
     };
-  }, [actionMenu, isMobile, lockDialog, onToggleMobileSidebar, showMobileSidebar]);
+  }, [
+    actionMenu,
+    isCreateGroupOpen,
+    isMobile,
+    isQuickMenuOpen,
+    lockDialog,
+    onToggleMobileSidebar,
+    showMobileSidebar,
+  ]);
 
   useEffect(() => {
     if (isMobile && showMobileSidebar) {
