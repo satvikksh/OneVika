@@ -183,7 +183,7 @@ const ChatActionMenu: React.FC<{
           <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-gray-300 dark:bg-gray-700" />
           <div className="mb-4 flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">Chat actions</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-490 dark:text-gray-400">Chat actions</p>
               <h3 className="mt-1 truncate text-lg font-semibold text-gray-900 dark:text-white">{getPresentedName(user)}</h3>
             </div>
             <button onClick={onClose} className="rounded-full p-2 text-gray-500 transition-colors hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800" aria-label="Close chat actions">
