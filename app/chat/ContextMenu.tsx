@@ -5,6 +5,8 @@ import { Message } from "../types/socket";
 import {
   Copy,
   Download,
+  Eye,
+  EyeOff,
   Link,
   MessageSquareReply,
   Star,
@@ -81,6 +83,15 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
         action: "toggleStar",
         icon: Star,
       },
+      {
+        id: "toggleHidden",
+        label: message.isHidden ? "Unhide message" : "Hide message",
+        description: message.isHidden
+          ? "Restore this message to the normal chat flow"
+          : "Keep this message in storage but out of the main chat view",
+        action: message.isHidden ? "unhide" : "hide",
+        icon: message.isHidden ? Eye : EyeOff,
+      },
       ...(message.attachments?.[0]?.url
         ? [
             {
@@ -113,7 +124,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
           ]
         : []),
     ],
-    [isCurrentUser, message.attachments, message.isStarred]
+    [isCurrentUser, message.attachments, message.isHidden, message.isStarred]
   );
 
   const handleClose = useCallback(() => {

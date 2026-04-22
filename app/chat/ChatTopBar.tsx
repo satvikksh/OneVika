@@ -6,6 +6,10 @@ import {
   Archive,
   ArrowLeft,
   Ban,
+  Copy,
+  Eye,
+  EyeOff,
+  Forward,
   Info,
   Menu,
   MoreVertical,
@@ -14,6 +18,7 @@ import {
   Trash2,
   Users,
   Video,
+  X,
   XCircle,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
@@ -39,6 +44,22 @@ interface ChatTopBarProps {
   onOpenGroupInfo?: () => void;
   isGroupInfoOpen?: boolean;
   isActionBusy?: boolean;
+  showHiddenMessages?: boolean;
+  hiddenMessageCount?: number;
+  onToggleShowHiddenMessages?: () => void;
+  selectedMessageCount?: number;
+  onExitSelectionMode?: () => void;
+  onCopySelectedMessages?: () => void;
+  onForwardSelectedMessages?: () => void;
+  onHideSelectedMessages?: () => void;
+  onUnhideSelectedMessages?: () => void;
+  onDeleteSelectedMessages?: () => void;
+  canCopySelectedMessages?: boolean;
+  canForwardSelectedMessages?: boolean;
+  canHideSelectedMessages?: boolean;
+  canUnhideSelectedMessages?: boolean;
+  canDeleteSelectedMessages?: boolean;
+  isSelectionActionBusy?: boolean;
 }
 
 function ChatTopBar({
@@ -55,6 +76,22 @@ function ChatTopBar({
   onOpenGroupInfo,
   isGroupInfoOpen = false,
   isActionBusy = false,
+  showHiddenMessages = false,
+  hiddenMessageCount = 0,
+  onToggleShowHiddenMessages,
+  selectedMessageCount = 0,
+  onExitSelectionMode,
+  onCopySelectedMessages,
+  onForwardSelectedMessages,
+  onHideSelectedMessages,
+  onUnhideSelectedMessages,
+  onDeleteSelectedMessages,
+  canCopySelectedMessages = false,
+  canForwardSelectedMessages = false,
+  canHideSelectedMessages = false,
+  canUnhideSelectedMessages = false,
+  canDeleteSelectedMessages = false,
+  isSelectionActionBusy = false,
 }: ChatTopBarProps) {
   const { data: session } = useSession();
   const router = useRouter();
@@ -69,6 +106,7 @@ function ChatTopBar({
   const mobileClasses = isMobile ? "left-0 right-0" : "";
   const positionClasses = isMobile ? mobileClasses : `${desktopLeft} right-0`;
   const isGroupChat = selectedUser?.chatType === "group";
+  const isSelectionMode = selectedMessageCount > 0;
 
   const isUserOnline = selectedUser?.id
     ? !isGroupChat && onlineUsers.includes(selectedUser.id)
@@ -149,7 +187,101 @@ function ChatTopBar({
     );
   }
 
+  if (isSelectionMode) {
+    const selectionActions = [
+      {
+        id: "copy",
+        label: "Copy",
+        icon: Copy,
+        onClick: onCopySelectedMessages,
+        disabled: !canCopySelectedMessages,
+      },
+      {
+        id: "forward",
+        label: "Forward",
+        icon: Forward,
+        onClick: onForwardSelectedMessages,
+        disabled: !canForwardSelectedMessages,
+      },
+      {
+        id: "toggleHidden",
+        label: canUnhideSelectedMessages ? "Unhide" : "Hide",
+        icon: canUnhideSelectedMessages ? Eye : EyeOff,
+        onClick: canUnhideSelectedMessages
+          ? onUnhideSelectedMessages
+          : onHideSelectedMessages,
+        disabled: canUnhideSelectedMessages
+          ? !canUnhideSelectedMessages
+          : !canHideSelectedMessages,
+      },
+      {
+        id: "delete",
+        label: "Delete",
+        icon: Trash2,
+        onClick: onDeleteSelectedMessages,
+        disabled: !canDeleteSelectedMessages,
+      },
+    ];
+
+    return (
+      <>
+        <header
+          className={`fixed top-16 ${positionClasses} z-40 h-16 border-b border-emerald-800 bg-emerald-700 text-white transition-colors duration-200`}
+        >
+          <div className="flex h-full items-center justify-between gap-2 px-3 sm:px-4">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <button
+                onClick={onExitSelectionMode}
+                className="rounded-xl p-2 transition-colors hover:bg-white/10"
+                aria-label="Clear selected messages"
+              >
+                {isMobile ? <ArrowLeft size={20} /> : <X size={20} />}
+              </button>
+
+              <div className="min-w-0">
+                <div className="text-sm font-semibold sm:text-base">
+                  {selectedMessageCount} selected
+                </div>
+                <p className="truncate text-xs text-emerald-100">
+                  Tap more messages to add or remove them
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1 sm:gap-2">
+              {selectionActions.map((action) => (
+                <button
+                  key={action.id}
+                  onClick={action.onClick}
+                  disabled={action.disabled || isSelectionActionBusy}
+                  className="rounded-xl p-2 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                  aria-label={action.label}
+                  title={action.label}
+                >
+                  <action.icon size={18} />
+                </button>
+              ))}
+            </div>
+          </div>
+        </header>
+
+        <AudioCallModal incoming={false} onAccept={startCall} onReject={() => {}} inCall={inCall} onEnd={endCall} />
+      </>
+    );
+  }
+
   const menuItems = [
+    {
+      id: "toggleHiddenMessages",
+      label: showHiddenMessages
+        ? "Hide Hidden Messages"
+        : hiddenMessageCount > 0
+          ? `Show Hidden Messages (${hiddenMessageCount})`
+          : "Show Hidden Messages",
+      icon: showHiddenMessages ? EyeOff : Eye,
+      onClick: onToggleShowHiddenMessages,
+      danger: false,
+    },
     {
       id: "clear",
       label: "Clear All Chat",
@@ -178,7 +310,7 @@ function ChatTopBar({
       onClick: onDeleteChat,
       danger: true,
     },
-  ].filter((item) => !isGroupChat && Boolean(item.onClick));
+  ].filter((item) => (item.id === "toggleHiddenMessages" || !isGroupChat) && Boolean(item.onClick));
 
   return (
     <>

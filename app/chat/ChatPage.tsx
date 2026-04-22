@@ -310,6 +310,9 @@ export default function ChatPage() {
   const [loadingGroupInfo, setLoadingGroupInfo] = useState(false);
   const [groupInfoError, setGroupInfoError] = useState<string | null>(null);
   const [updatingGroupInfo, setUpdatingGroupInfo] = useState(false);
+  const [showHiddenMessages, setShowHiddenMessages] = useState(false);
+  const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
+  const [isSelectionActionBusy, setIsSelectionActionBusy] = useState(false);
   
   // Chat UI state
   const [replyTo, setReplyTo] = useState<Message | null>(null);
@@ -1228,7 +1231,7 @@ export default function ChatPage() {
   /* ---------------------------- FILTER MESSAGES FOR SELECTED USER ---------------------------- */
   
   // Filter messages for the selected user from SocketContext
-  const filteredMessages = useMemo(
+  const conversationMessages = useMemo(
     () =>
       socketMessages.filter((msg) => {
         if (!selectedUserId || !currentUserId) return false;
@@ -1248,13 +1251,28 @@ export default function ChatPage() {
   );
 
   // Sort messages by timestamp
-  const sortedMessages = useMemo(
+  const sortedConversationMessages = useMemo(
     () =>
-      [...filteredMessages].sort(
+      [...conversationMessages].sort(
         (a, b) =>
           new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
       ),
-    [filteredMessages]
+    [conversationMessages]
+  );
+
+  const hiddenMessageCount = useMemo(
+    () =>
+      sortedConversationMessages.filter((message) => Boolean(message.isHidden))
+        .length,
+    [sortedConversationMessages]
+  );
+
+  const sortedMessages = useMemo(
+    () =>
+      showHiddenMessages
+        ? sortedConversationMessages
+        : sortedConversationMessages.filter((message) => !message.isHidden),
+    [showHiddenMessages, sortedConversationMessages]
   );
 
   const selectedMessagePageInfo = selectedUserId
@@ -1263,7 +1281,7 @@ export default function ChatPage() {
   const loadingInitialMessages =
     selectedUserId !== null &&
     initialLoadingMessageUserId === selectedUserId &&
-    sortedMessages.length === 0;
+    sortedConversationMessages.length === 0;
   const loadingOlderMessages =
     selectedUserId !== null && loadingOlderMessageUserId === selectedUserId;
   const syncingNewMessages =
@@ -1272,6 +1290,58 @@ export default function ChatPage() {
     ? messageErrorsByUser[selectedUserId] ?? null
     : null;
   const hasOlderMessages = Boolean(selectedMessagePageInfo?.hasMoreBefore);
+  const selectedMessageIdSet = useMemo(
+    () => new Set(selectedMessageIds),
+    [selectedMessageIds]
+  );
+  const selectedMessages = useMemo(
+    () =>
+      sortedConversationMessages.filter((message) =>
+        selectedMessageIdSet.has(message.id)
+      ),
+    [selectedMessageIdSet, sortedConversationMessages]
+  );
+  const hiddenSelectedMessages = useMemo(
+    () => selectedMessages.filter((message) => Boolean(message.isHidden)),
+    [selectedMessages]
+  );
+  const visibleSelectedMessages = useMemo(
+    () => selectedMessages.filter((message) => !message.isHidden),
+    [selectedMessages]
+  );
+  const canHideSelectedMessages = visibleSelectedMessages.some((message) =>
+    isValidObjectId(message.id)
+  );
+  const canUnhideSelectedMessages = hiddenSelectedMessages.some((message) =>
+    isValidObjectId(message.id)
+  );
+
+  useEffect(() => {
+    setSelectedMessageIds([]);
+    setShowHiddenMessages(false);
+  }, [selectedConversationId, selectedUserId]);
+
+  useEffect(() => {
+    const availableMessageIds = new Set(
+      sortedConversationMessages.map((message) => message.id)
+    );
+
+    setSelectedMessageIds((prev) => {
+      const next = prev.filter((messageId) => availableMessageIds.has(messageId));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [sortedConversationMessages]);
+
+  useEffect(() => {
+    if (selectedMessageIds.length === 0) {
+      return;
+    }
+
+    setContextMenu(null);
+    setReplyTo(null);
+    setShowEmojiPicker(false);
+    setActiveDropdownId(null);
+  }, [selectedMessageIds.length]);
 
   const handleLoadOlderMessages = useCallback(() => {
     if (!selectedUser || loadingOlderMessages) {
@@ -1578,6 +1648,181 @@ export default function ChatPage() {
     }
   };
 
+  const clearSelectedMessages = useCallback(() => {
+    setSelectedMessageIds([]);
+  }, []);
+
+  const startMessageSelection = useCallback((message: Message) => {
+    setSelectedMessageIds((prev) =>
+      prev.includes(message.id)
+        ? prev
+        : prev.length === 0
+          ? [message.id]
+          : [...prev, message.id]
+    );
+  }, []);
+
+  const toggleMessageSelection = useCallback((message: Message) => {
+    setSelectedMessageIds((prev) =>
+      prev.includes(message.id)
+        ? prev.filter((messageId) => messageId !== message.id)
+        : [...prev, message.id]
+    );
+  }, []);
+
+  const buildSelectedMessageSummary = useCallback(
+    (messagesToFormat: Message[]) =>
+      messagesToFormat
+        .map((message) => {
+          const senderLabel =
+            message.senderId === currentUserId
+              ? "You"
+              : selectedUser?.name || "Contact";
+          const attachment = message.attachments?.[0];
+          const attachmentLabel = attachment
+            ? `[${attachment.fileName || attachment.type || "attachment"}]`
+            : "";
+          const messageBody = message.text || message.content || "";
+          const combinedBody = [messageBody, attachmentLabel]
+            .filter(Boolean)
+            .join(messageBody && attachmentLabel ? "\n" : "");
+
+          return `${senderLabel}: ${combinedBody || "Media message"}`;
+        })
+        .join("\n\n"),
+    [currentUserId, selectedUser?.name]
+  );
+
+  const handleCopySelectedMessages = useCallback(async () => {
+    if (selectedMessages.length === 0) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(
+        buildSelectedMessageSummary(selectedMessages)
+      );
+
+      if (isMobile && "vibrate" in navigator) {
+        navigator.vibrate(24);
+      }
+
+      clearSelectedMessages();
+    } catch (error) {
+      console.error("Failed to copy selected messages:", error);
+      alert("Unable to copy the selected messages right now.");
+    }
+  }, [
+    buildSelectedMessageSummary,
+    clearSelectedMessages,
+    isMobile,
+    selectedMessages,
+  ]);
+
+  const handleForwardSelectedMessages = useCallback(() => {
+    if (selectedMessages.length === 0) {
+      return;
+    }
+
+    const header =
+      selectedMessages.length > 1 ? "Forwarded messages:" : "Forwarded message:";
+    const forwardedDraft = `${header}\n${buildSelectedMessageSummary(
+      selectedMessages
+    )}`;
+
+    setNewMessage((prev) =>
+      prev.trim() ? `${prev}\n\n${forwardedDraft}` : forwardedDraft
+    );
+    setShowEmojiPicker(false);
+    clearSelectedMessages();
+    inputRef.current?.focus();
+  }, [
+    buildSelectedMessageSummary,
+    clearSelectedMessages,
+    selectedMessages,
+    setNewMessage,
+  ]);
+
+  const updateMessageVisibility = useCallback(
+    async (messagesToUpdate: Message[], hidden: boolean) => {
+      const persistedMessages = messagesToUpdate.filter((message) =>
+        isValidObjectId(message.id)
+      );
+
+      if (persistedMessages.length === 0) {
+        return;
+      }
+
+      try {
+        setIsSelectionActionBusy(true);
+
+        await Promise.all(
+          persistedMessages.map(async (message) => {
+            const response = await fetch(`/api/messages/by-message/${message.id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ hidden }),
+            });
+
+            const data = (await response.json().catch(() => ({}))) as {
+              error?: string;
+            };
+
+            if (!response.ok) {
+              throw new Error(
+                data.error ||
+                  `Failed to ${hidden ? "hide" : "unhide"} one or more messages`
+              );
+            }
+          })
+        );
+
+        const updatedIds = new Set(persistedMessages.map((message) => message.id));
+        addMessages(
+          persistedMessages.map((message) => ({
+            ...message,
+            isHidden: hidden,
+          }))
+        );
+        setStarredMessages((prev) =>
+          hidden
+            ? prev.filter((message) => !updatedIds.has(message.id))
+            : prev
+        );
+        setReplyTo((prev) =>
+          prev && updatedIds.has(prev.id) ? null : prev
+        );
+        clearSelectedMessages();
+      } catch (error) {
+        console.error("Failed to update selected message visibility:", error);
+        alert(
+          `Unable to ${hidden ? "hide" : "unhide"} the selected messages right now.`
+        );
+      } finally {
+        setIsSelectionActionBusy(false);
+      }
+    },
+    [addMessages, clearSelectedMessages]
+  );
+
+  const handleHideSelectedMessages = useCallback(() => {
+    void updateMessageVisibility(visibleSelectedMessages, true);
+  }, [updateMessageVisibility, visibleSelectedMessages]);
+
+  const handleUnhideSelectedMessages = useCallback(() => {
+    void updateMessageVisibility(hiddenSelectedMessages, false);
+  }, [hiddenSelectedMessages, updateMessageVisibility]);
+
+  const handleToggleHiddenMessages = useCallback(() => {
+    setShowHiddenMessages((prev) => {
+      const next = !prev;
+      if (!next) {
+        clearSelectedMessages();
+      }
+      return next;
+    });
+  }, [clearSelectedMessages]);
+
   /* ---------------------------- DELETE MESSAGE ---------------------------- */
   const removeMessagesForChat = useCallback(
     (chatUserId: string) => {
@@ -1654,11 +1899,47 @@ export default function ChatPage() {
     [currentUserId, emitMessageDelete, removeMessage]
   );
 
+  const handleDeleteSelectedMessages = useCallback(() => {
+    if (selectedMessages.length === 0) {
+      return;
+    }
+
+    openConfirmDialog({
+      title: `Delete ${selectedMessages.length} selected ${selectedMessages.length === 1 ? "message" : "messages"}?`,
+      description:
+        "This removes the selected messages from your view only. Hidden messages remain recoverable, but deleted messages do not.",
+      confirmLabel: "Delete selected",
+      tone: "danger",
+      onConfirm: async () => {
+        try {
+          setIsSelectionActionBusy(true);
+
+          for (const message of selectedMessages) {
+            await handleDeleteMessage(message, "self");
+          }
+
+          clearSelectedMessages();
+        } finally {
+          setIsSelectionActionBusy(false);
+        }
+      },
+    });
+  }, [
+    clearSelectedMessages,
+    handleDeleteMessage,
+    openConfirmDialog,
+    selectedMessages,
+  ]);
+
   /* ---------------------------- CONTEXT MENU HANDLERS --------------------------- */
   const handleMessageContextMenu = (
     trigger: ContextMenuTrigger,
     message: Message
   ) => {
+    if (selectedMessageIds.length > 0) {
+      return;
+    }
+
     let clientX: number;
     let clientY: number;
 
@@ -1690,6 +1971,10 @@ export default function ChatPage() {
   };
 
   const handleDropdownClick = (e: React.MouseEvent, message: Message) => {
+    if (selectedMessageIds.length > 0) {
+      return;
+    }
+
     e.stopPropagation();
     const rect = e.currentTarget.getBoundingClientRect();
     
@@ -1788,6 +2073,12 @@ export default function ChatPage() {
         link.remove();
         break;
       }
+      case "hide":
+        await updateMessageVisibility([message], true);
+        break;
+      case "unhide":
+        await updateMessageVisibility([message], false);
+        break;
       case "deleteSelf":
         openConfirmDialog({
           title: "Delete message for you?",
@@ -2872,6 +3163,24 @@ export default function ChatPage() {
               (deletingChatUserId === selectedUser.id ||
                 updatingChatUserId === selectedUser.id)
           )}
+          showHiddenMessages={showHiddenMessages}
+          hiddenMessageCount={hiddenMessageCount}
+          onToggleShowHiddenMessages={handleToggleHiddenMessages}
+          selectedMessageCount={selectedMessages.length}
+          onExitSelectionMode={clearSelectedMessages}
+          onCopySelectedMessages={() => {
+            void handleCopySelectedMessages();
+          }}
+          onForwardSelectedMessages={handleForwardSelectedMessages}
+          onHideSelectedMessages={handleHideSelectedMessages}
+          onUnhideSelectedMessages={handleUnhideSelectedMessages}
+          onDeleteSelectedMessages={handleDeleteSelectedMessages}
+          canCopySelectedMessages={selectedMessages.length > 0}
+          canForwardSelectedMessages={selectedMessages.length > 0}
+          canHideSelectedMessages={canHideSelectedMessages}
+          canUnhideSelectedMessages={canUnhideSelectedMessages}
+          canDeleteSelectedMessages={selectedMessages.length > 0}
+          isSelectionActionBusy={isSelectionActionBusy}
         />
       ) : null}
 
@@ -2947,6 +3256,11 @@ export default function ChatPage() {
               messageError={selectedMessageError}
               onLoadOlderMessages={handleLoadOlderMessages}
               messages={sortedMessages}
+              showHiddenMessages={showHiddenMessages}
+              hiddenMessagesCount={hiddenMessageCount}
+              selectedMessageIds={selectedMessageIds}
+              onStartMessageSelection={startMessageSelection}
+              onToggleMessageSelection={toggleMessageSelection}
               newMessage={newMessage}
               setNewMessage={setNewMessage}
               sendingMessage={sendingMessage}

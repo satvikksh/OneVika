@@ -90,12 +90,14 @@ export async function POST(
           conversationId: conversation._id,
           senderId: { $ne: senderObjId },
           deletedForUserIds: { $ne: senderObjId },
+          hiddenForUserIds: { $ne: senderObjId },
           readByUserIds: { $ne: senderObjId },
         }
       : {
           conversationId: conversation._id,
           senderId: receiverObjId,
           deletedForUserIds: { $ne: senderObjId },
+          hiddenForUserIds: { $ne: senderObjId },
           readByUserIds: { $ne: senderObjId },
         };
 

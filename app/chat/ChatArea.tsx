@@ -27,6 +27,11 @@ interface ChatAreaProps {
   onLoadOlderMessages: () => void;
   newMessage: string;
   messages: Message[];
+  showHiddenMessages: boolean;
+  hiddenMessagesCount: number;
+  selectedMessageIds: string[];
+  onStartMessageSelection: (message: Message) => void;
+  onToggleMessageSelection: (message: Message) => void;
   setNewMessage: (message: string) => void;
   sendingMessage: boolean;
   handleTyping: () => void;
@@ -237,6 +242,11 @@ function ChatArea({
   messageError,
   onLoadOlderMessages,
   messages = [],
+  showHiddenMessages,
+  hiddenMessagesCount,
+  selectedMessageIds,
+  onStartMessageSelection,
+  onToggleMessageSelection,
   newMessage,
   setNewMessage,
   sendingMessage,
@@ -272,6 +282,11 @@ function ChatArea({
   isChatBlocked = false,
 }: ChatAreaProps) {
   const currentUserId = session?.user?.id;
+  const selectedMessageIdSet = React.useMemo(
+    () => new Set(selectedMessageIds),
+    [selectedMessageIds]
+  );
+  const isSelectionMode = selectedMessageIds.length > 0;
   const longPressTimerRef = React.useRef<number | null>(null);
   const touchOriginRef = React.useRef<{ x: number; y: number } | null>(null);
   const scrollContainerRef = React.useRef<HTMLDivElement | null>(null);
@@ -372,6 +387,7 @@ function ChatArea({
 
   const showInitialConversationLoader =
     Boolean(selectedUser) && loadingInitialMessages && messages.length === 0;
+  const isComposerDisabled = isChatBlocked || isSelectionMode;
 
   return (
     <div className="flex flex-col h-full w-full bg-white dark:bg-black">
@@ -390,6 +406,16 @@ function ChatArea({
       >
         {selectedUser ? (
             <div className="space-y-3 p-4">
+              {showHiddenMessages ? (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-100">
+                  Hidden message view is on. Hidden messages stay highlighted until you unhide them.
+                </div>
+              ) : hiddenMessagesCount > 0 ? (
+                <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300">
+                  {hiddenMessagesCount} hidden {hiddenMessagesCount === 1 ? "message is" : "messages are"} filtered from this chat.
+                </div>
+              ) : null}
+
               {showInitialConversationLoader ? (
                 <div className="flex items-center justify-center gap-2 py-8 text-sm text-gray-500 dark:text-gray-400">
                   <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
@@ -433,17 +459,30 @@ function ChatArea({
                 <div className="flex flex-col items-center justify-center h-full py-8">
                   <div className="text-gray-400 mb-4">💬</div>
                   <p className="text-gray-500 dark:text-gray-400">
-                    No messages yet. Start a conversation!
+                    {hiddenMessagesCount > 0 && !showHiddenMessages
+                      ? "All visible messages are hidden. Use the menu to reveal them."
+                      : "No messages yet. Start a conversation!"}
                   </p>
                 </div>
               ) : (
                 messages.map((msg) => {
                   const isCurrentUser = msg.senderId === currentUserId;
+                  const isHiddenMessage = Boolean(msg.isHidden);
+                  const isSelected = selectedMessageIdSet.has(msg.id);
                   const hasAttachment = Boolean(msg.attachments?.[0]?.url);
                   const hasText = Boolean(msg.text || msg.content);
+                  const bubbleBaseClasses = isCurrentUser
+                    ? "bg-blue-600 text-white rounded-br-none"
+                    : "bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-white rounded-bl-none";
+                  const hiddenBubbleClasses =
+                    showHiddenMessages && isHiddenMessage
+                      ? isCurrentUser
+                        ? "bg-blue-500/85 text-white ring-1 ring-amber-200/70"
+                        : "border border-dashed border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-100"
+                      : bubbleBaseClasses;
 
                   const startMessageLongPress = (touch: React.Touch) => {
-                    if (!isMobile) return;
+                    if (!isMobile || isSelectionMode) return;
 
                     touchOriginRef.current = {
                       x: touch.clientX,
@@ -452,10 +491,7 @@ function ChatArea({
                     setPressedMessageId(msg.id);
 
                     longPressTimerRef.current = window.setTimeout(() => {
-                      handleMessageContextMenu(
-                        { x: touch.clientX, y: touch.clientY },
-                        msg
-                      );
+                      onStartMessageSelection(msg);
                       setPressedMessageId(null);
                       if ("vibrate" in navigator) {
                         navigator.vibrate(16);
@@ -472,93 +508,147 @@ function ChatArea({
                       onMouseLeave={() => setHoveredMessageId(null)}
                     >
                       <div
-                        className={`relative group ${
-                          hasAttachment ? "max-w-[320px] w-full" : "max-w-[70%] w-fit"
+                        className={`group flex items-start gap-2 ${
+                          isCurrentUser ? "flex-row-reverse" : ""
                         }`}
                       >
-                        {/* Message Bubble */}
+                        {isSelectionMode ? (
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onToggleMessageSelection(msg);
+                            }}
+                            className={`mt-3 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border transition-all ${
+                              isSelected
+                                ? "border-emerald-500 bg-emerald-500 text-white shadow-sm"
+                                : "border-gray-300 bg-white text-transparent dark:border-gray-600 dark:bg-gray-900"
+                            }`}
+                            aria-label={isSelected ? "Deselect message" : "Select message"}
+                          >
+                            <Check size={14} />
+                          </button>
+                        ) : null}
+
                         <div
-                          className={`rounded-2xl ${
-                            hasAttachment && !hasText ? "px-2 py-2" : "px-4 py-3"
-                          } ${
-                            isCurrentUser
-                              ? 'bg-blue-600 text-white rounded-br-none'
-                              : 'bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-white rounded-bl-none'
-                          } ${msg.status === 'sending' ? 'opacity-80' : ''} ${
-                            pressedMessageId === msg.id ? "ring-2 ring-blue-400/60" : ""
+                          className={`relative ${
+                            hasAttachment ? "max-w-[320px] w-full" : "max-w-[70%] w-fit"
                           }`}
-                          onContextMenu={(e) => handleMessageContextMenu(e, msg)}
-                          onTouchStart={(event) => {
-                            const touch = event.touches[0];
-                            if (touch) {
-                              startMessageLongPress(touch);
-                            }
-                          }}
-                          onTouchEnd={() => cancelLongPress()}
-                          onTouchCancel={() => cancelLongPress()}
-                          onTouchMove={(event) => {
-                            const touch = event.touches[0];
-                            if (!touchOriginRef.current || !touch) return;
-                            const deltaX = Math.abs(touch.clientX - touchOriginRef.current.x);
-                            const deltaY = Math.abs(touch.clientY - touchOriginRef.current.y);
-                            if (deltaX > 12 || deltaY > 12) {
-                              cancelLongPress();
-                            }
-                          }}
                         >
-                          {/* Reply indicator */}
-                          {msg.replyToId && (
-                            <div className="mb-2 p-2 bg-black/10 dark:bg-white/10 rounded-lg border-l-4 border-blue-400">
-                              <p className="text-xs italic opacity-75">Replying to a message</p>
+                          {/* Message Bubble */}
+                          <div
+                            className={`rounded-2xl ${
+                              hasAttachment && !hasText ? "px-2 py-2" : "px-4 py-3"
+                            } ${hiddenBubbleClasses} ${msg.status === 'sending' ? 'opacity-80' : ''} ${
+                              pressedMessageId === msg.id ? "ring-2 ring-blue-400/60" : ""
+                            } ${
+                              isSelected
+                                ? isCurrentUser
+                                  ? "ring-2 ring-emerald-300 shadow-lg"
+                                  : "bg-emerald-50 ring-2 ring-emerald-500 shadow-lg dark:bg-emerald-950/30"
+                                : ""
+                            } ${
+                              isSelectionMode || !isMobile ? "cursor-pointer" : ""
+                            }`}
+                            onClick={(event) => {
+                              if (isSelectionMode) {
+                                event.preventDefault();
+                                onToggleMessageSelection(msg);
+                                return;
+                              }
+
+                              if (!isMobile) {
+                                event.preventDefault();
+                                onStartMessageSelection(msg);
+                              }
+                            }}
+                            onContextMenu={(e) => {
+                              if (isSelectionMode) {
+                                e.preventDefault();
+                                return;
+                              }
+
+                              handleMessageContextMenu(e, msg);
+                            }}
+                            onTouchStart={(event) => {
+                              if (isSelectionMode) return;
+
+                              const touch = event.touches[0];
+                              if (touch) {
+                                startMessageLongPress(touch);
+                              }
+                            }}
+                            onTouchEnd={() => cancelLongPress()}
+                            onTouchCancel={() => cancelLongPress()}
+                            onTouchMove={(event) => {
+                              const touch = event.touches[0];
+                              if (!touchOriginRef.current || !touch) return;
+                              const deltaX = Math.abs(touch.clientX - touchOriginRef.current.x);
+                              const deltaY = Math.abs(touch.clientY - touchOriginRef.current.y);
+                              if (deltaX > 12 || deltaY > 12) {
+                                cancelLongPress();
+                              }
+                            }}
+                          >
+                            {showHiddenMessages && isHiddenMessage ? (
+                              <div className="mb-2 inline-flex rounded-full bg-amber-500/15 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-200">
+                                Hidden
+                              </div>
+                            ) : null}
+
+                            {/* Reply indicator */}
+                            {msg.replyToId && (
+                              <div className="mb-2 rounded-lg border-l-4 border-blue-400 bg-black/10 p-2 dark:bg-white/10">
+                                <p className="text-xs italic opacity-75">Replying to a message</p>
+                              </div>
+                            )}
+
+                            {renderAttachment(msg.attachments?.[0])}
+                            {(msg.text || msg.content) && (
+                              <div className="break-words whitespace-pre-wrap">
+                                {renderMessageText(msg.text || msg.content || "")}
+                              </div>
+                            )}
+
+                            {/* Message timestamp and status */}
+                            <div className="mt-1 flex items-center justify-end">
+                              <span className="mr-2 text-xs opacity-75">
+                                {new Date(msg.timestamp).toLocaleTimeString([], {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                  hour12: true
+                                })}
+                              </span>
+
+                              {/* Read/unread indicators */}
+                              {isCurrentUser && (
+                                <MessageStatusIndicator
+                                  isCurrentUser={isCurrentUser}
+                                  status={msg.status}
+                                />
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Dropdown Arrow (only shows on hover) */}
+                          {!isMobile && !isSelectionMode && (hoveredMessageId === msg.id || activeDropdownId === msg.id) && (
+                            <div
+                              ref={dropdownRef}
+                              className={`absolute ${isCurrentUser ? 'left-0 -translate-x-8' : 'right-0 translate-x-8'} top-1/2 -translate-y-1/2`}
+                            >
+                              <button
+                                onClick={(e) => {
+                                  setActiveDropdownId(msg.id);
+                                  handleDropdownClick(e, msg);
+                                }}
+                                className="rounded-full bg-white p-1 shadow-md transition-shadow hover:shadow-lg dark:bg-gray-800"
+                                aria-label="Message options"
+                              >
+                                <ChevronDown size={16} />
+                              </button>
                             </div>
                           )}
-                          
-                        {renderAttachment(msg.attachments?.[0])}
-                        {(msg.text || msg.content) && (
-                          <div className="break-words whitespace-pre-wrap">
-                            {renderMessageText(msg.text || msg.content || "")}
-                          </div>
-                        )}
-
-                          
-                          {/* Message timestamp and status */}
-                          <div className="flex items-center justify-end mt-1">
-                            <span className="text-xs opacity-75 mr-2">
-                              {new Date(msg.timestamp).toLocaleTimeString([], { 
-                                hour: '2-digit', 
-                                minute: '2-digit', 
-                                hour12: true 
-                              })}
-                            </span>
-                            
-                            {/* Read/unread indicators */}
-                            {isCurrentUser && (
-                              <MessageStatusIndicator 
-                                isCurrentUser={isCurrentUser}
-                                status={msg.status}
-                              />
-                            )}
-                          </div>
                         </div>
-                        
-                        {/* Dropdown Arrow (only shows on hover) */}
-                        {(hoveredMessageId === msg.id || activeDropdownId === msg.id) && (
-                          <div 
-                            ref={dropdownRef}
-                            className={`absolute ${isCurrentUser ? 'left-0 -translate-x-8' : 'right-0 translate-x-8'} top-1/2 -translate-y-1/2`}
-                          >
-                            <button
-                              onClick={(e) => {
-                                setActiveDropdownId(msg.id);
-                                handleDropdownClick(e, msg);
-                              }}
-                              className="p-1 bg-white dark:bg-gray-800 rounded-full shadow-md hover:shadow-lg transition-shadow"
-                              aria-label="Message options"
-                            >
-                              <ChevronDown size={16} />
-                            </button>
-                          </div>
-                        )}
                       </div>
                     </div>
                   );
@@ -586,13 +676,17 @@ function ChatArea({
       {/* Input Area - Fixed at bottom within chat area */}
       {selectedUser && (
         <div className="fixed bottom-0 left-0 lg:left-80 right-0 bg-white dark:bg-black border-t border-gray-200 dark:border-gray-800">
-          {isChatBlocked ? (
+          {isSelectionMode ? (
+            <div className="border-b border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200">
+              Selection mode is active. Use the top bar actions or clear the selection to resume chatting.
+            </div>
+          ) : isChatBlocked ? (
             <div className="border-b border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300">
               Messaging is disabled for this chat until the user is unblocked.
             </div>
           ) : null}
           {/* Reply Preview */}
-          {replyTo && (
+          {replyTo && !isSelectionMode && (
             <div className="px-4 pt-3 bg-gradient-to-r from-blue-50 to-pink-50 dark:from-blue-900/20 dark:to-pink-900/20 border-b border-blue-200 dark:border-blue-800">
               <div className="flex justify-between items-center">
                 <div className="flex-1">
@@ -631,7 +725,7 @@ function ChatArea({
                 <button
                   type="button"
                   onClick={handleFileSelect}
-                  disabled={isChatBlocked}
+                  disabled={isComposerDisabled}
                   className="p-2 text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-black rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                   aria-label="Attach file"
                 >
@@ -643,7 +737,7 @@ function ChatArea({
                   <button
                     type="button"
                     onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                    disabled={isChatBlocked}
+                    disabled={isComposerDisabled}
                     className="p-2 text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-black rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                     aria-label="Emoji"
                   >
@@ -726,8 +820,8 @@ function ChatArea({
                     onKeyDown={handleKeyDownOverride}
                     onFocus={handleInputFocus}
                     onBlur={handleInputBlur}
-                    placeholder={isChatBlocked ? "Unblock this user to send messages" : "Type a message..."}
-                    disabled={isChatBlocked}
+                    placeholder={isSelectionMode ? "Selection mode active" : isChatBlocked ? "Unblock this user to send messages" : "Type a message..."}
+                    disabled={isComposerDisabled}
                     className="w-full resize-none rounded-xl border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
                     style={{ minHeight: '30px', maxHeight: '50px' }}
                   />
@@ -737,7 +831,7 @@ function ChatArea({
                 <button
                   type="button"
                   onClick={handleSendClick}
-                  disabled={isChatBlocked || sendingMessage || (!newMessage.trim() && !pendingAttachment) || (isConnected !== undefined && !isConnected)}
+                  disabled={isComposerDisabled || sendingMessage || (!newMessage.trim() && !pendingAttachment) || (isConnected !== undefined && !isConnected)}
                   className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg flex items-center justify-center"
                   style={{ minHeight: '44px', minWidth: '44px' }}
                 >

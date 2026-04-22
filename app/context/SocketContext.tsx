@@ -94,6 +94,7 @@ const messagesAreEqual = (left: Message, right: Message) =>
   left.type === right.type &&
   left.replyToId === right.replyToId &&
   left.isStarred === right.isStarred &&
+  left.isHidden === right.isHidden &&
   stringListsAreEqual(left.deliveredToUserIds, right.deliveredToUserIds) &&
   stringListsAreEqual(left.readByUserIds, right.readByUserIds) &&
   attachmentsAreEqual(left.attachments, right.attachments);
@@ -240,6 +241,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
         deliveredToUserIds: [userId],
         readByUserIds: [userId],
         isStarred: false,
+        isHidden: false,
       };
 
       upsertMessage(tempMessage);
@@ -309,6 +311,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
               ? data.message.readByUserIds
               : [userId],
             isStarred: Boolean(data.message.isStarred),
+            isHidden: Boolean(data.message.isHidden),
           };
 
           // Replace optimistic temp message with saved DB message

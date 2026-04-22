@@ -109,7 +109,7 @@ export async function DELETE(
     }
 
     if (scope === "self") {
-      await db?.collection("messages").updateOne(
+      await db?.collection<StoredMessage>("messages").updateOne(
         { _id: messageObjectId },
         {
           $addToSet: {
@@ -217,7 +217,7 @@ export async function PATCH(
       );
     }
 
-    await db?.collection("messages").updateOne(
+    await db?.collection<StoredMessage>("messages").updateOne(
       { _id: messageObjectId },
       body.hidden
         ? {
