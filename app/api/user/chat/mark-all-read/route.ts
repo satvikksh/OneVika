@@ -22,6 +22,7 @@ export async function POST() {
       {
         senderId: { $ne: currentUserId },
         deletedForUserIds: { $ne: currentUserId },
+        hiddenForUserIds: { $ne: currentUserId },
         readByUserIds: { $ne: currentUserId },
       },
       {

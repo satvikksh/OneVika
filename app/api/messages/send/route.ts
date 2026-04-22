@@ -249,6 +249,7 @@ export async function POST(req: NextRequest) {
       deliveredToUserIds: [senderObjectId],
       readByUserIds: [senderObjectId],
       starredByUserIds: [],
+      hiddenForUserIds: [],
       deletedForUserIds: [],
       type: messageType,
       ...(uploadedAttachment ? { attachments: [uploadedAttachment] } : {}),
@@ -278,6 +279,7 @@ export async function POST(req: NextRequest) {
         deliveredToUserIds: [session.user.id],
         readByUserIds: [session.user.id],
         isStarred: false,
+        isHidden: false,
         chatType: isGroupConversation ? "group" : "direct",
       },
     });

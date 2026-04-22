@@ -288,6 +288,7 @@ export async function GET(req: NextRequest) {
         .aggregate([
           { $match: { conversationId: { $in: allConversationIds } } },
           { $match: { deletedForUserIds: { $ne: currentUserId } } },
+          { $match: { hiddenForUserIds: { $ne: currentUserId } } },
           { $sort: { createdAt: -1 } },
           {
             $group: {
@@ -315,6 +316,7 @@ export async function GET(req: NextRequest) {
               conversationId: { $in: allConversationIds },
               senderId: { $ne: currentUserId },
               deletedForUserIds: { $ne: currentUserId },
+              hiddenForUserIds: { $ne: currentUserId },
             },
           },
           {

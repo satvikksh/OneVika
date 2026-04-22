@@ -31,6 +31,7 @@ export interface Message {
   deliveredToUserIds?: string[];
   readByUserIds?: string[];
   isStarred?: boolean;
+  isHidden?: boolean;
 }
 
 export interface ChatAttachment {

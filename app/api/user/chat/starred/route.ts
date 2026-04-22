@@ -26,6 +26,7 @@ type StoredMessage = {
   attachments?: StoredAttachment[];
   starredByUserIds?: mongoose.Types.ObjectId[];
   deletedForUserIds?: mongoose.Types.ObjectId[];
+  hiddenForUserIds?: mongoose.Types.ObjectId[];
 };
 
 type ConversationDoc = {
@@ -58,6 +59,7 @@ export async function GET() {
       .find({
         starredByUserIds: currentUserId,
         deletedForUserIds: { $ne: currentUserId },
+        hiddenForUserIds: { $ne: currentUserId },
       })
       .sort({ createdAt: -1 })
       .limit(100)

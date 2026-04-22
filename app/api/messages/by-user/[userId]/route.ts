@@ -50,6 +50,7 @@ type StoredMessage = {
   deliveredToUserIds?: mongoose.Types.ObjectId[];
   readByUserIds?: mongoose.Types.ObjectId[];
   starredByUserIds?: mongoose.Types.ObjectId[];
+  hiddenForUserIds?: mongoose.Types.ObjectId[];
 };
 
 type ConversationDoc = {
@@ -337,6 +338,7 @@ export async function GET(
         deliveredToUserIds,
         readByUserIds,
         isStarred: hasObjectId(message.starredByUserIds, senderIdRaw),
+        isHidden: hasObjectId(message.hiddenForUserIds, senderIdRaw),
       };
     });
 
