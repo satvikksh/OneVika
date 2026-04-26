@@ -2,65 +2,16 @@
 
 import React, { useState, useEffect } from "react";
 import MoodStory from "./components/home/MoodStory";
-import DailyDropCard from "./components/home/DailyDropCard";
-import SpacesGrid from "./components/home/SpacesGrid";
-import { DailyDrop, Space } from "./types/home";
+import NewPosts from "./components/home/NewPosts";
+import Thoughts from "./components/home/Thoughts";
+import FeedToggle from "./components/home/FeedToggle";
 import RoomModal from "./components/room/RoomModal";
-
-// --- MOCK DATA ---
-const TODAY_DROP: DailyDrop = {
-  id: "drop-101",
-  date: new Date().toISOString(),
-  prompt: "What is a small win you had this week that went unnoticed?",
-  totalAnswers: 142,
-};
-
-const SPACES: Space[] = [
-  {
-    id: "s1",
-    name: "Lo-Fi Study",
-    emoji: "🎧",
-    description: "Quiet focus room. No talking.",
-    memberCount: 87,
-    category: "wellness",
-    activity: "high",
-  },
-  {
-    id: "s2",
-    name: "Midnight Thoughts",
-    emoji: "🌌",
-    description: "Deep conversations only.",
-    memberCount: 42,
-    category: "wellness",
-    activity: "high",
-  },
-  {
-    id: "s3",
-    name: "Pet Parade",
-    emoji: "🐾",
-    description: "Wholesome content only.",
-    memberCount: 156,
-    category: "wellness",
-    activity: "high",
-  },
-  {
-    id: "s4",
-    name: "Retro Tech",
-    emoji: "💾",
-    description: "Nostalgia for the 90s/00s.",
-    memberCount: 63,
-    category: "wellness",
-    activity: "high",
-  },
-];
 
 export default function Home() {
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
   const [greeting, setGreeting] = useState("Good afternoon");
-  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const [activeTab, setActiveTab] = useState<"thoughts" | "posts">("thoughts");
   const [showRoomModal, setShowRoomModal] = useState(false);
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const [joinRoomId, setJoinRoomId] = useState("");
 
   const updateGreeting = (hours: number) => {
     if (hours < 12) setGreeting("Good morning");
@@ -86,15 +37,15 @@ export default function Home() {
   if (!currentTime) return null;
 
   return (
-    <main className="min-h-screen bg-black flex justify-center">
-      <div className="w-full max-w-md px-5 py-8 flex flex-col gap-8">
+    <main className="min-h-screen bg-stone-50 text-stone-950 transition-colors dark:bg-black dark:text-stone-100 flex justify-center">
+      <div className="w-full max-w-7xl px-5 py-8 flex flex-col gap-8">
         {/* Header */}
         <header className="flex items-start justify-between">
           {/* Left Side - Greeting + Time */}
           <div>
-            <h1 className="text-2xl font-bold text-stone-100">{greeting}.</h1>
+            <h1 className="text-2xl font-bold text-stone-950 dark:text-stone-100">{greeting}.</h1>
 
-            <p className="text-xs text-stone-500">
+            <p className="text-xs text-stone-500 dark:text-stone-500">
               {currentTime.toLocaleDateString("en-US", {
                 weekday: "long",
                 month: "short",
@@ -123,15 +74,23 @@ export default function Home() {
         {/* ✅ STORIES (ONLY ONCE) */}
         <MoodStory />
 
-        {/* DAILY DROP */}
-        <DailyDropCard drop={TODAY_DROP} />
+        <section className="flex flex-col gap-5">
+          <FeedToggle activeTab={activeTab} onTabChange={setActiveTab} />
 
-        {/* SPACES */}
-        <SpacesGrid spaces={SPACES} />
+          <div className="grid gap-6 md:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] md:items-start">
+            <div className={activeTab === "posts" ? "hidden md:block" : "block"}>
+              <Thoughts />
+            </div>
+
+            <div className={activeTab === "thoughts" ? "hidden md:block" : "block"}>
+              <NewPosts />
+            </div>
+          </div>
+        </section>
 
         {/* Footer */}
         <footer className="text-center pt-6">
-          <p className="text-xs text-stone-600">Designed by Satvik's Group.</p>
+          <p className="text-xs text-stone-500 dark:text-stone-600">Designed by Satvik&#39;s Group.</p>
         </footer>
 
         <RoomModal

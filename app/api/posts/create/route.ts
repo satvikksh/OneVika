@@ -8,6 +8,7 @@ export async function POST(req: Request) {
 
   const post = await Post.create({
     userId,
+    contentType: "post",
     content,
     images: images || [],
   });

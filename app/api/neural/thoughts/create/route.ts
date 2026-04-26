@@ -7,6 +7,10 @@ import Notification from "../../../../models/Notification";
 import mongoose from "mongoose";
 import { emitRealtimeNotification } from "../../../../lib/socketServerEmitter";
 
+type FollowRow = {
+  followerId?: { toString?: () => string } | string;
+};
+
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id)
@@ -18,6 +22,12 @@ export async function POST(req: Request) {
   const thought = await Thought.create({
     ...body,
     createdBy: session.user.id,
+    createdAt: new Date(),
+  });
+
+  const populatedThought = await thought.populate({
+    path: "createdBy",
+    select: "name email avatar image isPremium premiumExpiresAt",
   });
 
   const db = mongoose.connection.db;
@@ -31,7 +41,11 @@ export async function POST(req: Request) {
       .toArray();
 
     const followers = followerRows
-      .map((row: any) => row.followerId?.toString?.())
+      .map((row: FollowRow) =>
+        typeof row.followerId === "string"
+          ? row.followerId
+          : row.followerId?.toString?.()
+      )
       .filter(Boolean) as string[];
 
     if (followers.length > 0) {
@@ -66,5 +80,5 @@ export async function POST(req: Request) {
     }
   }
 
-  return NextResponse.json(thought);
+  return NextResponse.json(populatedThought);
 }

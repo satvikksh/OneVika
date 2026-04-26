@@ -6,10 +6,6 @@ import { SpacesGridProps } from '../../types/home';
 export default function SpacesGrid({ spaces }: SpacesGridProps) {
   return (
     <section className="w-full pb-20">
-      <h2 className="text-stone-600 font-medium text-sm tracking-wide mb-4 px-1">
-        Your Spaces
-      </h2>
-      
       <div className="grid grid-cols-2 gap-4">
         {spaces.map((space) => (
           <button

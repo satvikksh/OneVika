@@ -34,11 +34,34 @@ export async function GET(req: Request) {
 
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get("userId");
+    const recentDays = searchParams.get("recentDays");
+    const type = searchParams.get("type");
 
-    let query = {};
+    const query: {
+      userId?: string;
+      createdAt?: { $gte: Date };
+      $or?: Array<{ contentType: "post" } | { contentType: { $exists: false } }>;
+    } = {};
 
     if (userId) {
-      query = { userId }; // 🔥 filter by profile user
+      query.userId = userId; // 🔥 filter by profile user
+    }
+
+    if (type && type !== "post") {
+      return NextResponse.json([]);
+    }
+
+    if (!type || type === "post") {
+      query.$or = [{ contentType: "post" }, { contentType: { $exists: false } }];
+    }
+
+    if (recentDays) {
+      const days = Number(recentDays);
+
+      if (Number.isFinite(days) && days > 0) {
+        const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+        query.createdAt = { $gte: cutoff };
+      }
     }
 
     const posts = await Post.find(query)
@@ -89,6 +112,7 @@ export async function POST(req: Request) {
 
     const post = await Post.create({
       userId: session.user.id,
+      contentType: "post",
       content,
       images, // ✅ array (image/video URLs)
     });

@@ -1,4 +1,20 @@
-import mongoose from "mongoose";
+import mongoose, { Model, Types } from "mongoose";
+
+export interface IThought {
+  title?: string;
+  content?: string;
+  tags?: string[];
+  mood?: "creative" | "logical" | "reflective";
+  createdBy?: Types.ObjectId;
+  connections?: Array<{
+    target: Types.ObjectId;
+    type: string;
+  }>;
+  embedding?: number[];
+  impactScore?: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 const ThoughtSchema = new mongoose.Schema(
   {
@@ -26,5 +42,8 @@ const ThoughtSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-export default mongoose.models.Thought ||
-  mongoose.model("Thought", ThoughtSchema);
+const Thought =
+  (mongoose.models.Thought as Model<IThought> | undefined) ||
+  mongoose.model<IThought>("Thought", ThoughtSchema);
+
+export default Thought;

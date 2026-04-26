@@ -40,6 +40,7 @@ interface ICommentJSON {
 export interface IPost extends Document {
   _id: Types.ObjectId;
   content: string;
+  contentType: "post";
   images: string[];
   userId: Types.ObjectId | IUser;
   likes: Types.ObjectId[];
@@ -52,6 +53,7 @@ export interface IPost extends Document {
 interface IPostJSON {
   _id: string;
   content: string;
+  contentType: "post";
   images: string[];
   userId: {
     _id: string;
@@ -144,6 +146,12 @@ const PostSchema = new Schema<IPost>(
       type: String,
       trim: true,
     },
+    contentType: {
+      type: String,
+      enum: ["post"],
+      default: "post",
+      index: true,
+    },
     images: [{
       type: String,
     }],
@@ -220,6 +228,7 @@ PostSchema.methods.toJSON = function(): IPostJSON {
   const transformed: IPostJSON = {
     _id: post._id.toString(),
     content: post.content || '',
+    contentType: 'post',
     images: post.images || [],
     userId: {
       _id: '',
