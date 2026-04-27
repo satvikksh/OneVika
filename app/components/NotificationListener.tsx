@@ -5,6 +5,21 @@ import { useSession } from "next-auth/react";
 import { getSocket } from "@/app/lib/socket";
 import { requestFCMToken } from "@/app/lib/firebase";
 
+type NotificationPayload = {
+  _id?: string;
+  id?: string;
+  message?: string;
+  title?: string;
+  type?: string;
+  isRead?: boolean;
+  createdAt?: string | Date;
+};
+
+type MessageNotificationPayload = {
+  id?: string;
+  _id?: string;
+};
+
 export default function NotificationListener() {
   const { data: session } = useSession();
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -15,7 +30,7 @@ export default function NotificationListener() {
     audioRef.current.play().catch(() => {});
   };
 
-  const broadcastNotification = (payload: any) => {
+  const broadcastNotification = (payload: NotificationPayload) => {
     window.dispatchEvent(
       new CustomEvent("orbitbyte:newNotification", {
         detail: payload,
@@ -83,8 +98,8 @@ export default function NotificationListener() {
   }, [session?.user?.id]);
 
   useEffect(() => {
-    const handleNewMessage = (event: any) => {
-      const msg = event.detail;
+    const handleNewMessage = (event: Event) => {
+      const msg = (event as CustomEvent<MessageNotificationPayload>).detail;
 
       if (!window.location.pathname.includes("/chat")) {
         playSound();

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 
 interface NotificationContextType {
@@ -9,6 +9,14 @@ interface NotificationContextType {
   clearNotifications: () => void;
   clearMessages: () => void;
 }
+
+type NotificationRow = {
+  isRead?: boolean;
+};
+
+type ChatListRow = {
+  unreadCount?: number | string | null;
+};
 
 const NotificationContext = createContext<NotificationContextType>({
   unreadNotifications: 0,
@@ -25,6 +33,8 @@ export const NotificationProvider = ({
   const { data: session } = useSession();
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [unreadMessages, setUnreadMessages] = useState(0);
+  const seenNotificationEventIds = useRef<Set<string>>(new Set());
+  const seenMessageEventIds = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!session?.user?.id) return;
@@ -42,7 +52,7 @@ export const NotificationProvider = ({
         const rows = await res.json();
         if (!active || !Array.isArray(rows)) return;
 
-        const unread = rows.filter((n: any) => !n.isRead).length;
+        const unread = rows.filter((n: NotificationRow) => !n.isRead).length;
         setUnreadNotifications(unread);
       } catch {
         // ignore initial load failures
@@ -57,7 +67,7 @@ export const NotificationProvider = ({
         if (!active || !Array.isArray(data?.users)) return;
 
         const unread = data.users.reduce(
-          (sum: number, user: any) => sum + (Number(user?.unreadCount) || 0),
+          (sum: number, user: ChatListRow) => sum + (Number(user?.unreadCount) || 0),
           0
         );
         setUnreadMessages(unread);
@@ -75,10 +85,32 @@ export const NotificationProvider = ({
   }, [session?.user?.id]);
 
   useEffect(() => {
-    const handleRealtimeNotification = () => {
+    const rememberEvent = (store: Set<string>, id?: string | null) => {
+      if (!id) return false;
+      if (store.has(id)) return true;
+
+      store.add(id);
+      if (store.size > 300) {
+        const first = store.values().next().value;
+        if (first) store.delete(first);
+      }
+
+      return false;
+    };
+
+    const handleRealtimeNotification = (event: Event) => {
+      const detail = (event as CustomEvent<{ _id?: string; id?: string }>).detail;
+      const eventId = detail?._id || detail?.id;
+      if (rememberEvent(seenNotificationEventIds.current, eventId)) return;
+
       setUnreadNotifications((prev) => prev + 1);
     };
-    const handleNewMessageNotification = () => {
+
+    const handleNewMessageNotification = (event: Event) => {
+      const detail = (event as CustomEvent<{ _id?: string; id?: string }>).detail;
+      const eventId = detail?._id || detail?.id;
+      if (rememberEvent(seenMessageEventIds.current, eventId)) return;
+
       setUnreadMessages((prev) => prev + 1);
     };
 
