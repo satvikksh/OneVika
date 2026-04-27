@@ -201,7 +201,6 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
 
   // Reset bottom nav when route changes
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setShowBottomNav(true);
     setIsVisible(true);
     if (hideTimeoutRef.current) {
@@ -279,22 +278,33 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
   // Close dropdowns on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (
-        userDropdownRef.current &&
-        !userDropdownRef.current.contains(e.target as Node) &&
-        notificationsRef.current &&
-        !notificationsRef.current.contains(e.target as Node) &&
-        searchRef.current &&
-        !searchRef.current.contains(e.target as Node) &&
-        mobileMenuRef.current &&
-        !mobileMenuRef.current.contains(e.target as Node)
-      ) {
+      const target = e.target as Node;
+      const clickedOutsideUserDropdown =
+        userDropdownRef.current && !userDropdownRef.current.contains(target);
+      const clickedOutsideNotifications =
+        notificationsRef.current && !notificationsRef.current.contains(target);
+      const clickedOutsideSearch =
+        searchRef.current && !searchRef.current.contains(target);
+      const clickedOutsideMobileMenu =
+        mobileMenuRef.current && !mobileMenuRef.current.contains(target);
+
+      if (clickedOutsideUserDropdown) {
         setIsUserDropdownOpen(false);
+      }
+
+      if (clickedOutsideNotifications) {
         setIsNotificationsOpen(false);
+      }
+
+      if (clickedOutsideSearch) {
         setShowSearchSuggestions(false);
+      }
+
+      if (clickedOutsideMobileMenu) {
         setIsMobileMenuOpen(false);
       }
     };
+
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
