@@ -1,576 +1,641 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  LineChart,
-  Line,
-  BarChart,
+  Area,
+  AreaChart,
   Bar,
-  PieChart,
-  Pie,
+  BarChart,
+  CartesianGrid,
   Cell,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-} from 'recharts';
+} from "recharts";
 import {
-  TrendingUp,
-  Users,
-  Clock,
-  Zap,
-  DollarSign,
   Activity,
-  Eye,
+  AlertTriangle,
+  Clock,
   Download,
+  Gauge,
+  Lock,
   RefreshCw,
-  ChevronDown,
-  MoreVertical,
   Shield,
   Smartphone,
-} from 'lucide-react';
+  TrendingUp,
+  Users,
+  Wallet,
+  Wifi,
+  Zap,
+} from "lucide-react";
 
-// Mock data for charts
-const userGrowthData = [
-  { month: 'Jan', users: 4000, active: 2400 },
-  { month: 'Feb', users: 4500, active: 2800 },
-  { month: 'Mar', users: 5200, active: 3200 },
-  { month: 'Apr', users: 6200, active: 4200 },
-  { month: 'May', users: 7800, active: 5200 },
-  { month: 'Jun', users: 9200, active: 6500 },
-  { month: 'Jul', users: 12450, active: 8920 },
+type TimeRange = "24h" | "7d" | "30d" | "90d";
+
+type SummaryMetric = {
+  title: string;
+  value: string;
+  rawValue: number;
+  change: number;
+  subtext: string;
+  icon: string;
+};
+
+type SeriesPoint = {
+  label: string;
+  totalUsers: number;
+  activeUsers: number;
+};
+
+type EngagementPoint = {
+  label: string;
+  value: number;
+};
+
+type PiePoint = {
+  name: string;
+  value: number;
+  color: string;
+};
+
+type RealTimePoint = {
+  time: string;
+  active: number;
+};
+
+type LabelMetric = {
+  label: string;
+  value: string;
+  change: number;
+};
+
+type PerformanceMetric = {
+  label: string;
+  value: string;
+  progress: number;
+  color: string;
+};
+
+type SecurityMetric = {
+  label: string;
+  value: string | number;
+  status: string;
+};
+
+type PredictiveMetric = {
+  label: string;
+  detail: string;
+  value: string;
+};
+
+type AnalyticsPayload = {
+  range: TimeRange;
+  generatedAt: string;
+  summary: SummaryMetric[];
+  userGrowth: SeriesPoint[];
+  engagement: EngagementPoint[];
+  trafficSources: PiePoint[];
+  deviceDistribution: PiePoint[];
+  realTimeActivity: RealTimePoint[];
+  userAnalytics: LabelMetric[];
+  performance: PerformanceMetric[];
+  security: SecurityMetric[];
+  predictive: PredictiveMetric[];
+};
+
+const TIME_RANGE_LABELS: Record<TimeRange, string> = {
+  "24h": "Last 24 hours",
+  "7d": "Last 7 days",
+  "30d": "Last 30 days",
+  "90d": "Last 90 days",
+};
+
+const FALLBACK_DATA: AnalyticsPayload = {
+  range: "7d",
+  generatedAt: new Date().toISOString(),
+  summary: [
+    { title: "Total Users", value: "0", rawValue: 0, change: 0, subtext: "No registrations yet", icon: "users" },
+    { title: "Active Users", value: "0", rawValue: 0, change: 0, subtext: "Recent account activity", icon: "activity" },
+    { title: "Avg. Session Time", value: "0m 00s", rawValue: 0, change: 0, subtext: "Estimated engagement", icon: "clock" },
+    { title: "Conversion Rate", value: "0.0%", rawValue: 0, change: 0, subtext: "Premium users", icon: "trend" },
+    { title: "Revenue", value: "₹0", rawValue: 0, change: 0, subtext: "Premium subscription estimate", icon: "revenue" },
+    { title: "System Performance", value: "99.00%", rawValue: 99, change: 0, subtext: "Operational score", icon: "performance" },
+  ],
+  userGrowth: Array.from({ length: 7 }, (_, index) => ({
+    label: `Day ${index + 1}`,
+    totalUsers: 0,
+    activeUsers: 0,
+  })),
+  engagement: [
+    { label: "Sessions", value: 0 },
+    { label: "Page Views", value: 0 },
+    { label: "Avg Duration", value: 0 },
+    { label: "Bounce Rate", value: 0 },
+  ],
+  trafficSources: [
+    { name: "Direct", value: 35, color: "#22d3ee" },
+    { name: "Social", value: 25, color: "#a78bfa" },
+    { name: "Search", value: 20, color: "#34d399" },
+    { name: "Referral", value: 12, color: "#fbbf24" },
+    { name: "Email", value: 8, color: "#fb7185" },
+  ],
+  deviceDistribution: [
+    { name: "Mobile", value: 62, color: "#22d3ee" },
+    { name: "Desktop", value: 30, color: "#34d399" },
+    { name: "Tablet", value: 8, color: "#a78bfa" },
+  ],
+  realTimeActivity: Array.from({ length: 10 }, (_, index) => ({
+    time: `${index + 1}`,
+    active: 0,
+  })),
+  userAnalytics: [
+    { label: "New Registrations", value: "0", change: 0 },
+    { label: "Returning Users", value: "0", change: 0 },
+    { label: "User Retention", value: "0.0%", change: 0 },
+    { label: "Avg. Session Time", value: "0m 00s", change: 0 },
+  ],
+  performance: [
+    { label: "Server Response Time", value: "0ms", progress: 92, color: "#34d399" },
+    { label: "API Latency", value: "0ms", progress: 94, color: "#22d3ee" },
+    { label: "Database Queries", value: "0/day", progress: 80, color: "#a78bfa" },
+    { label: "Cache Hit Rate", value: "94%", progress: 94, color: "#fbbf24" },
+  ],
+  security: [
+    { label: "Failed Logins", value: 0, status: "Monitored" },
+    { label: "Threats Detected", value: 0, status: "Clear" },
+    { label: "Uptime", value: "99.00%", status: "Healthy" },
+    { label: "SSL Status", value: "Active", status: "Encrypted" },
+  ],
+  predictive: [
+    { label: "Projected Growth", detail: "Next 30 days", value: "+0.0%" },
+    { label: "Revenue Forecast", detail: "Next quarter", value: "₹0" },
+    { label: "Peak Load Prediction", detail: "Expected max users", value: "0" },
+  ],
+};
+
+const metricIcons = {
+  users: Users,
+  activity: Activity,
+  clock: Clock,
+  trend: TrendingUp,
+  revenue: Wallet,
+  performance: Zap,
+};
+
+const metricGradients = [
+  "from-cyan-500 to-blue-500",
+  "from-emerald-500 to-teal-500",
+  "from-violet-500 to-fuchsia-500",
+  "from-amber-500 to-orange-500",
+  "from-lime-500 to-emerald-500",
+  "from-sky-500 to-indigo-500",
 ];
 
-const engagementData = [
-  { metric: 'Sessions', value: 24500 },
-  { metric: 'Page Views', value: 189000 },
-  { metric: 'Avg Duration', value: 345 },
-  { metric: 'Bounce Rate', value: 28 },
-];
+function formatChange(change: number) {
+  const prefix = change > 0 ? "+" : "";
+  return `${prefix}${change.toFixed(Math.abs(change) % 1 === 0 ? 0 : 1)}%`;
+}
 
-const trafficSources = [
-  { name: 'Direct', value: 35, color: '#8884d8' },
-  { name: 'Social', value: 25, color: '#82ca9d' },
-  { name: 'Search', value: 20, color: '#ffc658' },
-  { name: 'Referral', value: 15, color: '#ff8042' },
-  { name: 'Email', value: 5, color: '#0088fe' },
-];
+function chartTooltipStyle() {
+  return {
+    backgroundColor: "rgba(15, 23, 42, 0.96)",
+    border: "1px solid rgba(148, 163, 184, 0.25)",
+    borderRadius: "12px",
+    color: "#f8fafc",
+    boxShadow: "0 18px 45px rgba(0,0,0,0.35)",
+  };
+}
 
-const deviceData = [
-  { name: 'Mobile', value: 65 },
-  { name: 'Desktop', value: 30 },
-  { name: 'Tablet', value: 5 },
-];
+function Card({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section
+      className={`rounded-2xl border border-white/10 bg-slate-950/70 p-5 shadow-2xl shadow-black/20 backdrop-blur-xl ${className}`}
+    >
+      {children}
+    </section>
+  );
+}
 
-const realTimeActivity = [
-  { time: '10:00', active: 1200 },
-  { time: '11:00', active: 1450 },
-  { time: '12:00', active: 1890 },
-  { time: '13:00', active: 2100 },
-  { time: '14:00', active: 1890 },
-  { time: '15:00', active: 1600 },
-  { time: '16:00', active: 1450 },
-];
+function SectionTitle({
+  title,
+  subtitle,
+  icon,
+}: {
+  title: string;
+  subtitle?: string;
+  icon?: React.ReactNode;
+}) {
+  return (
+    <div className="mb-5 flex items-start justify-between gap-4">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          {icon}
+          <h2 className="text-base font-semibold text-white sm:text-lg">{title}</h2>
+        </div>
+        {subtitle && <p className="mt-1 text-xs text-slate-400">{subtitle}</p>}
+      </div>
+    </div>
+  );
+}
+
+function EmptyFreeChartShell({ children }: { children: React.ReactNode }) {
+  return <div className="h-72 min-h-72 w-full">{children}</div>;
+}
 
 export default function AnalyticsPage() {
-  const [timeRange, setTimeRange] = useState('7d');
+  const [timeRange, setTimeRange] = useState<TimeRange>("7d");
+  const [analytics, setAnalytics] = useState<AnalyticsPayload>(FALLBACK_DATA);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [activeMetric, setActiveMetric] = useState('users');
-  
-  const refreshData = () => {
-    setIsRefreshing(true);
-    setTimeout(() => setIsRefreshing(false), 1000);
-  };
+  const [lastUpdated, setLastUpdated] = useState(new Date());
+  const [activeGrowthSeries, setActiveGrowthSeries] = useState<"both" | "total" | "active">("both");
 
-  // Simulate real-time updates
+  const loadAnalytics = useCallback(
+    async (range: TimeRange, background = false) => {
+      if (!background) setIsRefreshing(true);
+
+      try {
+        const response = await fetch(`/api/analytics?range=${range}`, {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to load analytics");
+        }
+
+        const data = (await response.json()) as AnalyticsPayload;
+        setAnalytics(data);
+        setLastUpdated(new Date(data.generatedAt || new Date().toISOString()));
+      } catch (error) {
+        console.error("Analytics load failed:", error);
+      } finally {
+        setIsRefreshing(false);
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    loadAnalytics(timeRange);
+  }, [loadAnalytics, timeRange]);
+
   useEffect(() => {
     const interval = setInterval(() => {
-      // In a real app, this would fetch new data
+      loadAnalytics(timeRange, true);
     }, 30000);
-    return () => clearInterval(interval);
-  }, []);
 
-  const keyMetrics = [
-    {
-      title: "Total Users",
-      value: "12,450",
-      change: "+18.2%",
-      icon: <Users className="w-6 h-6" />,
-      color: "from-blue-500 to-cyan-500",
-      subtext: "From last month",
-    },
-    {
-      title: "Active Users",
-      value: "8,920",
-      change: "+12.4%",
-      icon: <Activity className="w-6 h-6" />,
-      color: "from-emerald-500 to-green-500",
-      subtext: "Currently online",
-    },
-    {
-      title: "Avg. Session",
-      value: "4m 32s",
-      change: "+2.1%",
-      icon: <Clock className="w-6 h-6" />,
-      color: "from-blue-500 to-pink-500",
-      subtext: "Time spent",
-    },
-    {
-      title: "Conversion",
-      value: "3.2%",
-      change: "+0.8%",
-      icon: <TrendingUp className="w-6 h-6" />,
-      color: "from-orange-500 to-red-500",
-      subtext: "Goal completion",
-    },
-    {
-      title: "Revenue",
-      value: "$24,580",
-      change: "+22.5%",
-      icon: <DollarSign className="w-6 h-6" />,
-      color: "from-green-500 to-emerald-500",
-      subtext: "This month",
-    },
-    {
-      title: "Performance",
-      value: "99.9%",
-      change: "+0.1%",
-      icon: <Zap className="w-6 h-6" />,
-      color: "from-yellow-500 to-amber-500",
-      subtext: "System uptime",
-    },
-  ];
+    return () => clearInterval(interval);
+  }, [loadAnalytics, timeRange]);
+
+  const currentActiveUsers = useMemo(() => {
+    const lastPoint = analytics.realTimeActivity.at(-1);
+    return lastPoint?.active.toLocaleString() || "0";
+  }, [analytics.realTimeActivity]);
+
+  function exportAnalytics() {
+    const blob = new Blob([JSON.stringify(analytics, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `orbitbyte-analytics-${timeRange}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-gray-900 to-slate-800 text-slate-100 px-4 py-8">
-      <div className="max-w-7xl mx-auto space-y-8">
-        {/* Header with Controls */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <main className="min-h-screen overflow-hidden bg-[#050816] text-slate-100">
+      <div className="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.22),transparent_30%),radial-gradient(circle_at_top_right,rgba(168,85,247,0.18),transparent_28%),linear-gradient(135deg,#020617,#0f172a_45%,#111827)]" />
+
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
+        <header className="flex flex-col gap-4 rounded-3xl border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-cyan-950/20 backdrop-blur-xl sm:p-6 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h1 className="text-3xl md:text-4xl font-extrabold mb-2 bg-gradient-to-r from-emerald-400 to-cyan-500 bg-clip-text text-transparent">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.28em] text-cyan-300">
+              Account Intelligence
+            </p>
+            <h1 className="bg-gradient-to-r from-white via-cyan-100 to-emerald-200 bg-clip-text text-3xl font-bold text-transparent sm:text-4xl">
               Analytics Dashboard
             </h1>
-            <p className="text-gray-400">
-              Real-time insights and performance metrics
+            <p className="mt-2 max-w-2xl text-sm text-slate-400">
+              Real-time insights and performance metrics for users, engagement, security, and system health.
             </p>
           </div>
-          
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2">
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+            <label className="relative">
+              <span className="sr-only">Date range</span>
               <select
                 value={timeRange}
-                onChange={(e) => setTimeRange(e.target.value)}
-                className="bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                onChange={(event) => setTimeRange(event.target.value as TimeRange)}
+                className="h-11 w-full appearance-none rounded-xl border border-white/10 bg-slate-950/70 px-4 pr-10 text-sm text-slate-100 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20"
               >
-                <option value="24h">Last 24 hours</option>
-                <option value="7d">Last 7 days</option>
-                <option value="30d">Last 30 days</option>
-                <option value="90d">Last 90 days</option>
+                {Object.entries(TIME_RANGE_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
               </select>
-              
-              <button
-                onClick={refreshData}
-                disabled={isRefreshing}
-                className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700 transition-colors disabled:opacity-50"
-              >
-                <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} />
-              </button>
-              
-              <button className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-emerald-500 text-white rounded-lg hover:opacity-90 transition-opacity flex items-center space-x-2">
-                <Download className="w-4 h-4" />
-                <span>Export</span>
-              </button>
-            </div>
-          </div>
-        </div>
+              <Clock className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+            </label>
 
-        {/* Key Metrics Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-          {keyMetrics.map((metric, index) => (
-            <div
-              key={index}
-              className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-xl p-4 hover:border-slate-600 transition-all duration-300 hover:scale-[1.02]"
+            <button
+              type="button"
+              onClick={() => loadAnalytics(timeRange)}
+              disabled={isRefreshing}
+              className="flex h-11 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-4 text-sm font-medium text-slate-100 transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <div className="flex items-center justify-between mb-4">
-                <div className={`p-2 rounded-lg bg-gradient-to-br ${metric.color}`}>
-                  {metric.icon}
-                </div>
-                <span className={`text-sm font-semibold ${
-                  metric.change.startsWith('+') ? 'text-green-400' : 'text-red-400'
-                }`}>
-                  {metric.change}
-                </span>
-              </div>
-              <h3 className="text-2xl font-bold mb-1">{metric.value}</h3>
-              <p className="text-sm text-gray-400">{metric.title}</p>
-              <p className="text-xs text-gray-500 mt-2">{metric.subtext}</p>
-            </div>
-          ))}
-        </div>
+              <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+              Refresh
+            </button>
 
-        {/* Charts Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* User Growth Chart */}
-          <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-white">User Growth</h2>
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={() => setActiveMetric('users')}
-                  className={`px-3 py-1 text-sm rounded-lg ${
-                    activeMetric === 'users'
-                      ? 'bg-cyan-500 text-white'
-                      : 'bg-slate-700 text-gray-300'
-                  }`}
-                >
-                  Total
-                </button>
-                <button
-                  onClick={() => setActiveMetric('active')}
-                  className={`px-3 py-1 text-sm rounded-lg ${
-                    activeMetric === 'active'
-                      ? 'bg-cyan-500 text-white'
-                      : 'bg-slate-700 text-gray-300'
-                  }`}
-                >
-                  Active
-                </button>
+            <button
+              type="button"
+              onClick={exportAnalytics}
+              className="flex h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 px-4 text-sm font-semibold text-slate-950 transition hover:brightness-110"
+            >
+              <Download className="h-4 w-4" />
+              Export
+            </button>
+          </div>
+        </header>
+
+        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          {analytics.summary.map((metric, index) => {
+            const Icon = metricIcons[metric.icon as keyof typeof metricIcons] || Gauge;
+            const isPositive = metric.change >= 0;
+
+            return (
+              <Card key={metric.title} className="p-4 transition hover:-translate-y-0.5 hover:border-cyan-300/30">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div className={`rounded-xl bg-gradient-to-br ${metricGradients[index % metricGradients.length]} p-2.5 text-white shadow-lg`}>
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <span
+                    className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                      isPositive
+                        ? "bg-emerald-400/10 text-emerald-300"
+                        : "bg-rose-400/10 text-rose-300"
+                    }`}
+                  >
+                    {formatChange(metric.change)}
+                  </span>
+                </div>
+                <p className="truncate text-2xl font-bold text-white">{metric.value}</p>
+                <p className="mt-1 text-sm font-medium text-slate-300">{metric.title}</p>
+                <p className="mt-2 min-h-8 text-xs leading-4 text-slate-500">{metric.subtext}</p>
+              </Card>
+            );
+          })}
+        </section>
+
+        <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+          <Card>
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <SectionTitle
+                title="User Growth"
+                subtitle="Active users compared with total users over time"
+                icon={<Users className="h-5 w-5 text-cyan-300" />}
+              />
+              <div className="flex rounded-xl border border-white/10 bg-white/[0.04] p-1">
+                {(["both", "total", "active"] as const).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setActiveGrowthSeries(value)}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-medium capitalize transition ${
+                      activeGrowthSeries === value
+                        ? "bg-cyan-400 text-slate-950"
+                        : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    {value}
+                  </button>
+                ))}
               </div>
             </div>
-            <div className="h-72">
+
+            <EmptyFreeChartShell>
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={userGrowthData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                  <XAxis dataKey="month" stroke="#94a3b8" />
-                  <YAxis stroke="#94a3b8" />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: '#1e293b', borderColor: '#475569' }}
-                    labelStyle={{ color: '#f1f5f9' }}
-                  />
-                  <Legend />
-                  <Area
-                    type="monotone"
-                    dataKey="users"
-                    stackId="1"
-                    stroke="#06b6d4"
-                    fill="url(#colorUsers)"
-                    fillOpacity={0.3}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="active"
-                    stackId="2"
-                    stroke="#10b981"
-                    fill="url(#colorActive)"
-                    fillOpacity={0.3}
-                  />
+                <AreaChart data={analytics.userGrowth} margin={{ top: 8, right: 16, left: -16, bottom: 0 }}>
                   <defs>
-                    <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.8} />
-                      <stop offset="95%" stopColor="#06b6d4" stopOpacity={0} />
+                    <linearGradient id="totalUsersFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.45} />
+                      <stop offset="95%" stopColor="#22d3ee" stopOpacity={0.02} />
                     </linearGradient>
-                    <linearGradient id="colorActive" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.8} />
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                    <linearGradient id="activeUsersFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#34d399" stopOpacity={0.45} />
+                      <stop offset="95%" stopColor="#34d399" stopOpacity={0.02} />
                     </linearGradient>
                   </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.16)" />
+                  <XAxis dataKey="label" stroke="#94a3b8" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
+                  <YAxis stroke="#94a3b8" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
+                  <Tooltip contentStyle={chartTooltipStyle()} />
+                  {(activeGrowthSeries === "both" || activeGrowthSeries === "total") && (
+                    <Area type="monotone" dataKey="totalUsers" name="Total Users" stroke="#22d3ee" fill="url(#totalUsersFill)" strokeWidth={2.5} />
+                  )}
+                  {(activeGrowthSeries === "both" || activeGrowthSeries === "active") && (
+                    <Area type="monotone" dataKey="activeUsers" name="Active Users" stroke="#34d399" fill="url(#activeUsersFill)" strokeWidth={2.5} />
+                  )}
                 </AreaChart>
               </ResponsiveContainer>
-            </div>
-          </div>
+            </EmptyFreeChartShell>
+          </Card>
 
-          {/* Engagement Metrics */}
-          <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
-            <h2 className="text-xl font-bold text-white mb-6">Engagement Metrics</h2>
-            <div className="h-72">
+          <Card>
+            <SectionTitle
+              title="Engagement Metrics"
+              subtitle="Sessions, page views, duration, and bounce behavior"
+              icon={<Activity className="h-5 w-5 text-violet-300" />}
+            />
+            <EmptyFreeChartShell>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={engagementData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                  <XAxis dataKey="metric" stroke="#94a3b8" />
-                  <YAxis stroke="#94a3b8" />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: '#1e293b', borderColor: '#475569' }}
-                    labelStyle={{ color: '#f1f5f9' }}
-                    formatter={(value) => [value, 'Value']}
-                  />
-                  <Bar dataKey="value" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                <BarChart data={analytics.engagement} margin={{ top: 8, right: 10, left: -18, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.16)" />
+                  <XAxis dataKey="label" stroke="#94a3b8" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
+                  <YAxis stroke="#94a3b8" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
+                  <Tooltip contentStyle={chartTooltipStyle()} />
+                  <Bar dataKey="value" radius={[8, 8, 0, 0]} fill="#a78bfa" />
                 </BarChart>
               </ResponsiveContainer>
-            </div>
-          </div>
-        </div>
+            </EmptyFreeChartShell>
+          </Card>
+        </section>
 
-        {/* Second Row Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Traffic Sources */}
-          <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
-            <h2 className="text-xl font-bold text-white mb-6">Traffic Sources</h2>
+        <section className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+          <Card>
+            <SectionTitle title="Traffic Sources" subtitle="Where account visits originate" icon={<Wifi className="h-5 w-5 text-cyan-300" />} />
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie
-                    data={trafficSources}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={(entry) => `${entry.name}: ${entry.value}%`}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {trafficSources.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
+                  <Pie data={analytics.trafficSources} dataKey="value" nameKey="name" innerRadius={42} outerRadius={82} paddingAngle={3}>
+                    {analytics.trafficSources.map((source) => (
+                      <Cell key={source.name} fill={source.color} />
                     ))}
                   </Pie>
-                  <Tooltip
-                    contentStyle={{ backgroundColor: '#1e293b', borderColor: '#475569' }}
-                  />
+                  <Tooltip contentStyle={chartTooltipStyle()} formatter={(value, name) => [`${value}%`, name]} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
-          </div>
-
-          {/* Device Distribution */}
-          <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
-            <h2 className="text-xl font-bold text-white mb-6">Device Distribution</h2>
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={deviceData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={(entry) => `${entry.name}: ${entry.value}%`}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    <Cell fill="#06b6d4" />
-                    <Cell fill="#10b981" />
-                    <Cell fill="#8b5cf6" />
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{ backgroundColor: '#1e293b', borderColor: '#475569' }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="flex items-center justify-center space-x-4 mt-4">
-              {deviceData.map((device, index) => (
-                <div key={index} className="flex items-center space-x-2">
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{
-                      backgroundColor: index === 0 ? '#06b6d4' : 
-                                     index === 1 ? '#10b981' : '#8b5cf6',
-                    }}
-                  />
-                  <span className="text-sm text-gray-300">{device.name}</span>
+            <div className="grid grid-cols-2 gap-2">
+              {analytics.trafficSources.map((source) => (
+                <div key={source.name} className="flex items-center gap-2 text-xs text-slate-400">
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: source.color }} />
+                  {source.name} {source.value}%
                 </div>
               ))}
             </div>
-          </div>
+          </Card>
 
-          {/* Real-time Activity */}
-          <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-white">Real-time Activity</h2>
-              <div className="flex items-center space-x-2 text-green-400">
-                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-                <span className="text-sm">Live</span>
-              </div>
-            </div>
+          <Card>
+            <SectionTitle title="Device Distribution" subtitle="Mobile, desktop, and tablet share" icon={<Smartphone className="h-5 w-5 text-emerald-300" />} />
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={realTimeActivity}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                  <XAxis dataKey="time" stroke="#94a3b8" />
-                  <YAxis stroke="#94a3b8" />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: '#1e293b', borderColor: '#475569' }}
-                    labelStyle={{ color: '#f1f5f9' }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="active"
-                    stroke="#f59e0b"
-                    strokeWidth={2}
-                    dot={{ r: 4 }}
-                    activeDot={{ r: 6 }}
-                  />
+                <PieChart>
+                  <Pie data={analytics.deviceDistribution} dataKey="value" nameKey="name" innerRadius={58} outerRadius={88} paddingAngle={4}>
+                    {analytics.deviceDistribution.map((device) => (
+                      <Cell key={device.name} fill={device.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip contentStyle={chartTooltipStyle()} formatter={(value, name) => [`${value}%`, name]} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="space-y-2">
+              {analytics.deviceDistribution.map((device) => (
+                <div key={device.name} className="flex items-center justify-between rounded-xl bg-white/[0.04] px-3 py-2 text-sm">
+                  <span className="flex items-center gap-2 text-slate-300">
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: device.color }} />
+                    {device.name}
+                  </span>
+                  <span className="font-semibold text-white">{device.value}%</span>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          <Card>
+            <div className="mb-5 flex items-center justify-between">
+              <SectionTitle title="Real-time Activity" subtitle="Active users by timestamp" icon={<Gauge className="h-5 w-5 text-amber-300" />} />
+              <span className="flex items-center gap-2 rounded-full bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-300">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-300" />
+                Live
+              </span>
+            </div>
+            <div className="h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={analytics.realTimeActivity} margin={{ top: 8, right: 10, left: -18, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.16)" />
+                  <XAxis dataKey="time" stroke="#94a3b8" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
+                  <YAxis stroke="#94a3b8" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
+                  <Tooltip contentStyle={chartTooltipStyle()} />
+                  <Line type="monotone" dataKey="active" name="Active Users" stroke="#fbbf24" strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
-            <div className="mt-4 flex items-center justify-center">
-              <div className="text-center">
-                <p className="text-2xl font-bold text-white">2,100</p>
-                <p className="text-sm text-gray-400">Active users right now</p>
-              </div>
+            <div className="mt-4 rounded-2xl bg-gradient-to-r from-amber-400/10 to-cyan-400/10 p-4 text-center">
+              <p className="text-3xl font-bold text-white">{currentActiveUsers}</p>
+              <p className="text-xs text-slate-400">Active users right now</p>
             </div>
-          </div>
-        </div>
+          </Card>
+        </section>
 
-        {/* Detailed Analytics Sections */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* User Analytics */}
-          <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
-            <div className="flex items-center space-x-2 mb-4">
-              <Users className="w-5 h-5 text-cyan-400" />
-              <h2 className="text-xl font-bold text-white">User Analytics</h2>
-            </div>
+        <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <Card>
+            <SectionTitle title="User Analytics" subtitle="Account behavior and retention" icon={<Users className="h-5 w-5 text-cyan-300" />} />
             <div className="space-y-3">
-              {[
-                { label: 'New Registrations', value: '1,234', change: '+12%' },
-                { label: 'Returning Users', value: '4,567', change: '+8%' },
-                { label: 'User Retention', value: '78%', change: '+5%' },
-                { label: 'Avg. Session Time', value: '4:32', change: '+2%' },
-              ].map((item, index) => (
-                <div key={index} className="flex items-center justify-between p-3 hover:bg-slate-700/50 rounded-lg transition-colors">
-                  <span className="text-gray-300">{item.label}</span>
-                  <div className="flex items-center space-x-4">
+              {analytics.userAnalytics.map((item) => (
+                <div key={item.label} className="flex items-center justify-between gap-3 rounded-xl bg-white/[0.04] p-3">
+                  <span className="text-sm text-slate-300">{item.label}</span>
+                  <div className="flex items-center gap-3">
                     <span className="font-semibold text-white">{item.value}</span>
-                    <span className={`text-sm px-2 py-1 rounded ${
-                      item.change.startsWith('+') 
-                        ? 'bg-green-900/30 text-green-400' 
-                        : 'bg-red-900/30 text-red-400'
-                    }`}>
-                      {item.change}
+                    <span className={`rounded-full px-2 py-1 text-xs font-semibold ${item.change >= 0 ? "bg-emerald-400/10 text-emerald-300" : "bg-rose-400/10 text-rose-300"}`}>
+                      {formatChange(item.change)}
                     </span>
                   </div>
                 </div>
               ))}
             </div>
-          </div>
+          </Card>
 
-          {/* Performance Metrics */}
-          <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
-            <div className="flex items-center space-x-2 mb-4">
-              <Zap className="w-5 h-5 text-yellow-400" />
-              <h2 className="text-xl font-bold text-white">Performance Metrics</h2>
-            </div>
+          <Card>
+            <SectionTitle title="Performance Metrics" subtitle="Infrastructure quality indicators" icon={<Zap className="h-5 w-5 text-amber-300" />} />
             <div className="space-y-4">
-              <div>
-                <div className="flex justify-between text-sm text-gray-400 mb-1">
-                  <span>Server Response</span>
-                  <span>142ms</span>
+              {analytics.performance.map((item) => (
+                <div key={item.label}>
+                  <div className="mb-2 flex items-center justify-between gap-3 text-sm">
+                    <span className="text-slate-300">{item.label}</span>
+                    <span className="font-semibold text-white">{item.value}</span>
+                  </div>
+                  <div className="h-2.5 overflow-hidden rounded-full bg-slate-800">
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{ width: `${item.progress}%`, backgroundColor: item.color }}
+                    />
+                  </div>
                 </div>
-                <div className="w-full bg-slate-700 rounded-full h-2">
-                  <div className="bg-green-500 h-2 rounded-full" style={{ width: '95%' }} />
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between text-sm text-gray-400 mb-1">
-                  <span>API Latency</span>
-                  <span>89ms</span>
-                </div>
-                <div className="w-full bg-slate-700 rounded-full h-2">
-                  <div className="bg-blue-500 h-2 rounded-full" style={{ width: '98%' }} />
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between text-sm text-gray-400 mb-1">
-                  <span>Database Queries</span>
-                  <span>2.1k/s</span>
-                </div>
-                <div className="w-full bg-slate-700 rounded-full h-2">
-                  <div className="bg-blue-500 h-2 rounded-full" style={{ width: '82%' }} />
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between text-sm text-gray-400 mb-1">
-                  <span>Cache Hit Rate</span>
-                  <span>94%</span>
-                </div>
-                <div className="w-full bg-slate-700 rounded-full h-2">
-                  <div className="bg-cyan-500 h-2 rounded-full" style={{ width: '94%' }} />
-                </div>
-              </div>
+              ))}
             </div>
-          </div>
-        </div>
+          </Card>
+        </section>
 
-        {/* Security & Predictive Analytics */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Security Analytics */}
-          <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-2xl p-6">
-            <div className="flex items-center space-x-2 mb-6">
-              <Shield className="w-5 h-5 text-red-400" />
-              <h2 className="text-xl font-bold text-white">Security Analytics</h2>
+        <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <Card className="bg-gradient-to-br from-slate-950/90 to-rose-950/20">
+            <SectionTitle title="Security Analytics" subtitle="Account protection and platform status" icon={<Shield className="h-5 w-5 text-rose-300" />} />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {analytics.security.map((item) => (
+                <div key={item.label} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <Lock className="h-4 w-4 text-rose-300" />
+                    <span className="rounded-full bg-white/[0.06] px-2 py-1 text-[11px] text-slate-400">{item.status}</span>
+                  </div>
+                  <p className="text-2xl font-bold text-white">{item.value}</p>
+                  <p className="mt-1 text-xs text-slate-400">{item.label}</p>
+                </div>
+              ))}
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-slate-800/50 rounded-lg p-4 text-center">
-                <div className="text-2xl font-bold text-white mb-2">23</div>
-                <div className="text-sm text-gray-400">Failed Logins</div>
-              </div>
-              <div className="bg-slate-800/50 rounded-lg p-4 text-center">
-                <div className="text-2xl font-bold text-white mb-2">0</div>
-                <div className="text-sm text-gray-400">Security Threats</div>
-              </div>
-              <div className="bg-slate-800/50 rounded-lg p-4 text-center">
-                <div className="text-2xl font-bold text-white mb-2">99.9%</div>
-                <div className="text-sm text-gray-400">System Uptime</div>
-              </div>
-              <div className="bg-slate-800/50 rounded-lg p-4 text-center">
-                <div className="text-2xl font-bold text-white mb-2">100%</div>
-                <div className="text-sm text-gray-400">SSL Encryption</div>
-              </div>
-            </div>
-          </div>
+          </Card>
 
-          {/* Predictive Analytics */}
-          <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-2xl p-6">
-            <div className="flex items-center space-x-2 mb-6">
-              <TrendingUp className="w-5 h-5 text-indigo-400" />
-              <h2 className="text-xl font-bold text-white">Predictive Analytics</h2>
+          <Card className="bg-gradient-to-br from-slate-950/90 to-cyan-950/20">
+            <SectionTitle title="Predictive Analytics" subtitle="Forecasts based on current account activity" icon={<TrendingUp className="h-5 w-5 text-cyan-300" />} />
+            <div className="space-y-3">
+              {analytics.predictive.map((item, index) => (
+                <div key={item.label} className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-400/10 text-cyan-300">
+                      {index === 0 ? <TrendingUp className="h-5 w-5" /> : index === 1 ? <Wallet className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-white">{item.label}</p>
+                      <p className="text-xs text-slate-400">{item.detail}</p>
+                    </div>
+                  </div>
+                  <span className="text-xl font-bold text-cyan-200">{item.value}</span>
+                </div>
+              ))}
             </div>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 bg-slate-800/30 rounded-lg">
-                <div>
-                  <p className="font-medium text-white">Next 30 Days Growth</p>
-                  <p className="text-sm text-gray-400">Projected user increase</p>
-                </div>
-                <span className="text-2xl font-bold text-green-400">+15%</span>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-slate-800/30 rounded-lg">
-                <div>
-                  <p className="font-medium text-white">Revenue Forecast</p>
-                  <p className="text-sm text-gray-400">Next quarter projection</p>
-                </div>
-                <span className="text-2xl font-bold text-cyan-400">$28,500</span>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-slate-800/30 rounded-lg">
-                <div>
-                  <p className="font-medium text-white">Peak Load Prediction</p>
-                  <p className="text-sm text-gray-400">Expected max users</p>
-                </div>
-                <span className="text-2xl font-bold text-yellow-400">15,200</span>
-              </div>
-            </div>
-          </div>
-        </div>
+          </Card>
+        </section>
 
-        {/* Footer */}
-        <footer className="pt-8 border-t border-slate-800">
-          <div className="flex flex-col md:flex-row md:items-center justify-between text-sm text-gray-500">
-            <div>
-              © {new Date().getFullYear()} Skimagination Analytics Dashboard
-            </div>
-            <div className="flex items-center space-x-6 mt-4 md:mt-0">
-              <span className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                <span>Systems Operational</span>
-              </span>
-              <span>Last updated: Just now</span>
-              <span>Version 2.1.4</span>
-            </div>
-          </div>
+        <footer className="flex flex-col gap-3 border-t border-white/10 py-6 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+          <span>Last updated {lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+          <span className="flex items-center gap-2">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
+            Systems operational
+          </span>
+          <span>OrbitByte Analytics v2.2</span>
         </footer>
       </div>
-    </div>
+    </main>
   );
 }
