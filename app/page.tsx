@@ -37,7 +37,7 @@ export default function Home() {
   if (!currentTime) return null;
 
   return (
-    <main className="min-h-screen bg-stone-50 text-stone-950 transition-colors dark:bg-black dark:text-stone-100 flex justify-center">
+    <main className="min-h-screen bg-stone-50 text-stone-940 transition-colors dark:bg-black dark:text-stone-100 flex justify-center">
       <div className="w-full max-w-7xl px-5 py-8 flex flex-col gap-8">
         {/* Header */}
         <header className="flex items-start justify-between">
