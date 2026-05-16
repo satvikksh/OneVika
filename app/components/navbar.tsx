@@ -86,9 +86,11 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
   const [mounted, setMounted] = useState(false);
 
   const searchRef = useRef<HTMLDivElement>(null);
+  const mobileSearchRef = useRef<HTMLDivElement>(null);
   const userDropdownRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
+  const searchSelectionLockRef = useRef(false);
   const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -212,6 +214,15 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
   const isObjectId = (value: string) => /^[0-9a-fA-F]{24}$/.test(value);
 
   const selectSearchUser = (userId: string) => {
+    if (searchSelectionLockRef.current) return;
+
+    // A short lock keeps accidental double taps from triggering duplicate
+    // route transitions while the suggestions are being dismissed.
+    searchSelectionLockRef.current = true;
+    window.setTimeout(() => {
+      searchSelectionLockRef.current = false;
+    }, 500);
+
     setShowSearchSuggestions(false);
     setIsMobileMenuOpen(false);
     setSearchQuery("");
@@ -275,16 +286,18 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Close dropdowns on outside click
+  // Close dropdowns on outside click/tap
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
+    const handler = (e: PointerEvent) => {
       const target = e.target as Node;
       const clickedOutsideUserDropdown =
         userDropdownRef.current && !userDropdownRef.current.contains(target);
       const clickedOutsideNotifications =
         notificationsRef.current && !notificationsRef.current.contains(target);
-      const clickedOutsideSearch =
-        searchRef.current && !searchRef.current.contains(target);
+      const clickedOutsideDesktopSearch =
+        !searchRef.current?.contains(target);
+      const clickedOutsideMobileSearch =
+        !mobileSearchRef.current?.contains(target);
       const clickedOutsideMobileMenu =
         mobileMenuRef.current && !mobileMenuRef.current.contains(target);
 
@@ -296,7 +309,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
         setIsNotificationsOpen(false);
       }
 
-      if (clickedOutsideSearch) {
+      if (clickedOutsideDesktopSearch && clickedOutsideMobileSearch) {
         setShowSearchSuggestions(false);
       }
 
@@ -305,8 +318,8 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
       }
     };
 
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("pointerdown", handler);
+    return () => document.removeEventListener("pointerdown", handler);
   }, []);
 
   const handleThemeToggle = useCallback(() => {
@@ -480,7 +493,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                   />
                   <input
                     type="text"
-                    placeholder="Search..."
+                    placeholder="Search users..."
                     className="w-full pl-10 pr-4 py-2 bg-gray-100/50 dark:bg-gray-800/50 border border-transparent dark:border-gray-700 rounded-full focus:outline-none focus:bg-white dark:focus:bg-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/50 transition-all shadow-inner"
                     value={searchQuery}
                     onChange={(e) => {
@@ -527,7 +540,8 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                             key={user._id}
                             type="button"
                             onClick={() => selectSearchUser(user._id)}
-                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 text-left transition-colors group/item"
+                            className="flex min-h-12 w-full touch-manipulation select-none items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-gray-50 active:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 dark:hover:bg-gray-800 dark:active:bg-gray-700 group/item"
+                            aria-label={`Open profile for ${user.name}`}
                           >
                             <PremiumAvatar
                               src={user.avatar}
@@ -802,7 +816,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
             <div className="p-4 pb-24">
               {/* Mobile Search */}
               {showSearch && (
-                <div className="mb-6">
+                <div ref={mobileSearchRef} className="relative z-[61] mb-6">
                   <form onSubmit={handleMobileSearchSubmit} className="relative">
                     <Search
                       className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
@@ -810,7 +824,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                     />
                     <input
                       type="text"
-                      placeholder="Search..."
+                      placeholder="Search users..."
                       className="w-full pl-10 pr-4 py-3 bg-gray-100 dark:bg-gray-900 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white border border-transparent dark:border-gray-800"
                       value={searchQuery}
                       onChange={(e) => {
@@ -820,7 +834,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                     />
                   </form>
                   {showSearchSuggestions && searchQuery.trim().length > 0 && (
-                    <div className="mt-3 bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-lg overflow-hidden">
+                    <div className="pointer-events-auto relative z-[62] mt-3 max-h-[min(50vh,24rem)] touch-pan-y overflow-y-auto overscroll-contain rounded-2xl border border-gray-100 bg-white shadow-lg [-webkit-overflow-scrolling:touch] dark:border-gray-800 dark:bg-gray-900">
                       {isSearchLoading && (
                         <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
                           Searching users...
@@ -839,7 +853,8 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                             key={user._id}
                             type="button"
                             onClick={() => selectSearchUser(user._id)}
-                            className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                            className="flex min-h-14 w-full touch-manipulation select-none items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50 active:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500/50 dark:hover:bg-gray-800 dark:active:bg-gray-700"
+                            aria-label={`Open profile for ${user.name || "user"}`}
                           >
                             <PremiumAvatar
                               src={user.avatar}
