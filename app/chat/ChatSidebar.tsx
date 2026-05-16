@@ -19,6 +19,7 @@ import {
   Search,
   Shield,
   Star,
+  Sparkles,
   Trash2,
   User as UserIcon,
   UserPlus,
@@ -97,6 +98,8 @@ const getPresentedStatus = (
   typingUsers: Set<string>,
   isOnline: boolean
 ) => {
+  if (user.isAI) return typingUsers.has(user.id) ? "typing..." : "AI assistant";
+
   if (user.isLocked && !user.isUnlocked) {
     return user.lockVisibility === "hidden"
       ? "Hidden until unlocked"
@@ -900,12 +903,16 @@ function ChatSidebar({
     [searchQuery, users]
   );
 
-  const directChats = filteredUsers.filter((user) => user.chatType !== "group");
+  const aiChat = users.find((user) => user.isAI) ?? null;
+  const visibleAiChat = filteredUsers.find((user) => user.isAI) ?? null;
+  const directChats = filteredUsers.filter(
+    (user) => user.chatType !== "group" && !user.isAI
+  );
   const creatableUsers = directChats.filter((user) => user.canMessage !== false);
 
   const suggestedUsers = searchQuery.trim() ? filteredUsers.slice(0, 5) : [];
-  const activeChats = filteredUsers.filter((user) => !user.isArchived);
-  const archivedChats = filteredUsers.filter((user) => user.isArchived);
+  const activeChats = filteredUsers.filter((user) => !user.isArchived && !user.isAI);
+  const archivedChats = filteredUsers.filter((user) => user.isArchived && !user.isAI);
   const groupCount = filteredUsers.filter((user) => user.chatType === "group").length;
   const highlightedUserId = actionMenu?.user.id ?? pressingUserId;
 
@@ -1183,7 +1190,7 @@ function ChatSidebar({
       <div
         key={user.id}
         onPointerDown={(event) => {
-          if (!isGroupChat) {
+          if (!isGroupChat && !user.isAI) {
             beginLongPress(event, user);
           }
         }}
@@ -1192,7 +1199,7 @@ function ChatSidebar({
         onPointerCancel={() => cancelLongPress()}
         onPointerMove={handlePointerMove}
         onContextMenu={(event) => {
-          if (!isGroupChat) {
+          if (!isGroupChat && !user.isAI) {
             event.preventDefault();
             openActionMenu(user, event.currentTarget);
           }
@@ -1284,6 +1291,47 @@ function ChatSidebar({
 
     return (
       <div className="pb-24">
+        {visibleAiChat ? (
+          <div className="border-b border-blue-100 bg-gradient-to-r from-blue-50 via-cyan-50 to-violet-50 p-3 dark:border-blue-950/60 dark:from-blue-950/25 dark:via-cyan-950/15 dark:to-violet-950/25">
+            <button
+              type="button"
+              onClick={() => handleUserSelect(visibleAiChat)}
+              className={`flex w-full items-center gap-3 rounded-2xl border px-3 py-3 text-left transition ${
+                selectedUser?.id === visibleAiChat.id
+                  ? "border-blue-500 bg-white shadow-sm dark:border-blue-400 dark:bg-gray-900"
+                  : "border-blue-200/80 bg-white/80 hover:border-blue-300 hover:bg-white dark:border-blue-900/80 dark:bg-gray-950/70 dark:hover:border-blue-700"
+              }`}
+            >
+              <div className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 via-cyan-500 to-violet-600 text-white">
+                {typeof visibleAiChat.avatar === "string" && visibleAiChat.avatar ? (
+                  <img
+                    src={visibleAiChat.avatar}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <Sparkles size={20} />
+                )}
+                <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-white bg-blue-400 dark:border-gray-950" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="truncate font-semibold text-gray-900 dark:text-white">
+                    {getChatDisplayName(visibleAiChat)}
+                  </span>
+                  <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-blue-700 dark:bg-blue-950 dark:text-blue-200">
+                    AI
+                  </span>
+                </div>
+                <p className="mt-1 truncate text-sm text-blue-700 dark:text-blue-300">
+                  {typingUsers.has(visibleAiChat.id)
+                    ? "typing..."
+                    : "Chat privately with Orbit"}
+                </p>
+              </div>
+            </button>
+          </div>
+        ) : null}
         {activeChats.length > 0 ? <div>{activeChats.map((user) => renderUserRow(user))}</div> : null}
         {archivedChats.length > 0 ? (
           <div className="border-t border-gray-200/80 pt-2 dark:border-gray-800">
@@ -1308,7 +1356,7 @@ function ChatSidebar({
           {!isMobile ? <div className="rounded-xl bg-blue-100 p-2 text-blue-600 dark:bg-blue-950/40 dark:text-blue-300"><MessageSquare size={20} /></div> : <button onClick={onToggleMobileSidebar} className="rounded-lg p-2 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Close sidebar"><ArrowLeft size={20} /></button>}
           <div>
             <h2 className="text-xl font-bold text-gray-900 dark:text-white">{isMobile ? "Chats" : "Messages"}</h2>
-            {!isMobile ? <p className="text-sm text-gray-500 dark:text-gray-400">{activeChats.length} active chats, {groupCount} groups</p> : null}
+            {!isMobile ? <p className="text-sm text-gray-500 dark:text-gray-400">{activeChats.length + (aiChat ? 1 : 0)} active chats, {groupCount} groups</p> : null}
           </div>
         </div>
         <div className="flex items-center gap-2">

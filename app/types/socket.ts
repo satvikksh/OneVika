@@ -32,6 +32,8 @@ export interface Message {
   readByUserIds?: string[];
   isStarred?: boolean;
   isHidden?: boolean;
+  isAI?: boolean;
+  isStreaming?: boolean;
 }
 
 export interface ChatAttachment {
@@ -72,6 +74,7 @@ export interface User {
   isGroupOwner?: boolean;
   isGroupAdmin?: boolean;
   subtitle?: string | null;
+  isAI?: boolean;
 }
 
 

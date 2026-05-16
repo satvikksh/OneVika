@@ -35,6 +35,7 @@ export async function GET(req: NextRequest) {
         {
           $match: {
             _id: { $ne: currentUserId },
+            isAI: { $ne: true },
           },
         },
         {

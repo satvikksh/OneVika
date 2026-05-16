@@ -106,6 +106,7 @@ function ChatTopBar({
   const mobileClasses = isMobile ? "left-0 right-0" : "";
   const positionClasses = isMobile ? mobileClasses : `${desktopLeft} right-0`;
   const isGroupChat = selectedUser?.chatType === "group";
+  const isAiChat = Boolean(selectedUser?.isAI);
   const isSelectionMode = selectedMessageCount > 0;
 
   const isUserOnline = selectedUser?.id
@@ -310,7 +311,12 @@ function ChatTopBar({
       onClick: onDeleteChat,
       danger: true,
     },
-  ].filter((item) => (item.id === "toggleHiddenMessages" || !isGroupChat) && Boolean(item.onClick));
+  ].filter(
+    (item) =>
+      (item.id === "toggleHiddenMessages" ||
+        (!isGroupChat && (!isAiChat || item.id === "clear"))) &&
+      Boolean(item.onClick)
+  );
 
   return (
     <>
@@ -404,6 +410,11 @@ function ChatTopBar({
                       <span className="h-2 w-2 rounded-full bg-blue-500" />
                       {selectedUser.memberCount ?? selectedUser.memberIds?.length ?? 0} members
                     </span>
+                  ) : isAiChat ? (
+                    <span className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400">
+                      <span className="h-2 w-2 rounded-full bg-blue-500" />
+                      AI assistant online
+                    </span>
                   ) : selectedUser.isBlocked ? (
                     <span className="inline-flex items-center gap-1 text-red-500 dark:text-red-400">
                       <span className="h-2 w-2 rounded-full bg-red-500" />
@@ -428,7 +439,7 @@ function ChatTopBar({
           </div>
 
           <div className="flex flex-shrink-0 items-center gap-1 sm:gap-2" ref={menuRef}>
-            {!isGroupChat ? (
+            {!isGroupChat && !isAiChat ? (
               <>
                 <button
                   onClick={startCall}

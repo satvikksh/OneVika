@@ -8,6 +8,7 @@ import {
   toChatPreferenceState,
 } from "@/app/lib/chatAccess";
 import { isPremiumActive } from "@/app/lib/premium";
+import { ensureAiConversationForUser } from "@/app/lib/aiAssistant";
 import mongoose from "mongoose";
 
 const { ObjectId } = mongoose.Types;
@@ -45,6 +46,7 @@ type ChatUserRow = {
   lastSeen?: Date | string | null;
   isPremium?: boolean;
   premiumExpiresAt?: Date | null;
+  isAI?: boolean;
 };
 
 type BlockRow = {
@@ -68,6 +70,7 @@ export async function GET(req: NextRequest) {
     }
 
     const currentUserId = new ObjectId(session.user.id);
+    await ensureAiConversationForUser(session.user.id);
     const allowedUserIds = new Set<string>();
 
     // 1) Mutual follows only (A follows B and B follows A, both active)
@@ -232,6 +235,7 @@ export async function GET(req: NextRequest) {
                   lastSeen: 1,
                   isPremium: 1,
                   premiumExpiresAt: 1,
+                  isAI: 1,
                 },
               }
             )
@@ -396,8 +400,9 @@ export async function GET(req: NextRequest) {
         name: user.name,
         email: user.email,
         avatar: user.avatar || user.image,
+        isAI: Boolean(user.isAI),
         isPremium: isPremiumActive(user),
-        isOnline: false,
+        isOnline: Boolean(user.isAI),
         lastSeen: user.lastSeen ? new Date(user.lastSeen).toISOString() : null,
         unreadCount: conversationId
           ? unreadByConversationId.get(conversationId) ?? 0
@@ -416,6 +421,7 @@ export async function GET(req: NextRequest) {
         canMessage: !(isBlockedByCurrentUser || hasBlockedCurrentUser),
         chatType: "direct",
         conversationId: conversationId ?? null,
+        subtitle: user.isAI ? "AI assistant" : null,
       };
     });
 

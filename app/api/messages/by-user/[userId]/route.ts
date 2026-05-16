@@ -51,6 +51,8 @@ type StoredMessage = {
   readByUserIds?: mongoose.Types.ObjectId[];
   starredByUserIds?: mongoose.Types.ObjectId[];
   hiddenForUserIds?: mongoose.Types.ObjectId[];
+  isAI?: boolean;
+  isStreaming?: boolean;
 };
 
 type ConversationDoc = {
@@ -339,6 +341,8 @@ export async function GET(
         readByUserIds,
         isStarred: hasObjectId(message.starredByUserIds, senderIdRaw),
         isHidden: hasObjectId(message.hiddenForUserIds, senderIdRaw),
+        isAI: Boolean(message.isAI),
+        isStreaming: Boolean(message.isStreaming),
       };
     });
 

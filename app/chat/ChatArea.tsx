@@ -73,6 +73,7 @@ interface ChatAreaProps {
   onSendMessage: () => void;
   isConnected?: boolean; // Optional for connection status
   isChatBlocked?: boolean;
+  isPeerTyping?: boolean;
 }
 
 const formatFileSize = (size?: number) => {
@@ -280,6 +281,7 @@ function ChatArea({
   onSendMessage,
   isConnected = true, // Default to true for backward compatibility
   isChatBlocked = false,
+  isPeerTyping = false,
 }: ChatAreaProps) {
   const currentUserId = session?.user?.id;
   const selectedMessageIdSet = React.useMemo(
@@ -654,6 +656,17 @@ function ChatArea({
                   );
                 })
               )}
+              {isPeerTyping ? (
+                <div className="flex justify-start">
+                  <div className="inline-flex items-center gap-2 rounded-2xl rounded-bl-none bg-gray-200 px-4 py-3 text-gray-700 dark:bg-gray-800 dark:text-gray-200">
+                    <span className="typing-indicator" aria-label="Typing">
+                      <span className="typing-dot" />
+                      <span className="typing-dot" />
+                      <span className="typing-dot" />
+                    </span>
+                  </div>
+                </div>
+              ) : null}
               <div ref={messagesEndRef} />
             </div>
         ) : (

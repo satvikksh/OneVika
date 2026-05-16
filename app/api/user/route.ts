@@ -19,7 +19,7 @@ export async function GET() {
 
     // Fetch users except current user
     const users = await User.find(
-      { email: { $ne: session.user.email } },
+      { email: { $ne: session.user.email }, isAI: { $ne: true } },
       { password: 0 } // exclude password
     )
       .lean(); // IMPORTANT

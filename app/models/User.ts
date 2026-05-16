@@ -23,6 +23,7 @@ export interface IUser extends Document {
   nickname?: string;
   provider: "credentials" | "google";
   image?: string;
+  isAI?: boolean;
   fcmToken?: string;
   fcmTokens?: string[];
 
@@ -110,6 +111,12 @@ const UserSchema = new Schema<IUser>(
 
     image: {
       type: String,
+    },
+
+    isAI: {
+      type: Boolean,
+      default: false,
+      index: true,
     },
 
     isPrivate: {

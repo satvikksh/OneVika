@@ -270,6 +270,7 @@ export default function ChatPage() {
   const { 
     isConnected, 
     onlineUsers, 
+    typingUsers,
     messages: socketMessages,
     sendMessage: socketSendMessage,
     removeMessage,
@@ -285,7 +286,6 @@ export default function ChatPage() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [newMessage, setNewMessage] = useState("");
   const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment | null>(null);
-  const [typingUsers] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [initialLoadingMessageUserId, setInitialLoadingMessageUserId] = useState<string | null>(null);
@@ -361,13 +361,19 @@ export default function ChatPage() {
     setUnreadByUser((prev) =>
       prev[chatId] === 0 ? prev : { ...prev, [chatId]: 0 }
     );
-    setUsers((prev) =>
-      prev.map((user) =>
-        user.id === chatId && (user.unreadCount ?? 0) !== 0
-          ? { ...user, unreadCount: 0 }
-          : user
-      )
-    );
+    setUsers((prev) => {
+      let hasChanges = false;
+      const nextUsers = prev.map((user) => {
+        if (user.id !== chatId || (user.unreadCount ?? 0) === 0) {
+          return user;
+        }
+
+        hasChanges = true;
+        return { ...user, unreadCount: 0 };
+      });
+
+      return hasChanges ? nextUsers : prev;
+    });
     setSelectedUser((prev) =>
       prev?.id === chatId && (prev.unreadCount ?? 0) !== 0
         ? { ...prev, unreadCount: 0 }
@@ -830,14 +836,21 @@ export default function ChatPage() {
 
     setUnreadByUser((prev) => {
       const next = { ...prev };
+      let hasChanges = false;
+
       users.forEach((user) => {
         if (typeof user.unreadCount === "number") {
-          next[user.id] = user.unreadCount;
+          if (next[user.id] !== user.unreadCount) {
+            next[user.id] = user.unreadCount;
+            hasChanges = true;
+          }
         } else if (!(user.id in next)) {
           next[user.id] = 0;
+          hasChanges = true;
         }
       });
-      return next;
+
+      return hasChanges ? next : prev;
     });
   }, [users]);
 
@@ -3293,6 +3306,9 @@ export default function ChatPage() {
               isMobile={isMobile}
               handleKeyDown={handleKeyDown}
               isChatBlocked={Boolean(selectedUser?.isBlocked)}
+              isPeerTyping={Boolean(
+                selectedUser && typingUsers.has(selectedUser.id)
+              )}
             />
           </div>
         ) : null}

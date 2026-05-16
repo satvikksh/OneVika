@@ -19,8 +19,14 @@ type ConversationDoc = {
   _id: mongoose.Types.ObjectId;
   participants?: mongoose.Types.ObjectId[];
   isGroup?: boolean;
+  isAI?: boolean;
+  aiAssistantUserId?: mongoose.Types.ObjectId;
   name?: string;
   createdBy?: mongoose.Types.ObjectId;
+};
+
+type ReceiverDoc = {
+  isAI?: boolean;
 };
 
 const getMessageTypeFromMime = (mimeType?: string | null) => {
@@ -138,6 +144,7 @@ export async function POST(req: NextRequest) {
       receiverId && ObjectId.isValid(receiverId) ? new ObjectId(receiverId) : null;
     let conversation: ConversationDoc | null = null;
     let isGroupConversation = false;
+    let isAiConversation = false;
 
     if (conversationId) {
       conversation = await db.collection<ConversationDoc>("conversations").findOne({
@@ -153,6 +160,7 @@ export async function POST(req: NextRequest) {
       }
 
       isGroupConversation = Boolean(conversation.isGroup);
+      isAiConversation = Boolean(conversation.isAI);
 
       if (!isGroupConversation && !receiverObjectId) {
         const otherParticipant = conversation.participants?.find(
@@ -169,6 +177,12 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         );
       }
+
+      const receiver = await db.collection<ReceiverDoc>("users").findOne(
+        { _id: receiverObjectId },
+        { projection: { isAI: 1 } }
+      );
+      const isAiReceiver = Boolean(receiver?.isAI);
 
       const blockRelationship = await db.collection("blockedUsers").findOne({
         $or: [
@@ -204,7 +218,7 @@ export async function POST(req: NextRequest) {
       const hasMutualFollow = Boolean(iFollowReceiver && receiverFollowsMe);
       const hasExistingConversation = Boolean(conversation);
 
-      if (!hasMutualFollow && !hasExistingConversation) {
+      if (!hasMutualFollow && !hasExistingConversation && !isAiReceiver) {
         return NextResponse.json(
           { error: "Message allowed only for mutual followers" },
           { status: 403 }
@@ -215,6 +229,12 @@ export async function POST(req: NextRequest) {
         const now = new Date();
         const result = await db.collection("conversations").insertOne({
           participants: [senderObjectId, receiverObjectId],
+          ...(isAiReceiver
+            ? {
+                isAI: true,
+                aiAssistantUserId: receiverObjectId,
+              }
+            : {}),
           createdAt: now,
           updatedAt: now,
         });
@@ -222,8 +242,12 @@ export async function POST(req: NextRequest) {
           _id: result.insertedId,
           participants: [senderObjectId, receiverObjectId],
           isGroup: false,
+          isAI: isAiReceiver,
+          aiAssistantUserId: isAiReceiver ? receiverObjectId : undefined,
         };
       }
+
+      isAiConversation = Boolean(conversation?.isAI || isAiReceiver);
     }
 
     if (!conversation?._id) {
@@ -280,6 +304,8 @@ export async function POST(req: NextRequest) {
         readByUserIds: [session.user.id],
         isStarred: false,
         isHidden: false,
+        isAI: false,
+        isStreaming: false,
         chatType: isGroupConversation ? "group" : "direct",
       },
     });

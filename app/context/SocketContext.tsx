@@ -22,6 +22,7 @@ type OutgoingMessageInput = Partial<Message> & {
 interface SocketContextType {
   isConnected: boolean;
   onlineUsers: string[];
+  typingUsers: Set<string>;
   messages: Message[];
   sendMessage: (message: OutgoingMessageInput) => void;
   removeMessage: (messageId: string) => void;
@@ -41,6 +42,7 @@ interface SocketContextType {
 const SocketContext = createContext<SocketContextType>({
   isConnected: false,
   onlineUsers: [],
+  typingUsers: new Set(),
   messages: [],
   sendMessage: () => {},
   removeMessage: () => {},
@@ -95,6 +97,8 @@ const messagesAreEqual = (left: Message, right: Message) =>
   left.replyToId === right.replyToId &&
   left.isStarred === right.isStarred &&
   left.isHidden === right.isHidden &&
+  left.isAI === right.isAI &&
+  left.isStreaming === right.isStreaming &&
   stringListsAreEqual(left.deliveredToUserIds, right.deliveredToUserIds) &&
   stringListsAreEqual(left.readByUserIds, right.readByUserIds) &&
   attachmentsAreEqual(left.attachments, right.attachments);
@@ -156,6 +160,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
 
   const [isConnected, setIsConnected] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
+  const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
   const [messages, setMessages] = useState<Message[]>([]);
 
   const upsertMessage = useCallback((msg: Message) => {
@@ -402,14 +407,35 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
         });
       }
     );
+    socket.on("typing_start", ({ userId: typingUserId }: { userId?: string }) => {
+      if (!typingUserId) return;
+      setTypingUsers((prev) => {
+        if (prev.has(typingUserId)) return prev;
+        const next = new Set(prev);
+        next.add(typingUserId);
+        return next;
+      });
+    });
+    socket.on("typing_stop", ({ userId: typingUserId }: { userId?: string }) => {
+      if (!typingUserId) return;
+      setTypingUsers((prev) => {
+        if (!prev.has(typingUserId)) return prev;
+        const next = new Set(prev);
+        next.delete(typingUserId);
+        return next;
+      });
+    });
 
     return () => {
       socket.off("online_users");
       socket.off("user_status");
+      socket.off("typing_start");
+      socket.off("typing_stop");
       socket.disconnect();
       socketRef.current = null;
       setIsConnected(false);
       setOnlineUsers([]);
+      setTypingUsers(new Set());
     };
   }, [userId]);
 
@@ -508,6 +534,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     () => ({
       isConnected,
       onlineUsers,
+      typingUsers,
       messages,
       sendMessage,
       removeMessage,
@@ -522,6 +549,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     [
       isConnected,
       onlineUsers,
+      typingUsers,
       messages,
       sendMessage,
       removeMessage,
