@@ -45,11 +45,12 @@ export async function POST(req: Request) {
     await dbConnect();
     const { name, email, password, securityQuestion, securityAnswer, file } =
       await parseSignupPayload(req);
+    const normalizedEmail = email.trim().toLowerCase();
     const validQuestions = new Set(["favoritePet", "favoriteColor", "nickname"]);
 
     if (
       !name ||
-      !email ||
+      !normalizedEmail ||
       !password ||
       !securityQuestion ||
       !securityAnswer
@@ -62,7 +63,7 @@ export async function POST(req: Request) {
     }
 
     // Check existing user
-    const existingUser = await User.findOne({ email });
+    const existingUser = await User.findOne({ email: normalizedEmail });
     if (existingUser) {
       return NextResponse.json(
         { error: "Email already registered" },
@@ -96,7 +97,7 @@ export async function POST(req: Request) {
     // Create user
     await User.create({
       name,
-      email,
+      email: normalizedEmail,
       password: hashedPassword,
       avatar: avatarUrl,
       image: avatarUrl,

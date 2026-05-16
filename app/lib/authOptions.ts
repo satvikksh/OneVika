@@ -6,6 +6,16 @@ import bcrypt from "bcryptjs";
 import User from "@/app/models/User";
 import { dbConnect } from "@/app/lib/mongodb";
 
+const canonicalAuthUrl =
+  process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_BASE_URL;
+
+// NextAuth uses NEXTAUTH_URL to build OAuth callback URLs outside Vercel.
+// This app already carries NEXT_PUBLIC_BASE_URL, so use it as a safe fallback
+// while still allowing an explicit NEXTAUTH_URL to take precedence.
+if (!process.env.NEXTAUTH_URL && canonicalAuthUrl) {
+  process.env.NEXTAUTH_URL = canonicalAuthUrl;
+}
+
 const googleClientId =
   process.env.GOOGLE_CLIENT_ID || process.env.AUTH_GOOGLE_ID;
 const googleClientSecret =
@@ -38,7 +48,8 @@ providers.push(
 
         await dbConnect();
 
-        const user = await User.findOne({ email: credentials.email }).lean();
+        const normalizedEmail = credentials.email.trim().toLowerCase();
+        const user = await User.findOne({ email: normalizedEmail }).lean();
 
         if (!user) {
           throw new Error("User not found");
@@ -78,23 +89,48 @@ export const authOptions: NextAuthOptions = {
   providers,
 
   callbacks: {
-    async signIn({ user, account }) {
+    async signIn({ user, account, profile }) {
       if (account?.provider === "google") {
         await dbConnect();
 
         if (!user.email) return false;
 
-        let dbUser = await User.findOne({ email: user.email });
+        const normalizedEmail = user.email.trim().toLowerCase();
+
+        if (
+          (profile as { email_verified?: boolean } | undefined)
+            ?.email_verified === false
+        ) {
+          return false;
+        }
+
+        let dbUser = await User.findOne({ email: normalizedEmail });
 
         if (!dbUser) {
-          dbUser = await User.create({
-            name: user.name,
-            email: user.email,
-            image: user.image,
-            avatar: user.image,
-            provider: "google",
-            sessionVersion: 0,
-          });
+          try {
+            dbUser = await User.create({
+              name: user.name || normalizedEmail.split("@")[0],
+              email: normalizedEmail,
+              image: user.image,
+              avatar: user.image,
+              provider: "google",
+              sessionVersion: 0,
+            });
+          } catch (error: unknown) {
+            // If two callbacks arrive together, the unique email index may win
+            // the race for one request. Reuse that user instead of surfacing a
+            // false "duplicate account" failure.
+            if (
+              typeof error === "object" &&
+              error !== null &&
+              "code" in error &&
+              error.code === 11000
+            ) {
+              dbUser = await User.findOne({ email: normalizedEmail });
+            } else {
+              throw error;
+            }
+          }
         } else {
           const updates: Record<string, unknown> = {};
 
@@ -107,10 +143,6 @@ export const authOptions: NextAuthOptions = {
             if (!dbUser.avatar) updates.avatar = user.image;
           }
 
-          if (dbUser.provider !== "google") {
-            updates.provider = "google";
-          }
-
           if (Object.keys(updates).length > 0) {
             await User.updateOne({ _id: dbUser._id }, { $set: updates });
             dbUser = await User.findById(dbUser._id);
@@ -121,9 +153,9 @@ export const authOptions: NextAuthOptions = {
 
         user.id = dbUser._id.toString();
         user.name = dbUser.name;
-        user.email = dbUser.email;
+        user.email = normalizedEmail;
         user.image = dbUser.avatar || dbUser.image || user.image;
-        (user as any).sessionVersion = dbUser.sessionVersion ?? 0;
+        user.sessionVersion = dbUser.sessionVersion ?? 0;
       }
 
       return true;
@@ -134,8 +166,8 @@ export const authOptions: NextAuthOptions = {
         token.id = user.id;
         token.name = user.name;
         token.email = user.email;
-        token.picture = (user as any).image || token.picture;
-        token.sessionVersion = (user as any).sessionVersion ?? 0;
+        token.picture = user.image || token.picture;
+        token.sessionVersion = user.sessionVersion ?? 0;
       }
       return token;
     },
@@ -145,9 +177,10 @@ export const authOptions: NextAuthOptions = {
         session.user.id = token.id as string;
         session.user.name = (token.name as string) || session.user.name;
         session.user.email = (token.email as string) || session.user.email;
-        (session.user as any).avatar =
-          (token.picture as string) || (session.user as any).avatar || "";
-        (session.user as any).sessionVersion = token.sessionVersion as number;
+        const image = (token.picture as string) || "";
+        session.user.avatar = image || session.user.avatar || "";
+        session.user.image = image || session.user.image || null;
+        session.user.sessionVersion = token.sessionVersion as number;
       }
       return session;
     },
@@ -155,6 +188,7 @@ export const authOptions: NextAuthOptions = {
 
   pages: {
     signIn: "/login",
+    error: "/login",
   },
 
   secret: process.env.NEXTAUTH_SECRET,

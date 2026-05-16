@@ -9,6 +9,7 @@ import { dbConnect } from "./lib/mongodb";
 import User from "./models/User";
 import NotificationListener from "./components/NotificationListener";
 import { isPremiumActive } from "./lib/premium";
+import { authOptions } from "./lib/authOptions";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -29,7 +30,7 @@ export default async function RootLayout({
     radius: "20px",
   };
 
-  const session = await getServerSession();
+  const session = await getServerSession(authOptions);
 
   if (session?.user?.email) {
     await dbConnect();

@@ -1,16 +1,23 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Sparkles, Lock, Mail, Eye, EyeOff, LogIn } from "lucide-react";
 import { useTheme } from "../theme-provider";
 import { signIn, useSession } from "next-auth/react";
 import { FcGoogle } from "react-icons/fc";
+import {
+  getAuthErrorMessage,
+  getSafeCallbackUrl,
+} from "../lib/authClient";
 
 export default function LoginPage() {
   const { theme } = useTheme();
   const isDark = theme === "dark";
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = getSafeCallbackUrl(searchParams.get("callbackUrl"));
+  const authError = getAuthErrorMessage(searchParams.get("error"));
 
   const { status } = useSession();
 
@@ -23,9 +30,9 @@ export default function LoginPage() {
   /* ✅ Redirect if already logged in */
   useEffect(() => {
     if (status === "authenticated") {
-      router.replace("/");
+      router.replace(callbackUrl);
     }
-  }, [status, router]);
+  }, [status, router, callbackUrl]);
 
   /* ✅ FIXED credentials login */
   const handleSubmit = async (e: React.FormEvent) => {
@@ -37,7 +44,7 @@ export default function LoginPage() {
       email,
       password,
       redirect: false,
-      callbackUrl: "/",
+      callbackUrl,
     });
 
     if (res?.error) {
@@ -46,27 +53,26 @@ export default function LoginPage() {
       return;
     }
 
-    router.push(res?.url || "/");
+    router.push(res?.url || callbackUrl);
   };
 
-  /* ✅ Google login already correct */
   const handleGoogleLogin = async () => {
     setError("");
     setLoading(true);
 
-    const res = await signIn("google", {
-      redirect: false,
-      callbackUrl: "/",
-      prompt: "select_account",
-    });
-
-    if (res?.error) {
+    try {
+      // OAuth providers should use the normal full-page redirect flow. This is
+      // the most reliable path across desktop and mobile browsers.
+      await signIn(
+        "google",
+        { callbackUrl },
+        { prompt: "select_account" }
+      );
+    } catch (error) {
+      console.error("Google login failed:", error);
       setLoading(false);
       setError("Google login failed. Please try again.");
-      return;
     }
-
-    router.push(res?.url || "/");
   };
 
   return (
@@ -103,8 +109,10 @@ export default function LoginPage() {
           </h2>
         </div>
 
-        {error && (
-          <p className="text-red-500 text-sm mb-4 text-center">{error}</p>
+        {(error || authError) && (
+          <p className="text-red-500 text-sm mb-4 text-center">
+            {error || authError}
+          </p>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -183,12 +191,14 @@ export default function LoginPage() {
         <button
           onClick={handleGoogleLogin}
           type="button"
+          disabled={loading}
           className="w-full flex items-center justify-center gap-3 py-3 
           bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700
-          rounded-xl font-semibold hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+          rounded-xl font-semibold hover:bg-gray-100 dark:hover:bg-gray-700 transition
+          disabled:opacity-60 disabled:cursor-not-allowed"
         >
           <FcGoogle className="w-5 h-5" />
-          Continue with Google
+          {loading ? "Connecting..." : "Continue with Google"}
         </button>
 
         <p className="mt-6 text-center text-gray-600 dark:text-gray-400">

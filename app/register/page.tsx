@@ -1,11 +1,15 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Sparkles, Mail, User, Lock, Eye, EyeOff, Camera } from "lucide-react";
-import { signIn } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 import { FcGoogle } from "react-icons/fc";
 import AvatarCropperModal from "../components/AvatarCropperModal";
+import {
+  getAuthErrorMessage,
+  getSafeCallbackUrl,
+} from "../lib/authClient";
 
 type SecurityKey = "favoritePet" | "favoriteColor" | "nickname";
 
@@ -18,6 +22,10 @@ const SECURITY_QUESTIONS: { key: SecurityKey; label: string }[] = [
 export default function SignupPage() {
   const [showPass, setShowPass] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = getSafeCallbackUrl(searchParams.get("callbackUrl"));
+  const authError = getAuthErrorMessage(searchParams.get("error"));
+  const { status } = useSession();
 
   const [form, setForm] = useState({
     name: "",
@@ -32,6 +40,12 @@ export default function SignupPage() {
   const [showCropper, setShowCropper] = useState(false);
   const [error, setError] = useState("");
   const [googleLoading, setGoogleLoading] = useState(false);
+
+  useEffect(() => {
+    if (status === "authenticated") {
+      router.replace(callbackUrl);
+    }
+  }, [status, router, callbackUrl]);
 
   useEffect(() => {
     return () => {
@@ -67,18 +81,16 @@ export default function SignupPage() {
       return;
     }
 
-    if (!profileFile) {
-      setError("Please select a profile picture.");
-      return;
-    }
-
     const payload = new FormData();
     payload.append("name", form.name);
     payload.append("email", form.email);
     payload.append("password", form.password);
     payload.append("securityQuestion", securityQuestion);
     payload.append("securityAnswer", securityAnswer.trim());
-    payload.append("file", profileFile);
+    
+    if (profileFile) {
+      payload.append("file", profileFile);
+    }
 
     const req = await fetch("/api/register", {
       method: "POST",
@@ -99,19 +111,17 @@ export default function SignupPage() {
     setError("");
     setGoogleLoading(true);
 
-    const res = await signIn("google", {
-      redirect: false,
-      callbackUrl: "/",
-      prompt: "select_account",
-    });
-
-    if (res?.error) {
+    try {
+      await signIn(
+        "google",
+        { callbackUrl },
+        { prompt: "select_account" }
+      );
+    } catch (error) {
+      console.error("Google signup failed:", error);
       setGoogleLoading(false);
       setError("Google signup failed. Please try again.");
-      return;
     }
-
-    router.push(res?.url || "/");
   };
 
   return (
@@ -129,7 +139,7 @@ export default function SignupPage() {
         {/* FORM */}
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="rounded-2xl border border-gray-300 dark:border-gray-700 p-4 bg-white dark:bg-gray-800">
-            <p className="text-sm font-semibold mb-3">Set Profile Picture</p>
+            <p className="text-sm font-semibold mb-3">Set Profile Picture (Optional)</p>
             <div className="flex items-center gap-4">
               <div className="w-20 h-20 rounded-2xl overflow-hidden border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700">
                 {profilePreview ? (
@@ -223,7 +233,9 @@ export default function SignupPage() {
             />
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {(error || authError) && (
+            <p className="text-sm text-red-600">{error || authError}</p>
+          )}
 
           <button
             type="submit"
