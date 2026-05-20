@@ -117,7 +117,7 @@ OrbitByte/
 
 ```bash
 git clone https://github.com/satvikksh/OneVika
-cd orbitbyte
+cd OneVika
 ```
 
 ### 2. Install dependencies
@@ -191,23 +191,23 @@ http://localhost:3000
 ### Example `.env.local`
 
 ```env
-MONGODB_URI="mongodb+srv://OneVika:OneVika!123@cluster0.jwd2ykt.mongodb.net/OneVika?retryWrites=true&w=majority&appName=OneVika"
-NEXTAUTH_SECRET="Cr32uuP8FAKilbnJ5A0RuEz3J9HkIK1lFsMDhldC5Yk="
+MONGODB_URI="mongodb+srv://your-project name and password@cluster0.jwd2ykt.mongodb.net/project name?retryWrites=true&w=majority&appName=OneVika"
+NEXTAUTH_SECRET="Cr32uuP8FAKilbnJ5A0Rudo349fj9fj3409"
 NEXT_PUBLIC_BASE_URL="http://localhost:3000"
 NEXT_PUBLIC_SOCKET_URL="http://localhost:3000"
 
-GOOGLE_CLIENT_ID="920738586360-d5elktnpsvo2j02j2d427viot6iednhm.apps.googleusercontent.com"
-GOOGLE_CLIENT_SECRET="ee393ec4e521856896e7a11c8d4a80e8"
+GOOGLE_CLIENT_ID="3482034824c-c3220e23cmwiwn.apps.googleusercontent.com"
+GOOGLE_CLIENT_SECRET="dfcm4939ru329jdwcjd9cmjfnsk"
 
-DEEPSEEK_API_KEY="sk-ff03cbd49d574d8895eff60cc6a208ce"
+DEEPSEEK_API_KEY="cm4jf9mh348hc9wjdwod"
 
-CLOUDINARY_CLOUD_NAME="dptmi16gl"
-CLOUDINARY_API_KEY="863361776481946"
-CLOUDINARY_API_SECRET="6cwpDUwiqBUXP-sUe6dvQa0Gdnk"
+CLOUDINARY_CLOUD_NAME="cdmr9sdkjnw"
+CLOUDINARY_API_KEY="47295720527"
+CLOUDINARY_API_SECRET="cdhrnfij3m9orwjro"
 
-FIREBASE_PROJECT_ID=orbitbytein
-FIREBASE_CLIENT_EMAIL=firebase-adminsdk-fbsvc@orbitbytein.iam.gserviceaccount.com
-FIREBASE_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC0oCWlcA+b0ZBm\nQSD3xlo4gzB5NCdPb5Qsgkvn4NgNSejyfGZUumFpLj6i2qF5BXsIH4UL8u5l2idT\n1TvZNcK7whdVp5+GAXJNc4pHqulR4LLeq7p1MhG763NgA902te6hERCOfIi82D4f\nf3NFH4OLrCnf91kca5crC2XZFjjs3OxldmuTlfyT2oVzjZaTxk75D+fyL8p/KWzL\npN2F/xUS8QcnrA6Id1+eEbR7uQ2OEUWTtwxsmnhi1/rfn953j6bsVIgL+ESeRVBF\npZO5FgoLbZ9dyXoqPgyEGZNhj+Icc8PRzHnj6WaNyeIowWClM0B9djbHPCwim2eC\ndrNwpqodAgMBAAECggEADMIlIURC7fwwVBtfQ0aA9+3tqMSyJCPFq8aBAGjQNKbB\nrA3KbUtZocQmS3rgSKabnqLEqJKTxqD8AdQVgqMQABLWcsfrdjE4TC067r4CoLRw\n81aI+J89Q8X+o8u8vpESQSaYl0qc8/iIRtGfUu9wwMG77CR8vbZXJVoMQHhtM+8h\nGMaxJoJ5OK83QZ4KcNWuSZuh3IgE9xDAOiThDeEBWqC8yvLuVVC1GaTohpUA/s5Z\neofft4baLnJYSM6xu8MmZKelNpVHmYkKBncBsssih0hLlgpegiDxNgNK0qHACPvN\nD/Leqvmecl7p9wz70KPnOiQ7X1OOoUvdiCc0QE29YQKBgQDtJZAKv+AbmxEq1TNO\nv87K5Crk9l+kellPI0zUCbP8c9D62RGUm7DMkxoaPocGHJLddtrMUP+UqhJAJtM2\na3hBnY2E6R9dUSBwgEPX3H6zF0cfAjrQdJg91sC02sU+O5rWFtorhh+vuMPn3tvU\nwWeWPvWWbwEUFccRqLaa2C/dUQKBgQDC/EJnbv/gvevpV7T7KMiRQUwDL8QoUX65\nNUra6EjjwVL52C5mxuaufWUSWsChBrS0zdxuJt+eKd8seljFEt9NWsHbqnTMMgUq\nH6tB5V/5aBJ4mMwGyDtS6jAX7KvfwcboMg0jrEXJmS0mQ7li6ewGFD7AkrA+UVIV\nBIpsCTJdDQKBgQDBTgYdDQyz0/HpdUJOZcE910Ezw7RwkR6tiHu+t24UUZ++aiSP\ne11hVGNJk0Bi9fWtOo3dUAUVfJBF5J/0UyQCcFgESDa9zTxhF9y1X1GT0Fyz5RBm\nDTRv69bHVTDEqrdq3dPW+Ixpo3VlU17kDQbQDOAJUNCTO7E6LskybRiPEQKBgHBV\nnvgyRe633HtR0W3FoE+3G9DWKx/DW8vePSMDIkM89M4GUy1ZODuc+KbrbAEZePCV\njYJUmQ5pNy9LyWq4pbfOKtOgT6v4wWr0VdkgCfwJjmK2PQ1HPI5XZ5/Q9XBzFmJd\nu54quQYdXpql999Zv2X9Me4GVM2CUlTTieAWKFLdAoGAWRvczaEuYXMx5p3GgnTX\nAnlaliq3+30EdvVVhZCMRL5OisWF+UiqYKJnkgCLlbfd1DFN3d3J8OHjd+cDBWok\nNRjXG8C+7UsZr893NwdNJmVTWJhz5I1qsdNUwks0a3IMbm6bA0jmmeOzNeSATEpJ\nREGbb7G/ozNrn+72gYQy82w=\n-----END PRIVATE KEY-----\n
+FIREBASE_PROJECT_ID=project id
+FIREBASE_CLIENT_EMAIL=email given@orbitbytein.iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\cmu83v98r y39c29cn28jm9dc2jrc92jdnwuc38w2ccasamc2rcny8rh\n-----END PRIVATE KEY-----\n
 
 ```
 
