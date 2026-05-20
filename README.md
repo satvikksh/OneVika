@@ -10,7 +10,7 @@
 [![MongoDB](https://img.shields.io/badge/MongoDB-Mongoose-47A248?style=for-the-badge&logo=mongodb&logoColor=fff)](https://www.mongodb.com/)
 [![Socket.IO](https://img.shields.io/badge/Socket.IO-Realtime-010101?style=for-the-badge&logo=socketdotio)](https://socket.io/)
 
-**Live Demo:** [https://your-demo-url.com](https://your-demo-url.com) · **Repository:** [https://github.com/your-username/orbitbyte](https://github.com/your-username/orbitbyte)
+**Live Demo:** [https://orbitbyte.vercel.app/](https://orbitbyte.vercel.app/) · **Repository:** [https://github.com/satvikksh/OneVika](https://github.com/satvikksh/OneVika)
 
 </div>
 
@@ -116,7 +116,7 @@ OrbitByte/
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/your-username/orbitbyte.git
+git clone https://github.com/satvikksh/OneVika
 cd orbitbyte
 ```
 
@@ -191,23 +191,24 @@ http://localhost:3000
 ### Example `.env.local`
 
 ```env
-MONGODB_URI="mongodb+srv://username:password@cluster.mongodb.net/orbitbyte"
-NEXTAUTH_SECRET="replace-with-a-long-random-secret"
+MONGODB_URI="mongodb+srv://OneVika:OneVika!123@cluster0.jwd2ykt.mongodb.net/OneVika?retryWrites=true&w=majority&appName=OneVika"
+NEXTAUTH_SECRET="Cr32uuP8FAKilbnJ5A0RuEz3J9HkIK1lFsMDhldC5Yk="
 NEXT_PUBLIC_BASE_URL="http://localhost:3000"
 NEXT_PUBLIC_SOCKET_URL="http://localhost:3000"
 
-GOOGLE_CLIENT_ID="your-google-client-id"
-GOOGLE_CLIENT_SECRET="your-google-client-secret"
+GOOGLE_CLIENT_ID="920738586360-d5elktnpsvo2j02j2d427viot6iednhm.apps.googleusercontent.com"
+GOOGLE_CLIENT_SECRET="ee393ec4e521856896e7a11c8d4a80e8"
 
-DEEPSEEK_API_KEY="your-server-only-deepseek-key"
+DEEPSEEK_API_KEY="sk-ff03cbd49d574d8895eff60cc6a208ce"
 
-CLOUDINARY_CLOUD_NAME="your-cloud-name"
-CLOUDINARY_API_KEY="your-cloudinary-api-key"
-CLOUDINARY_API_SECRET="your-cloudinary-api-secret"
+CLOUDINARY_CLOUD_NAME="dptmi16gl"
+CLOUDINARY_API_KEY="863361776481946"
+CLOUDINARY_API_SECRET="6cwpDUwiqBUXP-sUe6dvQa0Gdnk"
 
-FIREBASE_PROJECT_ID="your-firebase-project-id"
-FIREBASE_CLIENT_EMAIL="firebase-admin@example.iam.gserviceaccount.com"
-FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+FIREBASE_PROJECT_ID=orbitbytein
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk-fbsvc@orbitbytein.iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC0oCWlcA+b0ZBm\nQSD3xlo4gzB5NCdPb5Qsgkvn4NgNSejyfGZUumFpLj6i2qF5BXsIH4UL8u5l2idT\n1TvZNcK7whdVp5+GAXJNc4pHqulR4LLeq7p1MhG763NgA902te6hERCOfIi82D4f\nf3NFH4OLrCnf91kca5crC2XZFjjs3OxldmuTlfyT2oVzjZaTxk75D+fyL8p/KWzL\npN2F/xUS8QcnrA6Id1+eEbR7uQ2OEUWTtwxsmnhi1/rfn953j6bsVIgL+ESeRVBF\npZO5FgoLbZ9dyXoqPgyEGZNhj+Icc8PRzHnj6WaNyeIowWClM0B9djbHPCwim2eC\ndrNwpqodAgMBAAECggEADMIlIURC7fwwVBtfQ0aA9+3tqMSyJCPFq8aBAGjQNKbB\nrA3KbUtZocQmS3rgSKabnqLEqJKTxqD8AdQVgqMQABLWcsfrdjE4TC067r4CoLRw\n81aI+J89Q8X+o8u8vpESQSaYl0qc8/iIRtGfUu9wwMG77CR8vbZXJVoMQHhtM+8h\nGMaxJoJ5OK83QZ4KcNWuSZuh3IgE9xDAOiThDeEBWqC8yvLuVVC1GaTohpUA/s5Z\neofft4baLnJYSM6xu8MmZKelNpVHmYkKBncBsssih0hLlgpegiDxNgNK0qHACPvN\nD/Leqvmecl7p9wz70KPnOiQ7X1OOoUvdiCc0QE29YQKBgQDtJZAKv+AbmxEq1TNO\nv87K5Crk9l+kellPI0zUCbP8c9D62RGUm7DMkxoaPocGHJLddtrMUP+UqhJAJtM2\na3hBnY2E6R9dUSBwgEPX3H6zF0cfAjrQdJg91sC02sU+O5rWFtorhh+vuMPn3tvU\nwWeWPvWWbwEUFccRqLaa2C/dUQKBgQDC/EJnbv/gvevpV7T7KMiRQUwDL8QoUX65\nNUra6EjjwVL52C5mxuaufWUSWsChBrS0zdxuJt+eKd8seljFEt9NWsHbqnTMMgUq\nH6tB5V/5aBJ4mMwGyDtS6jAX7KvfwcboMg0jrEXJmS0mQ7li6ewGFD7AkrA+UVIV\nBIpsCTJdDQKBgQDBTgYdDQyz0/HpdUJOZcE910Ezw7RwkR6tiHu+t24UUZ++aiSP\ne11hVGNJk0Bi9fWtOo3dUAUVfJBF5J/0UyQCcFgESDa9zTxhF9y1X1GT0Fyz5RBm\nDTRv69bHVTDEqrdq3dPW+Ixpo3VlU17kDQbQDOAJUNCTO7E6LskybRiPEQKBgHBV\nnvgyRe633HtR0W3FoE+3G9DWKx/DW8vePSMDIkM89M4GUy1ZODuc+KbrbAEZePCV\njYJUmQ5pNy9LyWq4pbfOKtOgT6v4wWr0VdkgCfwJjmK2PQ1HPI5XZ5/Q9XBzFmJd\nu54quQYdXpql999Zv2X9Me4GVM2CUlTTieAWKFLdAoGAWRvczaEuYXMx5p3GgnTX\nAnlaliq3+30EdvVVhZCMRL5OisWF+UiqYKJnkgCLlbfd1DFN3d3J8OHjd+cDBWok\nNRjXG8C+7UsZr893NwdNJmVTWJhz5I1qsdNUwks0a3IMbm6bA0jmmeOzNeSATEpJ\nREGbb7G/ozNrn+72gYQy82w=\n-----END PRIVATE KEY-----\n
+
 ```
 
 ---
@@ -382,9 +383,7 @@ Recommended hosting options:
 2. Configure all required environment variables on your hosting provider.
 3. Add production Google OAuth redirect URIs:
 
-```txt
-https://your-domain.com/api/auth/callback/google
-```
+
 
 4. Build the application:
 
@@ -479,10 +478,10 @@ copies of the Software, subject to the conditions of the MIT License.
 
 **OrbitByte Team**
 
-- Website: [https://your-website.com](https://your-website.com)
-- GitHub: [https://github.com/your-username](https://github.com/your-username)
-- LinkedIn: [https://linkedin.com/in/your-profile](https://linkedin.com/in/your-profile)
-- Email: [hello@orbitbyte.dev](mailto:hello@orbitbyte.dev)
+- Website: [https://orbitbyte.vercel.app/](https://orbitbyte.vercel.app/)
+- GitHub: [https://github.com/satvikksh/OneVika](https://github.com/satvikksh/OneVika)
+- LinkedIn: [https://www.linkedin.com/in/satvik-kushwaha-343452237/](https://www.linkedin.com/in/satvik-kushwaha-343452237/)
+- Email: [satvikksh@gmail.com](satvikksh@gmail.com)
 
 ---
 
@@ -490,9 +489,9 @@ copies of the Software, subject to the conditions of the MIT License.
 
 Need help or want to report an issue?
 
-- 📧 Email: [support@orbitbyte.dev](mailto:support@orbitbyte.dev)
-- 🐛 Issues: [https://github.com/your-username/orbitbyte/issues](https://github.com/your-username/orbitbyte/issues)
-- 💡 Feature Requests: [https://github.com/your-username/orbitbyte/discussions](https://github.com/your-username/orbitbyte/discussions)
+- 📧 Email: [satvikksh@gmail.com](satvikksh@gmail.com)
+- 🐛 Issues: [https://github.com/satvikksh/OneVika/issues](https://github.com/satvikksh/OneVikaissues)
+- 💡 Feature Requests: [https://github.com/satvikksh/OneVika/discussions](https://github.com/satvikksh/OneVika/discussions)
 
 If OrbitByte helps your work, consider starring the repository ⭐ and sharing feedback.
 
