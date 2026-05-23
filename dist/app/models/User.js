@@ -42,6 +42,11 @@ const UserSchema = new Schema({
     image: {
         type: String,
     },
+    isAI: {
+        type: Boolean,
+        default: false,
+        index: true,
+    },
     isPrivate: {
         type: Boolean,
         default: false,

@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from "express";
 import http from "http";
 import { Server } from "socket.io";
@@ -5,6 +6,7 @@ import mongoose from "mongoose";
 import admin from "firebase-admin";
 import User from "./app/models/User.js";
 import Notification from "./app/models/Notification.js";
+import { decryptChatText, encryptChatText } from "./app/lib/chatCrypto.js";
 
 type NotificationPayload = {
   _id?: string;
@@ -27,6 +29,8 @@ type ConversationDoc = {
   _id: mongoose.Types.ObjectId;
   participants?: mongoose.Types.ObjectId[];
   isGroup?: boolean;
+  isAI?: boolean;
+  aiAssistantUserId?: mongoose.Types.ObjectId;
   name?: string;
 };
 
@@ -37,6 +41,34 @@ type SocketMessagePayload = {
   conversationId?: string;
   content?: string;
   text?: string;
+  timestamp?: string | Date;
+  type?: string;
+  status?: "sending" | "sent" | "delivered" | "read";
+  deliveredToUserIds?: string[];
+  readByUserIds?: string[];
+  isAI?: boolean;
+  isStreaming?: boolean;
+};
+
+type StoredMessageDoc = {
+  _id: mongoose.Types.ObjectId;
+  conversationId: mongoose.Types.ObjectId;
+  senderId: mongoose.Types.ObjectId;
+  receiverId?: mongoose.Types.ObjectId | null;
+  text?: string;
+  textCipher?: string;
+  textIv?: string;
+  textTag?: string;
+  createdAt?: Date;
+  type?: string;
+  isAI?: boolean;
+  isStreaming?: boolean;
+  aiReplyStatus?: "processing" | "completed" | "failed";
+};
+
+type DeepSeekChatMessage = {
+  role: "system" | "user" | "assistant";
+  content: string;
 };
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://orbitbyte.vercel.app";
@@ -44,9 +76,35 @@ const PREMIUM_REMINDER_WINDOW_MS = 24 * 60 * 60 * 1000;
 const BACKGROUND_JOB_INTERVAL_MS = Number(
   process.env.BACKGROUND_JOB_INTERVAL_MS || "300000"
 );
+const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
+const DEEPSEEK_BASE_URL = (
+  process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com"
+).replace(/\/+$/, "");
+const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || "deepseek-v4-flash";
+const AI_CONTEXT_MESSAGE_LIMIT = Math.min(
+  Math.max(Number(process.env.AI_CONTEXT_MESSAGE_LIMIT || "24"), 4),
+  60
+);
+const AI_RESPONSE_MAX_RETRIES = Math.min(
+  Math.max(Number(process.env.AI_RESPONSE_MAX_RETRIES || "2"), 1),
+  3
+);
+const AI_SYSTEM_PROMPT =
+  process.env.AI_SYSTEM_PROMPT ||
+  [
+    "You are Orbit AI, a helpful AI assistant inside the OrbitByte chat app.",
+    "Answer clearly, conversationally, and safely.",
+    "Use the recent chat history as context, but do not claim access to private data outside this conversation.",
+    "If the user asks about OrbitByte features, be practical and developer-friendly.",
+  ].join(" ");
+const AI_PROVIDER_FAILURE_MESSAGE =
+  "I’m connected, but I couldn’t get a response from the AI provider right now. Please try again in a moment.";
+const INTERNAL_SOCKET_SECRET =
+  process.env.SOCKET_INTERNAL_SECRET || process.env.NEXTAUTH_SECRET || "";
 
 let backgroundJobsStarted = false;
 let backgroundJobsRunning = false;
+const aiReplyJobs = new Set<string>();
 
 // Initialize Firebase Admin
 if (!admin.apps.length) {
@@ -70,6 +128,65 @@ const httpServer = http.createServer(app);
 
 app.get("/", (_req, res) => {
   res.status(200).send("Socket server running");
+});
+
+app.post("/internal/ai/reply", express.json({ limit: "64kb" }), async (req, res) => {
+  try {
+    if (
+      INTERNAL_SOCKET_SECRET &&
+      req.headers.authorization !== `Bearer ${INTERNAL_SOCKET_SECRET}`
+    ) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const messageId = req.body?.messageId?.toString?.();
+    if (!messageId || !mongoose.Types.ObjectId.isValid(messageId)) {
+      res.status(400).json({ error: "Valid messageId is required" });
+      return;
+    }
+
+    const messageObjectId = new mongoose.Types.ObjectId(messageId);
+    const storedMessage = await mongoose.connection.db
+      ?.collection<StoredMessageDoc>("messages")
+      .findOne({ _id: messageObjectId });
+
+    if (!storedMessage) {
+      res.status(404).json({ error: "Message not found" });
+      return;
+    }
+
+    const conversation = (await mongoose.connection.db
+      ?.collection<ConversationDoc>("conversations")
+      .findOne({ _id: storedMessage.conversationId })) as ConversationDoc | null;
+
+    if (!conversation?.isAI) {
+      res.status(204).end();
+      return;
+    }
+
+    const text = readStoredMessageText(storedMessage);
+    void handleAiConversationMessage(conversation, {
+      id: storedMessage._id.toString(),
+      conversationId: storedMessage.conversationId.toString(),
+      senderId: storedMessage.senderId.toString(),
+      receiverId: storedMessage.receiverId?.toString?.() ?? "",
+      content: text,
+      text,
+      timestamp: storedMessage.createdAt?.toISOString?.() ?? new Date().toISOString(),
+      type: storedMessage.type ?? "text",
+      status: "sent",
+      isAI: Boolean(storedMessage.isAI),
+      isStreaming: Boolean(storedMessage.isStreaming),
+    }).catch((error) => {
+      console.error("[AI Chat] Internal AI reply trigger failed:", error);
+    });
+
+    res.status(202).json({ started: true });
+  } catch (error) {
+    console.error("[AI Chat] Failed to accept internal AI reply trigger:", error);
+    res.status(500).json({ error: "Failed to trigger AI reply" });
+  }
 });
 
 const io = new Server(httpServer, {
@@ -343,6 +460,547 @@ function startBackgroundJobs() {
   }, BACKGROUND_JOB_INTERVAL_MS);
 }
 
+const sleep = (ms: number) =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
+const toObjectId = (id?: string | mongoose.Types.ObjectId | null) => {
+  const value = id?.toString?.();
+  if (!value || !mongoose.Types.ObjectId.isValid(value)) {
+    return null;
+  }
+
+  return new mongoose.Types.ObjectId(value);
+};
+
+const readStoredMessageText = (message: StoredMessageDoc) => {
+  if (message.text?.trim()) {
+    return message.text.trim();
+  }
+
+  if (message.textCipher && message.textIv && message.textTag) {
+    try {
+      return decryptChatText({
+        textCipher: message.textCipher,
+        textIv: message.textIv,
+        textTag: message.textTag,
+      }).trim();
+    } catch (error) {
+      console.error("[AI Chat] Failed to decrypt context message:", error);
+    }
+  }
+
+  return "";
+};
+
+async function buildAiContextMessages(
+  conversationId: mongoose.Types.ObjectId,
+  assistantUserId: mongoose.Types.ObjectId
+): Promise<DeepSeekChatMessage[]> {
+  const rawMessages = await mongoose.connection.db
+    ?.collection<StoredMessageDoc>("messages")
+    .find({
+      conversationId,
+      type: { $ne: "system" },
+    })
+    .sort({ _id: -1 })
+    .limit(AI_CONTEXT_MESSAGE_LIMIT)
+    .toArray();
+
+  const contextMessages = (rawMessages || [])
+    .reverse()
+    .map((message): DeepSeekChatMessage | null => {
+      const content = readStoredMessageText(message);
+      if (!content) return null;
+
+      return {
+        role:
+          message.senderId?.toString?.() === assistantUserId.toString()
+            ? "assistant"
+            : "user",
+        content,
+      };
+    })
+    .filter((message): message is DeepSeekChatMessage => Boolean(message));
+
+  return [{ role: "system", content: AI_SYSTEM_PROMPT }, ...contextMessages];
+}
+
+function buildAiSocketMessagePayload({
+  messageId,
+  conversationId,
+  assistantUserId,
+  humanUserId,
+  text,
+  createdAt,
+  isStreaming,
+}: {
+  messageId: mongoose.Types.ObjectId;
+  conversationId: mongoose.Types.ObjectId;
+  assistantUserId: mongoose.Types.ObjectId;
+  humanUserId: mongoose.Types.ObjectId;
+  text: string;
+  createdAt: Date;
+  isStreaming: boolean;
+}): SocketMessagePayload {
+  return {
+    id: messageId.toString(),
+    conversationId: conversationId.toString(),
+    senderId: assistantUserId.toString(),
+    receiverId: humanUserId.toString(),
+    content: text,
+    text,
+    timestamp: createdAt.toISOString(),
+    status: "delivered",
+    type: "text",
+    deliveredToUserIds: [assistantUserId.toString(), humanUserId.toString()],
+    readByUserIds: [assistantUserId.toString()],
+    isAI: true,
+    isStreaming,
+  };
+}
+
+function emitAiTypingState({
+  humanUserId,
+  assistantUserId,
+  conversationId,
+  isTyping,
+}: {
+  humanUserId: mongoose.Types.ObjectId;
+  assistantUserId: mongoose.Types.ObjectId;
+  conversationId: mongoose.Types.ObjectId;
+  isTyping: boolean;
+}) {
+  io.to(`user_${humanUserId.toString()}`).emit(
+    isTyping ? "typing_start" : "typing_stop",
+    {
+      userId: assistantUserId.toString(),
+      conversationId: conversationId.toString(),
+      isAI: true,
+    }
+  );
+}
+
+function emitAiMessageToHuman(
+  humanUserId: mongoose.Types.ObjectId,
+  payload: SocketMessagePayload
+) {
+  io.to(`user_${humanUserId.toString()}`).emit("receive_message", payload);
+}
+
+function emitAiErrorToHuman({
+  humanUserId,
+  conversationId,
+  error,
+}: {
+  humanUserId: mongoose.Types.ObjectId;
+  conversationId: mongoose.Types.ObjectId;
+  error: unknown;
+}) {
+  io.to(`user_${humanUserId.toString()}`).emit("ai_response_error", {
+    conversationId: conversationId.toString(),
+    message:
+      error instanceof Error
+        ? error.message
+        : "The AI response failed for an unknown reason.",
+    retryable: true,
+  });
+}
+
+async function streamDeepSeekReply(
+  messages: DeepSeekChatMessage[],
+  onDelta: (delta: string, fullText: string) => Promise<void> | void
+) {
+  if (!DEEPSEEK_API_KEY) {
+    throw new Error("DEEPSEEK_API_KEY is not configured on the socket server.");
+  }
+
+  let lastError: unknown = null;
+
+  for (let attempt = 1; attempt <= AI_RESPONSE_MAX_RETRIES; attempt += 1) {
+    let fullText = "";
+    let emittedAnyChunk = false;
+
+    try {
+      console.info(
+        `[AI Chat] Calling DeepSeek (${DEEPSEEK_MODEL}), attempt ${attempt}/${AI_RESPONSE_MAX_RETRIES}`
+      );
+
+      const response = await fetch(`${DEEPSEEK_BASE_URL}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: DEEPSEEK_MODEL,
+          messages,
+          thinking: { type: "disabled" },
+          stream: true,
+        }),
+      });
+
+      if (!response.ok) {
+        const providerErrorText = await response.text().catch(() => "");
+        const error = new Error(
+          `DeepSeek API error ${response.status}: ${
+            providerErrorText || response.statusText
+          }`
+        );
+
+        if (
+          attempt < AI_RESPONSE_MAX_RETRIES &&
+          (response.status === 429 || response.status >= 500)
+        ) {
+          lastError = error;
+          console.warn("[AI Chat] DeepSeek retryable error:", error.message);
+          await sleep(500 * attempt);
+          continue;
+        }
+
+        throw error;
+      }
+
+      if (!response.body) {
+        throw new Error("DeepSeek API returned an empty streaming response.");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+
+        if (done) {
+          break;
+        }
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split(/\r?\n/);
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          const trimmedLine = line.trim();
+          if (!trimmedLine || !trimmedLine.startsWith("data:")) {
+            continue;
+          }
+
+          const data = trimmedLine.slice("data:".length).trim();
+          if (data === "[DONE]") {
+            return fullText;
+          }
+
+          try {
+            const parsed = JSON.parse(data) as {
+              choices?: Array<{
+                delta?: {
+                  content?: string | null;
+                  reasoning_content?: string | null;
+                };
+              }>;
+            };
+            const delta = parsed.choices?.[0]?.delta?.content;
+
+            if (typeof delta === "string" && delta.length > 0) {
+              emittedAnyChunk = true;
+              fullText += delta;
+              await onDelta(delta, fullText);
+            }
+          } catch (error) {
+            console.warn("[AI Chat] Ignored malformed DeepSeek SSE chunk:", {
+              data,
+              error,
+            });
+          }
+        }
+      }
+
+      if (buffer.trim()) {
+        console.warn("[AI Chat] DeepSeek stream ended with unprocessed data.");
+      }
+
+      if (fullText.trim()) {
+        return fullText;
+      }
+
+      throw new Error("DeepSeek returned an empty assistant response.");
+    } catch (error) {
+      lastError = error;
+
+      if (emittedAnyChunk) {
+        console.error("[AI Chat] Stream interrupted after partial output:", error);
+        return `${fullText.trim()}\n\n_Response interrupted. Please try again if you need the rest._`;
+      }
+
+      if (attempt < AI_RESPONSE_MAX_RETRIES) {
+        console.warn("[AI Chat] Retrying failed AI response:", error);
+        await sleep(500 * attempt);
+        continue;
+      }
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("DeepSeek response failed.");
+}
+
+async function storeAiReply({
+  messageId,
+  conversationId,
+  assistantUserId,
+  humanUserId,
+  text,
+  createdAt,
+}: {
+  messageId: mongoose.Types.ObjectId;
+  conversationId: mongoose.Types.ObjectId;
+  assistantUserId: mongoose.Types.ObjectId;
+  humanUserId: mongoose.Types.ObjectId;
+  text: string;
+  createdAt: Date;
+}) {
+  const encrypted = encryptChatText(text);
+
+  await mongoose.connection.db?.collection("messages").insertOne({
+    _id: messageId,
+    conversationId,
+    ...encrypted,
+    text,
+    senderId: assistantUserId,
+    receiverId: humanUserId,
+    createdAt,
+    read: false,
+    deliveredToUserIds: [assistantUserId, humanUserId],
+    readByUserIds: [assistantUserId],
+    starredByUserIds: [],
+    hiddenForUserIds: [],
+    deletedForUserIds: [],
+    type: "text",
+    isAI: true,
+    isStreaming: false,
+  });
+
+  await mongoose.connection.db?.collection("conversations").updateOne(
+    { _id: conversationId },
+    {
+      $set: {
+        updatedAt: createdAt,
+        isAI: true,
+        aiAssistantUserId: assistantUserId,
+      },
+    }
+  );
+}
+
+async function handleAiConversationMessage(
+  conversation: ConversationDoc | null,
+  humanMessage: SocketMessagePayload
+) {
+  if (
+    !conversation?.isAI ||
+    !humanMessage.id ||
+    !mongoose.Types.ObjectId.isValid(humanMessage.id) ||
+    !humanMessage.senderId
+  ) {
+    return;
+  }
+
+  const conversationId = toObjectId(conversation._id);
+  const humanUserId = toObjectId(humanMessage.senderId);
+  const assistantUserId =
+    toObjectId(conversation.aiAssistantUserId) ||
+    (conversation.participants || []).find(
+      (participant) => participant?.toString?.() !== humanMessage.senderId
+    );
+  const assistantObjectId = toObjectId(assistantUserId);
+
+  if (!conversationId || !humanUserId || !assistantObjectId) {
+    console.warn("[AI Chat] Missing AI conversation identifiers.", {
+      conversationId: conversation._id?.toString?.(),
+      senderId: humanMessage.senderId,
+      assistantUserId: conversation.aiAssistantUserId?.toString?.(),
+    });
+    return;
+  }
+
+  if (humanUserId.toString() === assistantObjectId.toString()) {
+    return;
+  }
+
+  const userText = (humanMessage.text || humanMessage.content || "").trim();
+  if (!userText) {
+    console.info("[AI Chat] Skipping AI reply for non-text/empty message.");
+    return;
+  }
+
+  const jobKey = humanMessage.id;
+  if (aiReplyJobs.has(jobKey)) {
+    console.info(`[AI Chat] Duplicate AI job ignored for message ${jobKey}.`);
+    return;
+  }
+
+  const humanMessageObjectId = new mongoose.Types.ObjectId(humanMessage.id);
+  const claimResult = await mongoose.connection.db?.collection("messages").updateOne(
+    {
+      _id: humanMessageObjectId,
+      $or: [
+        { aiReplyStatus: { $exists: false } },
+        { aiReplyStatus: "failed" },
+      ],
+    },
+    {
+      $set: {
+        aiReplyStatus: "processing",
+        aiReplyStartedAt: new Date(),
+      },
+      $unset: {
+        aiReplyError: "",
+      },
+    }
+  );
+
+  if (!claimResult?.matchedCount) {
+    console.info("[AI Chat] AI reply already claimed for message.", {
+      messageId: humanMessage.id,
+    });
+    return;
+  }
+
+  aiReplyJobs.add(jobKey);
+  const replyMessageId = new mongoose.Types.ObjectId();
+  const replyCreatedAt = new Date();
+  let finalText = "";
+
+  try {
+    console.info("[AI Chat] Starting AI reply job.", {
+      conversationId: conversationId.toString(),
+      humanMessageId: humanMessage.id,
+      humanUserId: humanUserId.toString(),
+      assistantUserId: assistantObjectId.toString(),
+    });
+
+    await mongoose.connection.db?.collection("messages").updateOne(
+      { _id: humanMessageObjectId },
+      {
+        $addToSet: {
+          deliveredToUserIds: assistantObjectId,
+          readByUserIds: assistantObjectId,
+        },
+      }
+    );
+
+    io.to(`user_${humanUserId.toString()}`).emit("message_delivered", {
+      messageId: humanMessage.id,
+      userIds: [assistantObjectId.toString()],
+    });
+    io.to(`user_${humanUserId.toString()}`).emit("message_read", {
+      messageId: humanMessage.id,
+      userId: assistantObjectId.toString(),
+    });
+
+    emitAiTypingState({
+      humanUserId,
+      assistantUserId: assistantObjectId,
+      conversationId,
+      isTyping: true,
+    });
+
+    const contextMessages = await buildAiContextMessages(
+      conversationId,
+      assistantObjectId
+    );
+
+    finalText = await streamDeepSeekReply(
+      contextMessages,
+      async (_delta, fullText) => {
+        finalText = fullText;
+        emitAiMessageToHuman(
+          humanUserId,
+          buildAiSocketMessagePayload({
+            messageId: replyMessageId,
+            conversationId,
+            assistantUserId: assistantObjectId,
+            humanUserId,
+            text: fullText,
+            createdAt: replyCreatedAt,
+            isStreaming: true,
+          })
+        );
+      }
+    );
+
+    finalText = finalText.trim() || AI_PROVIDER_FAILURE_MESSAGE;
+  } catch (error) {
+    console.error("[AI Chat] AI reply failed:", error);
+    emitAiErrorToHuman({ humanUserId, conversationId, error });
+    finalText = finalText.trim() || AI_PROVIDER_FAILURE_MESSAGE;
+  } finally {
+    emitAiTypingState({
+      humanUserId,
+      assistantUserId: assistantObjectId,
+      conversationId,
+      isTyping: false,
+    });
+  }
+
+  try {
+    await storeAiReply({
+      messageId: replyMessageId,
+      conversationId,
+      assistantUserId: assistantObjectId,
+      humanUserId,
+      text: finalText,
+      createdAt: replyCreatedAt,
+    });
+
+    await mongoose.connection.db?.collection("messages").updateOne(
+      { _id: humanMessageObjectId },
+      {
+        $set: {
+          aiReplyStatus: "completed",
+          aiReplyCompletedAt: new Date(),
+          aiReplyMessageId: replyMessageId,
+        },
+      }
+    );
+
+    emitAiMessageToHuman(
+      humanUserId,
+      buildAiSocketMessagePayload({
+        messageId: replyMessageId,
+        conversationId,
+        assistantUserId: assistantObjectId,
+        humanUserId,
+        text: finalText,
+        createdAt: replyCreatedAt,
+        isStreaming: false,
+      })
+    );
+
+    console.info("[AI Chat] AI reply stored and emitted.", {
+      conversationId: conversationId.toString(),
+      replyMessageId: replyMessageId.toString(),
+    });
+  } catch (error) {
+    console.error("[AI Chat] Failed to store/emit AI reply:", error);
+    await mongoose.connection.db?.collection("messages").updateOne(
+      { _id: humanMessageObjectId },
+      {
+        $set: {
+          aiReplyStatus: "failed",
+          aiReplyError: error instanceof Error ? error.message : "Unknown error",
+        },
+      }
+    );
+    emitAiErrorToHuman({ humanUserId, conversationId, error });
+  } finally {
+    aiReplyJobs.delete(jobKey);
+  }
+}
+
 mongoose.connect(mongoUri).then(() => {
   console.log("MongoDB connected");
   startBackgroundJobs();
@@ -374,6 +1032,15 @@ io.on("connection", (socket) => {
   socket.on("send_message", async (message: SocketMessagePayload) => {
     try {
       if (!message.senderId) {
+        return;
+      }
+
+      if (handshakeUserId && message.senderId !== handshakeUserId) {
+        console.warn("[Socket] Ignored message with mismatched sender.", {
+          socketId: socket.id,
+          handshakeUserId,
+          senderId: message.senderId,
+        });
         return;
       }
 
@@ -440,8 +1107,15 @@ io.on("connection", (socket) => {
         );
       }
 
+      const notificationRecipientIds = conversation?.isAI
+        ? recipientIds.filter(
+            (recipientId) =>
+              recipientId !== conversation.aiAssistantUserId?.toString?.()
+          )
+        : recipientIds;
+
       await Promise.all(
-        recipientIds.map((recipientId) =>
+        notificationRecipientIds.map((recipientId) =>
           pushNotificationToUser(recipientId, {
             type: "message",
             title: "New Message",
@@ -454,6 +1128,12 @@ io.on("connection", (socket) => {
           })
         )
       );
+
+      if (conversation?.isAI) {
+        void handleAiConversationMessage(conversation, message).catch((error) => {
+          console.error("[AI Chat] Unhandled AI reply job error:", error);
+        });
+      }
     } catch (error) {
       console.error("Push Error:", error);
     }

@@ -609,8 +609,18 @@ function ChatArea({
                             {(msg.text || msg.content) && (
                               <div className="break-words whitespace-pre-wrap">
                                 {renderMessageText(msg.text || msg.content || "")}
+                                {msg.isStreaming ? (
+                                  <span className="ml-1 inline-block h-4 w-1 animate-pulse rounded-full bg-current align-[-2px] opacity-70" />
+                                ) : null}
                               </div>
                             )}
+
+                            {msg.isStreaming && !(msg.text || msg.content) ? (
+                              <div className="flex items-center gap-2 text-sm opacity-80">
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                Thinking...
+                              </div>
+                            ) : null}
 
                             {/* Message timestamp and status */}
                             <div className="mt-1 flex items-center justify-end">

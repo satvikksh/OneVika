@@ -29,6 +29,46 @@ type ReceiverDoc = {
   isAI?: boolean;
 };
 
+const getSocketServerUrl = () =>
+  (
+    process.env.SOCKET_SERVER_URL ||
+    process.env.NEXT_PUBLIC_SOCKET_URL ||
+    "http://127.0.0.1:3001"
+  ).replace(/\/+$/, "");
+
+async function triggerAiReplyForSavedMessage(messageId: string) {
+  const socketServerUrl = getSocketServerUrl();
+  const internalSecret =
+    process.env.SOCKET_INTERNAL_SECRET || process.env.NEXTAUTH_SECRET || "";
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 2500);
+
+  try {
+    const response = await fetch(`${socketServerUrl}/internal/ai/reply`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(internalSecret
+          ? { Authorization: `Bearer ${internalSecret}` }
+          : {}),
+      },
+      body: JSON.stringify({ messageId }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok && response.status !== 204) {
+      console.warn("[AI Chat] Socket server declined AI reply trigger:", {
+        status: response.status,
+        statusText: response.statusText,
+      });
+    }
+  } catch (error) {
+    console.warn("[AI Chat] Unable to trigger AI reply from message API:", error);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 const getMessageTypeFromMime = (mimeType?: string | null) => {
   if (!mimeType) return "file" as const;
   if (mimeType.startsWith("image/")) return "image" as const;
@@ -284,6 +324,10 @@ export async function POST(req: NextRequest) {
       { _id: conversation._id },
       { $set: { updatedAt: createdAt } }
     );
+
+    if (isAiConversation && trimmedText) {
+      await triggerAiReplyForSavedMessage(result.insertedId.toString());
+    }
 
     return NextResponse.json({
       success: true,

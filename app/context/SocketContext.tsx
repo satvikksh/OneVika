@@ -317,6 +317,8 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
               : [userId],
             isStarred: Boolean(data.message.isStarred),
             isHidden: Boolean(data.message.isHidden),
+            isAI: Boolean(data.message.isAI),
+            isStreaming: Boolean(data.message.isStreaming),
           };
 
           // Replace optimistic temp message with saved DB message
@@ -521,12 +523,32 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
       removeMessage(messageId);
     });
 
+    socket.on(
+      "ai_response_error",
+      ({
+        conversationId,
+        message,
+        retryable,
+      }: {
+        conversationId?: string;
+        message?: string;
+        retryable?: boolean;
+      }) => {
+        console.warn("AI response failed:", {
+          conversationId,
+          message,
+          retryable,
+        });
+      }
+    );
+
     return () => {
       socket.off("receive_message");
       socket.off("message_sent");
       socket.off("message_delivered");
       socket.off("message_read");
       socket.off("message_deleted");
+      socket.off("ai_response_error");
     };
   }, [upsertMessage, userId, removeMessage]);
 
