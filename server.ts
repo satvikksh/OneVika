@@ -66,7 +66,7 @@ type StoredMessageDoc = {
   aiReplyStatus?: "processing" | "completed" | "failed";
 };
 
-type DeepSeekChatMessage = {
+type AiProviderChatMessage = {
   role: "system" | "user" | "assistant";
   content: string;
 };
@@ -76,11 +76,14 @@ const PREMIUM_REMINDER_WINDOW_MS = 24 * 60 * 60 * 1000;
 const BACKGROUND_JOB_INTERVAL_MS = Number(
   process.env.BACKGROUND_JOB_INTERVAL_MS || "300000"
 );
-const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
-const DEEPSEEK_BASE_URL = (
-  process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com"
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const OPENROUTER_BASE_URL = (
+  process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1"
 ).replace(/\/+$/, "");
-const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || "deepseek-v4-flash";
+const OPENROUTER_MODEL =
+  process.env.OPENROUTER_MODEL || "openai/gpt-oss-20b:free";
+const OPENROUTER_APP_TITLE =
+  process.env.OPENROUTER_APP_TITLE || "OrbitByte";
 const AI_CONTEXT_MESSAGE_LIMIT = Math.min(
   Math.max(Number(process.env.AI_CONTEXT_MESSAGE_LIMIT || "24"), 4),
   60
@@ -92,7 +95,7 @@ const AI_RESPONSE_MAX_RETRIES = Math.min(
 const AI_SYSTEM_PROMPT =
   process.env.AI_SYSTEM_PROMPT ||
   [
-    "You are Orbit AI, a helpful AI assistant inside the OrbitByte chat app.",
+    "You are Orbito AI, a helpful AI assistant inside the OrbitByte chat app.",
     "Answer clearly, conversationally, and safely.",
     "Use the recent chat history as context, but do not claim access to private data outside this conversation.",
     "If the user asks about OrbitByte features, be practical and developer-friendly.",
@@ -130,7 +133,44 @@ app.get("/", (_req, res) => {
   res.status(200).send("Socket server running");
 });
 
-app.post("/internal/ai/reply", express.json({ limit: "64kb" }), async (req, res) => {
+async function triggerAiReplyFromStoredMessage(messageId: string) {
+  const messageObjectId = new mongoose.Types.ObjectId(messageId);
+  const storedMessage = await mongoose.connection.db
+    ?.collection<StoredMessageDoc>("messages")
+    .findOne({ _id: messageObjectId });
+
+  if (!storedMessage) {
+    console.warn("[AI Chat] Internal AI reply trigger message not found.", {
+      messageId,
+    });
+    return;
+  }
+
+  const conversation = (await mongoose.connection.db
+    ?.collection<ConversationDoc>("conversations")
+    .findOne({ _id: storedMessage.conversationId })) as ConversationDoc | null;
+
+  if (!conversation?.isAI) {
+    return;
+  }
+
+  const text = readStoredMessageText(storedMessage);
+  await handleAiConversationMessage(conversation, {
+    id: storedMessage._id.toString(),
+    conversationId: storedMessage.conversationId.toString(),
+    senderId: storedMessage.senderId.toString(),
+    receiverId: storedMessage.receiverId?.toString?.() ?? "",
+    content: text,
+    text,
+    timestamp: storedMessage.createdAt?.toISOString?.() ?? new Date().toISOString(),
+    type: storedMessage.type ?? "text",
+    status: "sent",
+    isAI: Boolean(storedMessage.isAI),
+    isStreaming: Boolean(storedMessage.isStreaming),
+  });
+}
+
+app.post("/internal/ai/reply", express.json({ limit: "64kb" }), (req, res) => {
   try {
     if (
       INTERNAL_SOCKET_SECRET &&
@@ -146,43 +186,11 @@ app.post("/internal/ai/reply", express.json({ limit: "64kb" }), async (req, res)
       return;
     }
 
-    const messageObjectId = new mongoose.Types.ObjectId(messageId);
-    const storedMessage = await mongoose.connection.db
-      ?.collection<StoredMessageDoc>("messages")
-      .findOne({ _id: messageObjectId });
+    res.status(202).json({ started: true });
 
-    if (!storedMessage) {
-      res.status(404).json({ error: "Message not found" });
-      return;
-    }
-
-    const conversation = (await mongoose.connection.db
-      ?.collection<ConversationDoc>("conversations")
-      .findOne({ _id: storedMessage.conversationId })) as ConversationDoc | null;
-
-    if (!conversation?.isAI) {
-      res.status(204).end();
-      return;
-    }
-
-    const text = readStoredMessageText(storedMessage);
-    void handleAiConversationMessage(conversation, {
-      id: storedMessage._id.toString(),
-      conversationId: storedMessage.conversationId.toString(),
-      senderId: storedMessage.senderId.toString(),
-      receiverId: storedMessage.receiverId?.toString?.() ?? "",
-      content: text,
-      text,
-      timestamp: storedMessage.createdAt?.toISOString?.() ?? new Date().toISOString(),
-      type: storedMessage.type ?? "text",
-      status: "sent",
-      isAI: Boolean(storedMessage.isAI),
-      isStreaming: Boolean(storedMessage.isStreaming),
-    }).catch((error) => {
+    void triggerAiReplyFromStoredMessage(messageId).catch((error) => {
       console.error("[AI Chat] Internal AI reply trigger failed:", error);
     });
-
-    res.status(202).json({ started: true });
   } catch (error) {
     console.error("[AI Chat] Failed to accept internal AI reply trigger:", error);
     res.status(500).json({ error: "Failed to trigger AI reply" });
@@ -497,7 +505,7 @@ const readStoredMessageText = (message: StoredMessageDoc) => {
 async function buildAiContextMessages(
   conversationId: mongoose.Types.ObjectId,
   assistantUserId: mongoose.Types.ObjectId
-): Promise<DeepSeekChatMessage[]> {
+): Promise<AiProviderChatMessage[]> {
   const rawMessages = await mongoose.connection.db
     ?.collection<StoredMessageDoc>("messages")
     .find({
@@ -510,7 +518,7 @@ async function buildAiContextMessages(
 
   const contextMessages = (rawMessages || [])
     .reverse()
-    .map((message): DeepSeekChatMessage | null => {
+    .map((message): AiProviderChatMessage | null => {
       const content = readStoredMessageText(message);
       if (!content) return null;
 
@@ -522,7 +530,7 @@ async function buildAiContextMessages(
         content,
       };
     })
-    .filter((message): message is DeepSeekChatMessage => Boolean(message));
+    .filter((message): message is AiProviderChatMessage => Boolean(message));
 
   return [{ role: "system", content: AI_SYSTEM_PROMPT }, ...contextMessages];
 }
@@ -608,12 +616,12 @@ function emitAiErrorToHuman({
   });
 }
 
-async function streamDeepSeekReply(
-  messages: DeepSeekChatMessage[],
+async function streamOpenRouterReply(
+  messages: AiProviderChatMessage[],
   onDelta: (delta: string, fullText: string) => Promise<void> | void
 ) {
-  if (!DEEPSEEK_API_KEY) {
-    throw new Error("DEEPSEEK_API_KEY is not configured on the socket server.");
+  if (!OPENROUTER_API_KEY) {
+    throw new Error("OPENROUTER_API_KEY is not configured on the socket server.");
   }
 
   let lastError: unknown = null;
@@ -624,19 +632,22 @@ async function streamDeepSeekReply(
 
     try {
       console.info(
-        `[AI Chat] Calling DeepSeek (${DEEPSEEK_MODEL}), attempt ${attempt}/${AI_RESPONSE_MAX_RETRIES}`
+        `[AI Chat] Calling OpenRouter (${OPENROUTER_MODEL}), attempt ${attempt}/${AI_RESPONSE_MAX_RETRIES}`
       );
 
-      const response = await fetch(`${DEEPSEEK_BASE_URL}/chat/completions`, {
+      const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+          "HTTP-Referer": APP_URL,
+          "X-OpenRouter-Title": OPENROUTER_APP_TITLE,
         },
         body: JSON.stringify({
-          model: DEEPSEEK_MODEL,
+          model: OPENROUTER_MODEL,
           messages,
-          thinking: { type: "disabled" },
+          max_tokens: Number(process.env.OPENROUTER_MAX_TOKENS || "1200"),
+          temperature: Number(process.env.OPENROUTER_TEMPERATURE || "0.7"),
           stream: true,
         }),
       });
@@ -644,7 +655,7 @@ async function streamDeepSeekReply(
       if (!response.ok) {
         const providerErrorText = await response.text().catch(() => "");
         const error = new Error(
-          `DeepSeek API error ${response.status}: ${
+          `OpenRouter API error ${response.status}: ${
             providerErrorText || response.statusText
           }`
         );
@@ -654,7 +665,7 @@ async function streamDeepSeekReply(
           (response.status === 429 || response.status >= 500)
         ) {
           lastError = error;
-          console.warn("[AI Chat] DeepSeek retryable error:", error.message);
+          console.warn("[AI Chat] OpenRouter retryable error:", error.message);
           await sleep(500 * attempt);
           continue;
         }
@@ -663,7 +674,7 @@ async function streamDeepSeekReply(
       }
 
       if (!response.body) {
-        throw new Error("DeepSeek API returned an empty streaming response.");
+        throw new Error("OpenRouter API returned an empty streaming response.");
       }
 
       const reader = response.body.getReader();
@@ -709,7 +720,7 @@ async function streamDeepSeekReply(
               await onDelta(delta, fullText);
             }
           } catch (error) {
-            console.warn("[AI Chat] Ignored malformed DeepSeek SSE chunk:", {
+            console.warn("[AI Chat] Ignored malformed OpenRouter SSE chunk:", {
               data,
               error,
             });
@@ -718,14 +729,14 @@ async function streamDeepSeekReply(
       }
 
       if (buffer.trim()) {
-        console.warn("[AI Chat] DeepSeek stream ended with unprocessed data.");
+        console.warn("[AI Chat] OpenRouter stream ended with unprocessed data.");
       }
 
       if (fullText.trim()) {
         return fullText;
       }
 
-      throw new Error("DeepSeek returned an empty assistant response.");
+      throw new Error("OpenRouter returned an empty assistant response.");
     } catch (error) {
       lastError = error;
 
@@ -744,7 +755,7 @@ async function streamDeepSeekReply(
 
   throw lastError instanceof Error
     ? lastError
-    : new Error("DeepSeek response failed.");
+    : new Error("OpenRouter response failed.");
 }
 
 async function storeAiReply({
@@ -913,7 +924,7 @@ async function handleAiConversationMessage(
       assistantObjectId
     );
 
-    finalText = await streamDeepSeekReply(
+    finalText = await streamOpenRouterReply(
       contextMessages,
       async (_delta, fullText) => {
         finalText = fullText;

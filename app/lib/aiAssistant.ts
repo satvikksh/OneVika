@@ -9,7 +9,7 @@ export const AI_ASSISTANT_EMAIL = (
   process.env.AI_ASSISTANT_EMAIL || "deepseek-assistant@orbitbyte.ai"
 ).toLowerCase();
 export const AI_ASSISTANT_NAME =
-  process.env.AI_ASSISTANT_NAME || "Orbit AI";
+  process.env.AI_ASSISTANT_NAME || "Orbito AI";
 export const AI_ASSISTANT_AVATAR =
   process.env.AI_ASSISTANT_AVATAR || "/icons/deepseek-ai.svg";
 

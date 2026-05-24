@@ -29,19 +29,28 @@ type ReceiverDoc = {
   isAI?: boolean;
 };
 
-const getSocketServerUrl = () =>
-  (
-    process.env.SOCKET_SERVER_URL ||
-    process.env.NEXT_PUBLIC_SOCKET_URL ||
-    "http://127.0.0.1:3001"
-  ).replace(/\/+$/, "");
+const getSocketServerUrl = () => {
+  if (process.env.SOCKET_SERVER_URL) {
+    return process.env.SOCKET_SERVER_URL.replace(/\/+$/, "");
+  }
+
+  if (process.env.NODE_ENV !== "production" && process.env.PORT) {
+    return `http://127.0.0.1:${process.env.PORT}`;
+  }
+
+  return (process.env.NEXT_PUBLIC_SOCKET_URL || "http://127.0.0.1:3001").replace(
+    /\/+$/,
+    ""
+  );
+};
 
 async function triggerAiReplyForSavedMessage(messageId: string) {
   const socketServerUrl = getSocketServerUrl();
   const internalSecret =
     process.env.SOCKET_INTERNAL_SECRET || process.env.NEXTAUTH_SECRET || "";
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 2500);
+  const timeoutMs = Number(process.env.AI_TRIGGER_TIMEOUT_MS || "10000");
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await fetch(`${socketServerUrl}/internal/ai/reply`, {
@@ -58,12 +67,18 @@ async function triggerAiReplyForSavedMessage(messageId: string) {
 
     if (!response.ok && response.status !== 204) {
       console.warn("[AI Chat] Socket server declined AI reply trigger:", {
+        socketServerUrl,
         status: response.status,
         statusText: response.statusText,
       });
     }
   } catch (error) {
-    console.warn("[AI Chat] Unable to trigger AI reply from message API:", error);
+    console.warn("[AI Chat] Unable to trigger AI reply from message API:", {
+      socketServerUrl,
+      timeoutMs,
+      name: error instanceof Error ? error.name : "UnknownError",
+      message: error instanceof Error ? error.message : String(error),
+    });
   } finally {
     clearTimeout(timeout);
   }
