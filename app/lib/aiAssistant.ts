@@ -6,7 +6,7 @@ import { dbConnect, getNativeDb } from "./mongodb";
 const { ObjectId } = mongoose.Types;
 
 export const AI_ASSISTANT_EMAIL = (
-  process.env.AI_ASSISTANT_EMAIL || "deepseek-assistant@orbitbyte.ai"
+  process.env.AI_ASSISTANT_EMAIL || "orbito-assistant@orbitbyte.ai"
 ).toLowerCase();
 export const AI_ASSISTANT_NAME =
   process.env.AI_ASSISTANT_NAME || "Orbito AI";
