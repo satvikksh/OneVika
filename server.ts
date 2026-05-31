@@ -79,9 +79,20 @@ const BACKGROUND_JOB_INTERVAL_MS = Number(
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_BASE_URL = (
   process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1"
-).replace(/\/+$/, "");
+)
+  .replace(/\/chat\/completions\/?$/, "")
+  .replace(/\/+$/, "");
 const OPENROUTER_MODEL =
-  process.env.OPENROUTER_MODEL || "openai/gpt-oss-20b:free";
+  process.env.OPENROUTER_MODEL || "deepseek/deepseek-v4-flash:free";
+const OPENROUTER_FALLBACK_MODELS = (
+  process.env.OPENROUTER_FALLBACK_MODELS || "openai/gpt-oss-20b:free"
+)
+  .split(",")
+  .map((model) => model.trim())
+  .filter(Boolean);
+const OPENROUTER_MODELS = Array.from(
+  new Set([OPENROUTER_MODEL, ...OPENROUTER_FALLBACK_MODELS])
+);
 const OPENROUTER_APP_TITLE =
   process.env.OPENROUTER_APP_TITLE || "OrbitByte";
 const AI_CONTEXT_MESSAGE_LIMIT = Math.min(
@@ -89,19 +100,25 @@ const AI_CONTEXT_MESSAGE_LIMIT = Math.min(
   60
 );
 const AI_RESPONSE_MAX_RETRIES = Math.min(
-  Math.max(Number(process.env.AI_RESPONSE_MAX_RETRIES || "2"), 1),
+  Math.max(Number(process.env.AI_RESPONSE_MAX_RETRIES || "3"), 1),
   3
 );
 const AI_SYSTEM_PROMPT =
   process.env.AI_SYSTEM_PROMPT ||
   [
-    "You are Orbito AI, a helpful AI assistant inside the OrbitByte chat app.",
-    "Answer clearly, conversationally, and safely.",
+    "You are Orbito AI's assistant.",
+    "Always provide responses in a professional, well-structured, and visually organized format.",
+    "Use clear headings, subheadings, bullet points, numbered lists, markdown tables for comparisons, bold emphasis for important points, and code blocks for commands, code, configurations, and technical examples.",
+    "Maintain a professional, friendly, informative tone and prioritize accuracy and clarity.",
+    "For technical questions, provide step-by-step solutions.",
+    "For comparisons, recommendations, features, pros/cons, specifications, pricing, or differences, use structured markdown tables and include a final recommendation section.",
+    "If a user asks who founded, owns, or created Orbito AI, OrbitByte, or asks a similar company-related question, clearly state that Satvik Kushwaha is the founder of Orbito AI and OrbitByte. Do not repeat one fixed sentence every time; answer naturally in your own words and add a brief, professional description of Orbito AI or OrbitByte when helpful.",
     "Use the recent chat history as context, but do not claim access to private data outside this conversation.",
-    "If the user asks about OrbitByte features, be practical and developer-friendly.",
   ].join(" ");
 const AI_PROVIDER_FAILURE_MESSAGE =
   "I’m connected, but I couldn’t get a response from the AI provider right now. Please try again in a moment.";
+const AI_PROVIDER_RATE_LIMIT_MESSAGE =
+  "The free AI providers are temporarily rate-limited right now. Please try again in a moment.";
 const INTERNAL_SOCKET_SECRET =
   process.env.SOCKET_INTERNAL_SECRET || process.env.NEXTAUTH_SECRET || "";
 
@@ -378,6 +395,7 @@ async function claimNextPremiumReminderCandidate() {
       new: true,
       sort: { premiumExpiresAt: 1 },
       lean: true,
+      updatePipeline: true,
     }
   );
 }
@@ -472,6 +490,54 @@ const sleep = (ms: number) =>
   new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
+
+function getOpenRouterRetryDelayMs(
+  response: Response,
+  providerErrorText: string,
+  attempt: number
+) {
+  const retryAfterHeader = response.headers.get("retry-after");
+  const retryAfterSeconds = Number(retryAfterHeader);
+
+  if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
+    return Math.min(retryAfterSeconds * 1000, 15000);
+  }
+
+  try {
+    const parsed = JSON.parse(providerErrorText) as {
+      error?: {
+        metadata?: {
+          retry_after_seconds?: number;
+          retry_after_seconds_raw?: number;
+        };
+      };
+    };
+    const retryAfter =
+      parsed.error?.metadata?.retry_after_seconds_raw ??
+      parsed.error?.metadata?.retry_after_seconds;
+
+    if (Number.isFinite(retryAfter) && retryAfter > 0) {
+      return Math.min(retryAfter * 1000, 15000);
+    }
+  } catch {
+    // Some provider errors are plain text; fall back to a short backoff.
+  }
+
+  return 500 * attempt;
+}
+
+function getAiProviderFailureMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+
+  if (
+    message.includes("OpenRouter API error 429") ||
+    message.toLowerCase().includes("rate-limited")
+  ) {
+    return AI_PROVIDER_RATE_LIMIT_MESSAGE;
+  }
+
+  return AI_PROVIDER_FAILURE_MESSAGE;
+}
 
 const toObjectId = (id?: string | mongoose.Types.ObjectId | null) => {
   const value = id?.toString?.();
@@ -626,129 +692,145 @@ async function streamOpenRouterReply(
 
   let lastError: unknown = null;
 
-  for (let attempt = 1; attempt <= AI_RESPONSE_MAX_RETRIES; attempt += 1) {
-    let fullText = "";
-    let emittedAnyChunk = false;
+  for (const model of OPENROUTER_MODELS) {
+    for (let attempt = 1; attempt <= AI_RESPONSE_MAX_RETRIES; attempt += 1) {
+      let fullText = "";
+      let emittedAnyChunk = false;
 
-    try {
-      console.info(
-        `[AI Chat] Calling OpenRouter (${OPENROUTER_MODEL}), attempt ${attempt}/${AI_RESPONSE_MAX_RETRIES}`
-      );
-
-      const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-          "HTTP-Referer": APP_URL,
-          "X-OpenRouter-Title": OPENROUTER_APP_TITLE,
-        },
-        body: JSON.stringify({
-          model: OPENROUTER_MODEL,
-          messages,
-          max_tokens: Number(process.env.OPENROUTER_MAX_TOKENS || "1200"),
-          temperature: Number(process.env.OPENROUTER_TEMPERATURE || "0.7"),
-          stream: true,
-        }),
-      });
-
-      if (!response.ok) {
-        const providerErrorText = await response.text().catch(() => "");
-        const error = new Error(
-          `OpenRouter API error ${response.status}: ${
-            providerErrorText || response.statusText
-          }`
+      try {
+        console.info(
+          `[AI Chat] Calling OpenRouter (${model}), attempt ${attempt}/${AI_RESPONSE_MAX_RETRIES}`
         );
 
-        if (
-          attempt < AI_RESPONSE_MAX_RETRIES &&
-          (response.status === 429 || response.status >= 500)
-        ) {
-          lastError = error;
-          console.warn("[AI Chat] OpenRouter retryable error:", error.message);
-          await sleep(500 * attempt);
-          continue;
-        }
+        const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+            "HTTP-Referer": APP_URL,
+            "X-OpenRouter-Title": OPENROUTER_APP_TITLE,
+          },
+          body: JSON.stringify({
+            model,
+            messages,
+            max_tokens: Number(process.env.OPENROUTER_MAX_TOKENS || "1200"),
+            temperature: Number(process.env.OPENROUTER_TEMPERATURE || "0.7"),
+            stream: true,
+          }),
+        });
 
-        throw error;
-      }
+        if (!response.ok) {
+          const providerErrorText = await response.text().catch(() => "");
+          const error = new Error(
+            `OpenRouter API error ${response.status} from ${model}: ${
+              providerErrorText || response.statusText
+            }`
+          );
 
-      if (!response.body) {
-        throw new Error("OpenRouter API returned an empty streaming response.");
-      }
+          if (response.status === 429 && model !== OPENROUTER_MODELS.at(-1)) {
+            lastError = error;
+            console.warn("[AI Chat] OpenRouter model rate-limited, trying fallback:", {
+              model,
+              error: error.message,
+            });
+            break;
+          }
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-
-        if (done) {
-          break;
-        }
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split(/\r?\n/);
-        buffer = lines.pop() ?? "";
-
-        for (const line of lines) {
-          const trimmedLine = line.trim();
-          if (!trimmedLine || !trimmedLine.startsWith("data:")) {
+          if (
+            attempt < AI_RESPONSE_MAX_RETRIES &&
+            (response.status === 429 || response.status >= 500)
+          ) {
+            lastError = error;
+            const retryDelayMs = getOpenRouterRetryDelayMs(
+              response,
+              providerErrorText,
+              attempt
+            );
+            console.warn("[AI Chat] OpenRouter retryable error:", error.message);
+            await sleep(retryDelayMs);
             continue;
           }
 
-          const data = trimmedLine.slice("data:".length).trim();
-          if (data === "[DONE]") {
-            return fullText;
+          throw error;
+        }
+
+        if (!response.body) {
+          throw new Error("OpenRouter API returned an empty streaming response.");
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+
+          if (done) {
+            break;
           }
 
-          try {
-            const parsed = JSON.parse(data) as {
-              choices?: Array<{
-                delta?: {
-                  content?: string | null;
-                  reasoning_content?: string | null;
-                };
-              }>;
-            };
-            const delta = parsed.choices?.[0]?.delta?.content;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split(/\r?\n/);
+          buffer = lines.pop() ?? "";
 
-            if (typeof delta === "string" && delta.length > 0) {
-              emittedAnyChunk = true;
-              fullText += delta;
-              await onDelta(delta, fullText);
+          for (const line of lines) {
+            const trimmedLine = line.trim();
+            if (!trimmedLine || !trimmedLine.startsWith("data:")) {
+              continue;
             }
-          } catch (error) {
-            console.warn("[AI Chat] Ignored malformed OpenRouter SSE chunk:", {
-              data,
-              error,
-            });
+
+            const data = trimmedLine.slice("data:".length).trim();
+            if (data === "[DONE]") {
+              return fullText;
+            }
+
+            try {
+              const parsed = JSON.parse(data) as {
+                choices?: Array<{
+                  delta?: {
+                    content?: string | null;
+                    reasoning_content?: string | null;
+                  };
+                }>;
+              };
+              const delta = parsed.choices?.[0]?.delta?.content;
+
+              if (typeof delta === "string" && delta.length > 0) {
+                emittedAnyChunk = true;
+                fullText += delta;
+                await onDelta(delta, fullText);
+              }
+            } catch (error) {
+              console.warn("[AI Chat] Ignored malformed OpenRouter SSE chunk:", {
+                data,
+                error,
+              });
+            }
           }
         }
-      }
 
-      if (buffer.trim()) {
-        console.warn("[AI Chat] OpenRouter stream ended with unprocessed data.");
-      }
+        if (buffer.trim()) {
+          console.warn("[AI Chat] OpenRouter stream ended with unprocessed data.");
+        }
 
-      if (fullText.trim()) {
-        return fullText;
-      }
+        if (fullText.trim()) {
+          return fullText;
+        }
 
-      throw new Error("OpenRouter returned an empty assistant response.");
-    } catch (error) {
-      lastError = error;
+        throw new Error("OpenRouter returned an empty assistant response.");
+      } catch (error) {
+        lastError = error;
 
-      if (emittedAnyChunk) {
-        console.error("[AI Chat] Stream interrupted after partial output:", error);
-        return `${fullText.trim()}\n\n_Response interrupted. Please try again if you need the rest._`;
-      }
+        if (emittedAnyChunk) {
+          console.error("[AI Chat] Stream interrupted after partial output:", error);
+          return `${fullText.trim()}\n\n_Response interrupted. Please try again if you need the rest._`;
+        }
 
-      if (attempt < AI_RESPONSE_MAX_RETRIES) {
-        console.warn("[AI Chat] Retrying failed AI response:", error);
-        await sleep(500 * attempt);
-        continue;
+        if (attempt < AI_RESPONSE_MAX_RETRIES) {
+          console.warn("[AI Chat] Retrying failed AI response:", error);
+          await sleep(500 * attempt);
+          continue;
+        }
       }
     }
   }
@@ -947,7 +1029,7 @@ async function handleAiConversationMessage(
   } catch (error) {
     console.error("[AI Chat] AI reply failed:", error);
     emitAiErrorToHuman({ humanUserId, conversationId, error });
-    finalText = finalText.trim() || AI_PROVIDER_FAILURE_MESSAGE;
+    finalText = finalText.trim() || getAiProviderFailureMessage(error);
   } finally {
     emitAiTypingState({
       humanUserId,

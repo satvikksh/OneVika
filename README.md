@@ -69,7 +69,7 @@ OrbitByte brings together the core building blocks of a production-grade social 
 | Authentication | NextAuth.js, bcryptjs, Google OAuth |
 | Database | MongoDB, Mongoose |
 | Realtime | Socket.IO, Socket.IO Client |
-| AI/API | DeepSeek/OpenAI-compatible backend API integration |
+| AI/API | Qwen/OpenAI-compatible backend API integration |
 | Charts & Analytics | Recharts, D3 |
 | Media | Cloudinary, Multer |
 | Notifications | Firebase Admin, Firebase Client SDK |
