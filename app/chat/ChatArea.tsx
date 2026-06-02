@@ -9,11 +9,14 @@ import {
   Check,
   CheckCheck,
   ChevronDown,
+  Clock,
+  Edit3,
   FileText,
   Loader2,
   Paperclip,
   Send,
   Smile,
+  Trash2,
   X,
 } from "lucide-react";
 
@@ -70,7 +73,15 @@ interface ChatAreaProps {
   session: Session | null;
   isMobile: boolean;
   handleKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
-  onSendMessage: () => void;
+  onSendMessage: (schedule?: {
+    scheduleMode: "now" | "delay" | "later";
+    delayMs?: number;
+    scheduledFor?: string;
+  }) => void;
+  onEditScheduledMessage: (message: Message) => void;
+  onRescheduleMessage: (message: Message) => void;
+  onCancelScheduledMessage: (message: Message) => void;
+  onDeleteScheduledMessage: (message: Message) => void;
   isConnected?: boolean; // Optional for connection status
   isChatBlocked?: boolean;
   isPeerTyping?: boolean;
@@ -202,7 +213,7 @@ const MessageStatusIndicator = ({
   status,
   isCurrentUser,
 }: {
-  status?: "sending" | "sent" | "delivered" | "read";
+  status?: "sending" | "scheduled" | "sent" | "delivered" | "read" | "failed";
   isCurrentUser: boolean;
 }) => {
   
@@ -213,6 +224,16 @@ const MessageStatusIndicator = ({
       {status === 'sending' && (
         <div className="flex items-center text-sky-600">
           <Check size={12} />
+        </div>
+      )}
+      {status === 'scheduled' && (
+        <div className="flex items-center text-violet-100">
+          <Clock size={12} />
+        </div>
+      )}
+      {status === 'failed' && (
+        <div className="flex items-center text-red-200">
+          <X size={12} />
         </div>
       )}
       {status === 'sent' && (
@@ -279,6 +300,10 @@ function ChatArea({
   isMobile,
   handleKeyDown,
   onSendMessage,
+  onEditScheduledMessage,
+  onRescheduleMessage,
+  onCancelScheduledMessage,
+  onDeleteScheduledMessage,
   isConnected = true, // Default to true for backward compatibility
   isChatBlocked = false,
   isPeerTyping = false,
@@ -300,6 +325,15 @@ function ChatArea({
     clientHeight: 0,
   });
   const [pressedMessageId, setPressedMessageId] = React.useState<string | null>(null);
+  const [now, setNow] = React.useState(() => Date.now());
+  const [scheduleMode, setScheduleMode] = React.useState<"now" | "delay" | "later">("now");
+  const [delayMs, setDelayMs] = React.useState(60_000);
+  const [customDateTime, setCustomDateTime] = React.useState("");
+
+  React.useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   // Handle enter key for sending
   const handleKeyDownOverride = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -308,7 +342,31 @@ function ChatArea({
 
   // Handle send button click
   const handleSendClick = () => {
-    onSendMessage();
+    const schedule =
+      scheduleMode === "now"
+        ? { scheduleMode: "now" as const }
+        : scheduleMode === "delay"
+          ? { scheduleMode: "delay" as const, delayMs }
+          : {
+              scheduleMode: "later" as const,
+              scheduledFor: customDateTime
+                ? new Date(customDateTime).toISOString()
+                : undefined,
+            };
+    onSendMessage(schedule);
+  };
+
+  const formatCountdown = (scheduledFor?: string | Date) => {
+    if (!scheduledFor) return "";
+    const target = new Date(scheduledFor).getTime();
+    const diff = Math.max(0, target - now);
+    const totalSeconds = Math.ceil(diff / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    if (minutes > 0) return `${minutes}m ${seconds}s`;
+    return `${seconds}s`;
   };
 
   const captureScrollMetrics = useCallback(() => {
@@ -473,6 +531,11 @@ function ChatArea({
                   const isSelected = selectedMessageIdSet.has(msg.id);
                   const hasAttachment = Boolean(msg.attachments?.[0]?.url);
                   const hasText = Boolean(msg.text || msg.content);
+                  const isScheduledMessage =
+                    msg.status === "scheduled" ||
+                    ["pending", "processing", "cancelled"].includes(
+                      msg.scheduledStatus ?? ""
+                    );
                   const bubbleBaseClasses = isCurrentUser
                     ? "bg-blue-600 text-white rounded-br-none"
                     : "bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-white rounded-bl-none";
@@ -542,6 +605,8 @@ function ChatArea({
                             className={`rounded-2xl ${
                               hasAttachment && !hasText ? "px-2 py-2" : "px-4 py-3"
                             } ${hiddenBubbleClasses} ${msg.status === 'sending' ? 'opacity-80' : ''} ${
+                              isScheduledMessage ? "border border-violet-300/70 bg-violet-600 text-white" : ""
+                            } ${
                               pressedMessageId === msg.id ? "ring-2 ring-blue-400/60" : ""
                             } ${
                               isSelected
@@ -598,6 +663,20 @@ function ChatArea({
                               </div>
                             ) : null}
 
+                            {isScheduledMessage ? (
+                              <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-violet-100">
+                                <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-1">
+                                  <Clock size={12} />
+                                  Scheduled
+                                </span>
+                                {msg.scheduledStatus === "cancelled" ? (
+                                  <span>Cancelled</span>
+                                ) : (
+                                  <span>{formatCountdown(msg.scheduledFor)} left</span>
+                                )}
+                              </div>
+                            ) : null}
+
                             {/* Reply indicator */}
                             {msg.replyToId && (
                               <div className="mb-2 rounded-lg border-l-4 border-blue-400 bg-black/10 p-2 dark:bg-white/10">
@@ -625,7 +704,11 @@ function ChatArea({
                             {/* Message timestamp and status */}
                             <div className="mt-1 flex items-center justify-end">
                               <span className="mr-2 text-xs opacity-75">
-                                {new Date(msg.timestamp).toLocaleTimeString([], {
+                                {new Date(
+                                  isScheduledMessage && msg.scheduledFor
+                                    ? msg.scheduledFor
+                                    : msg.timestamp
+                                ).toLocaleTimeString([], {
                                   hour: '2-digit',
                                   minute: '2-digit',
                                   hour12: true
@@ -641,6 +724,47 @@ function ChatArea({
                               )}
                             </div>
                           </div>
+
+                          {isCurrentUser && isScheduledMessage ? (
+                            <div className="mt-1 flex flex-wrap justify-end gap-1 text-xs">
+                              {msg.scheduledStatus !== "cancelled" ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => onEditScheduledMessage(msg)}
+                                    className="inline-flex items-center gap-1 rounded-full border border-violet-200 px-2 py-1 text-violet-700 hover:bg-violet-50 dark:border-violet-800 dark:text-violet-200 dark:hover:bg-violet-950"
+                                  >
+                                    <Edit3 size={12} />
+                                    Edit
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => onRescheduleMessage(msg)}
+                                    className="inline-flex items-center gap-1 rounded-full border border-violet-200 px-2 py-1 text-violet-700 hover:bg-violet-50 dark:border-violet-800 dark:text-violet-200 dark:hover:bg-violet-950"
+                                  >
+                                    <Clock size={12} />
+                                    Reschedule
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => onCancelScheduledMessage(msg)}
+                                    className="inline-flex items-center gap-1 rounded-full border border-amber-200 px-2 py-1 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-200 dark:hover:bg-amber-950"
+                                  >
+                                    <X size={12} />
+                                    Cancel
+                                  </button>
+                                </>
+                              ) : null}
+                              <button
+                                type="button"
+                                onClick={() => onDeleteScheduledMessage(msg)}
+                                className="inline-flex items-center gap-1 rounded-full border border-red-200 px-2 py-1 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-200 dark:hover:bg-red-950"
+                              >
+                                <Trash2 size={12} />
+                                Delete
+                              </button>
+                            </div>
+                          ) : null}
 
                           {/* Dropdown Arrow (only shows on hover) */}
                           {!isMobile && !isSelectionMode && (hoveredMessageId === msg.id || activeDropdownId === msg.id) && (
@@ -728,6 +852,43 @@ function ChatArea({
           
           {/* Input Form */}
           <div className="p-4">
+            {!isSelectionMode && !isChatBlocked ? (
+              <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
+                <select
+                  value={scheduleMode}
+                  onChange={(event) =>
+                    setScheduleMode(event.target.value as "now" | "delay" | "later")
+                  }
+                  className="rounded-lg border border-gray-300 bg-white px-2 py-2 text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
+                >
+                  <option value="now">Send Now</option>
+                  <option value="delay">Send After Delay</option>
+                  <option value="later">Schedule for Later</option>
+                </select>
+                {scheduleMode === "delay" ? (
+                  <select
+                    value={delayMs}
+                    onChange={(event) => setDelayMs(Number(event.target.value))}
+                    className="rounded-lg border border-gray-300 bg-white px-2 py-2 text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
+                  >
+                    <option value={60_000}>1 minute</option>
+                    <option value={120_000}>2 minutes</option>
+                    <option value={300_000}>5 minutes</option>
+                    <option value={600_000}>10 minutes</option>
+                    <option value={1_800_000}>30 minutes</option>
+                    <option value={3_600_000}>1 hour</option>
+                  </select>
+                ) : null}
+                {scheduleMode === "later" ? (
+                  <input
+                    type="datetime-local"
+                    value={customDateTime}
+                    onChange={(event) => setCustomDateTime(event.target.value)}
+                    className="rounded-lg border border-gray-300 bg-white px-2 py-2 text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
+                  />
+                ) : null}
+              </div>
+            ) : null}
             <div className="flex items-end space-x-3">
               {/* Left Sidebar for additional actions */}
               <div className="flex items-center space-x-2">
@@ -854,14 +1015,22 @@ function ChatArea({
                 <button
                   type="button"
                   onClick={handleSendClick}
-                  disabled={isComposerDisabled || sendingMessage || (!newMessage.trim() && !pendingAttachment) || (isConnected !== undefined && !isConnected)}
+                  disabled={
+                    isComposerDisabled ||
+                    sendingMessage ||
+                    (!newMessage.trim() && !pendingAttachment) ||
+                    (scheduleMode === "later" && !customDateTime) ||
+                    (isConnected !== undefined && !isConnected)
+                  }
                   className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg flex items-center justify-center"
                   style={{ minHeight: '44px', minWidth: '44px' }}
                 >
                   {sendingMessage ? (
                     <Loader2 className="h-5 w-5 animate-spin" />
-                  ) : (
+                  ) : scheduleMode === "now" ? (
                     <Send size={20} />
+                  ) : (
+                    <Clock size={20} />
                   )}
                 </button>
               </div>

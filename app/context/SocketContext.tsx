@@ -17,6 +17,9 @@ import { ChatAttachment, Message } from "../types/socket";
 type OutgoingMessageInput = Partial<Message> & {
   file?: File | null;
   attachments?: ChatAttachment[];
+  scheduleMode?: "now" | "delay" | "later";
+  delayMs?: number;
+  scheduledFor?: string;
 };
 
 interface SocketContextType {
@@ -99,6 +102,11 @@ const messagesAreEqual = (left: Message, right: Message) =>
   left.isHidden === right.isHidden &&
   left.isAI === right.isAI &&
   left.isStreaming === right.isStreaming &&
+  String(left.scheduledFor ?? "") === String(right.scheduledFor ?? "") &&
+  left.scheduledStatus === right.scheduledStatus &&
+  left.scheduledAttempts === right.scheduledAttempts &&
+  left.scheduledLastError === right.scheduledLastError &&
+  String(left.sentAt ?? "") === String(right.sentAt ?? "") &&
   stringListsAreEqual(left.deliveredToUserIds, right.deliveredToUserIds) &&
   stringListsAreEqual(left.readByUserIds, right.readByUserIds) &&
   attachmentsAreEqual(left.attachments, right.attachments);
@@ -209,7 +217,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
         chatId: message.chatId ?? message.conversationId,
         conversationId: message.conversationId,
         timestamp: new Date().toISOString(),
-        status: "sending",
+        status: message.scheduleMode && message.scheduleMode !== "now" ? "scheduled" : "sending",
         type:
           attachments[0]?.type ??
           (pendingFile
@@ -247,6 +255,11 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
         readByUserIds: [userId],
         isStarred: false,
         isHidden: false,
+        scheduledFor: message.scheduledFor,
+        scheduledStatus:
+          message.scheduleMode && message.scheduleMode !== "now" ? "pending" : undefined,
+        scheduledAttempts:
+          message.scheduleMode && message.scheduleMode !== "now" ? 0 : undefined,
       };
 
       upsertMessage(tempMessage);
@@ -269,6 +282,15 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
             if (message.replyToId) {
               formData.append("replyToId", message.replyToId);
             }
+            if (message.scheduleMode && message.scheduleMode !== "now") {
+              formData.append("scheduleMode", message.scheduleMode);
+              if (typeof message.delayMs === "number") {
+                formData.append("delayMs", String(message.delayMs));
+              }
+              if (message.scheduledFor) {
+                formData.append("scheduledFor", message.scheduledFor);
+              }
+            }
             formData.append("file", pendingFile);
 
             res = await fetch("/api/messages/send", {
@@ -285,6 +307,9 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
                 conversationId: message.conversationId,
                 replyToId: message.replyToId,
                 attachments,
+                scheduleMode: message.scheduleMode ?? "now",
+                delayMs: message.delayMs,
+                scheduledFor: message.scheduledFor,
               }),
             });
           }
@@ -319,6 +344,11 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
             isHidden: Boolean(data.message.isHidden),
             isAI: Boolean(data.message.isAI),
             isStreaming: Boolean(data.message.isStreaming),
+            scheduledFor: data.message.scheduledFor,
+            scheduledStatus: data.message.scheduledStatus,
+            scheduledAttempts: data.message.scheduledAttempts,
+            scheduledLastError: data.message.scheduledLastError,
+            sentAt: data.message.sentAt,
           };
 
           // Replace optimistic temp message with saved DB message
@@ -330,7 +360,9 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
               : [...withoutTemp, savedMessage];
           });
 
-          socket.emit("send_message", savedMessage);
+          if (savedMessage.status !== "scheduled") {
+            socket.emit("send_message", savedMessage);
+          }
         } catch (error) {
           console.error("Failed to persist message:", error);
           // Remove optimistic message if persistence fails
@@ -524,6 +556,32 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     });
 
     socket.on(
+      "scheduled_message_failed",
+      ({
+        messageId,
+        error,
+      }: {
+        messageId: string;
+        error?: string;
+        retryable?: boolean;
+      }) => {
+        if (!messageId) return;
+        setMessages((prev) =>
+          prev.map((message) =>
+            message.id === messageId
+              ? {
+                  ...message,
+                  status: "failed",
+                  scheduledStatus: "failed",
+                  scheduledLastError: error,
+                }
+              : message
+          )
+        );
+      }
+    );
+
+    socket.on(
       "ai_response_error",
       ({
         conversationId,
@@ -548,6 +606,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
       socket.off("message_delivered");
       socket.off("message_read");
       socket.off("message_deleted");
+      socket.off("scheduled_message_failed");
       socket.off("ai_response_error");
     };
   }, [upsertMessage, userId, removeMessage]);

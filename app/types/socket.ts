@@ -23,7 +23,7 @@ export interface Message {
   chatId?: string;
   conversationId?: string;
   read?: boolean;
-  status?: "sending" | "sent" | "delivered" | "read";
+  status?: "sending" | "scheduled" | "sent" | "delivered" | "read" | "failed";
   type?: "text" | "image" | "video" | "audio" | "file";
   attachments?: ChatAttachment[];
   replyToId?: string;
@@ -34,6 +34,11 @@ export interface Message {
   isHidden?: boolean;
   isAI?: boolean;
   isStreaming?: boolean;
+  scheduledFor?: string | Date;
+  scheduledStatus?: "pending" | "processing" | "sent" | "cancelled" | "failed";
+  scheduledAttempts?: number;
+  scheduledLastError?: string;
+  sentAt?: string | Date;
 }
 
 export interface ChatAttachment {

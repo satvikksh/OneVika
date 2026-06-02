@@ -53,6 +53,11 @@ type StoredMessage = {
   hiddenForUserIds?: mongoose.Types.ObjectId[];
   isAI?: boolean;
   isStreaming?: boolean;
+  scheduledFor?: Date;
+  scheduledStatus?: "pending" | "processing" | "sent" | "cancelled" | "failed";
+  scheduledAttempts?: number;
+  scheduledLastError?: string;
+  sentAt?: Date;
 };
 
 type ConversationDoc = {
@@ -233,19 +238,59 @@ export async function GET(
     const cursorFilter: Record<string, unknown> = {
       conversationId: conversation._id,
       deletedForUserIds: { $ne: senderId },
+      $or: [
+        { scheduledStatus: { $exists: false } },
+        { scheduledStatus: { $in: ["sent", "failed"] } },
+        { senderId, scheduledStatus: { $in: ["pending", "processing", "cancelled"] } },
+      ],
     };
 
-    if (beforeIdRaw) {
-      cursorFilter._id = { $lt: new ObjectId(beforeIdRaw) };
-    } else if (afterIdRaw) {
-      cursorFilter._id = { $gt: new ObjectId(afterIdRaw) };
+    const cursorIdRaw = beforeIdRaw || afterIdRaw;
+    const cursorMessage = cursorIdRaw
+      ? await db.collection("messages").findOne(
+          { _id: new ObjectId(cursorIdRaw), conversationId: conversation._id },
+          { projection: { _id: 1, createdAt: 1 } }
+        )
+      : null;
+
+    if (cursorIdRaw && !cursorMessage) {
+      return NextResponse.json(
+        { error: "Message cursor not found" },
+        { status: 404 }
+      );
+    }
+
+    if (beforeIdRaw && cursorMessage?.createdAt) {
+      cursorFilter.$and = [
+        {
+          $or: [
+            { createdAt: { $lt: cursorMessage.createdAt } },
+            {
+              createdAt: cursorMessage.createdAt,
+              _id: { $lt: cursorMessage._id },
+            },
+          ],
+        },
+      ];
+    } else if (afterIdRaw && cursorMessage?.createdAt) {
+      cursorFilter.$and = [
+        {
+          $or: [
+            { createdAt: { $gt: cursorMessage.createdAt } },
+            {
+              createdAt: cursorMessage.createdAt,
+              _id: { $gt: cursorMessage._id },
+            },
+          ],
+        },
+      ];
     }
 
     const sortDirection = afterIdRaw ? 1 : -1;
     const rawMessages = await db
       .collection("messages")
       .find(cursorFilter)
-      .sort({ _id: sortDirection })
+      .sort({ createdAt: sortDirection, _id: sortDirection })
       .limit(limit + 1)
       .toArray();
 
@@ -284,9 +329,16 @@ export async function GET(
       const isReadForCurrentUser =
         readByUserIds.includes(senderIdRaw) ||
         (receiverIdString === senderIdRaw && Boolean(message.read));
-      let status: "sent" | "delivered" | "read" = "sent";
+      let status: "scheduled" | "sent" | "delivered" | "read" | "failed" =
+        message.scheduledStatus === "pending" ||
+        message.scheduledStatus === "processing" ||
+        message.scheduledStatus === "cancelled"
+          ? "scheduled"
+          : message.scheduledStatus === "failed"
+            ? "failed"
+            : "sent";
 
-      if (senderIdString === senderIdRaw) {
+      if (status === "sent" && senderIdString === senderIdRaw) {
         const recipientIds = participantIds.filter((participantId) => participantId !== senderIdRaw);
         const readCount = recipientIds.filter((participantId) =>
           readByUserIds.includes(participantId)
@@ -302,11 +354,12 @@ export async function GET(
         } else if (deliveredCount > 0) {
           status = "delivered";
         }
-      } else if (isReadForCurrentUser) {
+      } else if (status === "sent" && isReadForCurrentUser) {
         status = "read";
       } else if (
-        deliveredToUserIds.includes(senderIdRaw) ||
-        hasObjectId(message.deliveredToUserIds, senderIdRaw)
+        status === "sent" &&
+        (deliveredToUserIds.includes(senderIdRaw) ||
+          hasObjectId(message.deliveredToUserIds, senderIdRaw))
       ) {
         status = "delivered";
       }
@@ -343,6 +396,11 @@ export async function GET(
         isHidden: hasObjectId(message.hiddenForUserIds, senderIdRaw),
         isAI: Boolean(message.isAI),
         isStreaming: Boolean(message.isStreaming),
+        scheduledFor: message.scheduledFor?.toISOString?.(),
+        scheduledStatus: message.scheduledStatus,
+        scheduledAttempts: message.scheduledAttempts ?? 0,
+        scheduledLastError: message.scheduledLastError,
+        sentAt: message.sentAt?.toISOString?.(),
       };
     });
 

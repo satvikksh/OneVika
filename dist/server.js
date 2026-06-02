@@ -10,6 +10,9 @@ import { decryptChatText, encryptChatText } from "./app/lib/chatCrypto.js";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://orbitbyte.vercel.app";
 const PREMIUM_REMINDER_WINDOW_MS = 24 * 60 * 60 * 1000;
 const BACKGROUND_JOB_INTERVAL_MS = Number(process.env.BACKGROUND_JOB_INTERVAL_MS || "300000");
+const MESSAGE_SCHEDULER_INTERVAL_MS = Math.max(Number(process.env.MESSAGE_SCHEDULER_INTERVAL_MS || "15000"), 5000);
+const MESSAGE_SCHEDULER_BATCH_SIZE = Math.min(Math.max(Number(process.env.MESSAGE_SCHEDULER_BATCH_SIZE || "25"), 1), 100);
+const MESSAGE_SCHEDULER_MAX_ATTEMPTS = Math.min(Math.max(Number(process.env.MESSAGE_SCHEDULER_MAX_ATTEMPTS || "3"), 1), 10);
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_BASE_URL = (process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1")
     .replace(/\/chat\/completions\/?$/, "")
@@ -39,6 +42,8 @@ const AI_PROVIDER_RATE_LIMIT_MESSAGE = "The free AI providers are temporarily ra
 const INTERNAL_SOCKET_SECRET = process.env.SOCKET_INTERNAL_SECRET || process.env.NEXTAUTH_SECRET || "";
 let backgroundJobsStarted = false;
 let backgroundJobsRunning = false;
+let messageSchedulerStarted = false;
+let messageSchedulerRunning = false;
 const aiReplyJobs = new Set();
 // Initialize Firebase Admin
 if (!admin.apps.length) {
@@ -433,6 +438,225 @@ function emitAiTypingState({ humanUserId, assistantUserId, conversationId, isTyp
 function emitAiMessageToHuman(humanUserId, payload) {
     io.to(`user_${humanUserId.toString()}`).emit("receive_message", payload);
 }
+function readScheduledMessageText(message) {
+    return readStoredMessageText(message);
+}
+function buildScheduledSocketMessagePayload(message, status = "sent") {
+    const text = readScheduledMessageText(message);
+    return {
+        id: message._id.toString(),
+        conversationId: message.conversationId.toString(),
+        text,
+        content: text,
+        senderId: message.senderId.toString(),
+        receiverId: message.receiverId?.toString?.() ?? "",
+        timestamp: (message.sentAt ?? message.createdAt ?? new Date()).toISOString(),
+        type: message.type ?? "text",
+        status,
+        attachments: Array.isArray(message.attachments) ? message.attachments : [],
+        replyToId: message.replyToId?.toString?.() || undefined,
+        deliveredToUserIds: message.deliveredToUserIds?.map((id) => id.toString()) ?? [
+            message.senderId.toString(),
+        ],
+        readByUserIds: message.readByUserIds?.map((id) => id.toString()) ?? [
+            message.senderId.toString(),
+        ],
+        scheduledFor: message.scheduledFor?.toISOString?.(),
+        scheduledStatus: message.scheduledStatus,
+        scheduledAttempts: message.scheduledAttempts ?? 0,
+        scheduledLastError: message.scheduledLastError,
+        sentAt: message.sentAt?.toISOString?.(),
+        isAI: Boolean(message.isAI),
+        isStreaming: Boolean(message.isStreaming),
+    };
+}
+async function emitMessageToConversationAudience(message, conversation) {
+    const senderId = message.senderId.toString();
+    const recipientIds = (conversation.participants || [])
+        .map((participant) => participant?.toString?.())
+        .filter((participantId) => Boolean(participantId) && participantId !== senderId);
+    const audienceIds = Array.from(new Set([senderId, ...recipientIds]));
+    const deliveredUserIds = recipientIds.filter((recipientId) => Boolean(activeUsers.get(recipientId)?.size));
+    const deliveredObjectIds = deliveredUserIds.map((recipientId) => new mongoose.Types.ObjectId(recipientId));
+    if (deliveredObjectIds.length > 0) {
+        await mongoose.connection.db?.collection("messages").updateOne({ _id: message._id }, {
+            $addToSet: {
+                deliveredToUserIds: { $each: deliveredObjectIds },
+            },
+        });
+        message.deliveredToUserIds = Array.from(new Map([
+            ...(message.deliveredToUserIds ?? []),
+            ...deliveredObjectIds,
+        ].map((id) => [id.toString(), id])).values());
+    }
+    const payload = buildScheduledSocketMessagePayload(message, deliveredUserIds.length > 0 ? "delivered" : "sent");
+    audienceIds.forEach((audienceUserId) => {
+        io.to(`user_${audienceUserId}`).emit("receive_message", payload);
+    });
+    if (deliveredUserIds.length > 0) {
+        io.to(`user_${senderId}`).emit("message_delivered", {
+            messageId: message._id.toString(),
+            userIds: deliveredUserIds,
+        });
+    }
+    const notificationRecipientIds = conversation.isAI
+        ? recipientIds.filter((recipientId) => recipientId !== conversation.aiAssistantUserId?.toString?.())
+        : recipientIds;
+    await Promise.all(notificationRecipientIds.map((recipientId) => pushNotificationToUser(recipientId, {
+        type: "message",
+        title: conversation.isGroup ? conversation.name || "Group Message" : "New Message",
+        message: payload.content || payload.text || "You received a scheduled message.",
+        senderId,
+        url: "/chat",
+    }).catch((error) => {
+        console.error("[Scheduler] Push notification failed:", {
+            messageId: message._id.toString(),
+            recipientId,
+            error,
+        });
+    })));
+    return payload;
+}
+async function executeScheduledMessage(messageId) {
+    const now = new Date();
+    const messages = mongoose.connection.db?.collection("messages");
+    const conversations = mongoose.connection.db?.collection("conversations");
+    if (!messages || !conversations) {
+        throw new Error("MongoDB collections are unavailable");
+    }
+    const claimedMessage = await messages.findOneAndUpdate({
+        _id: messageId,
+        scheduledStatus: "pending",
+        scheduledFor: { $lte: now },
+        scheduledAttempts: { $lt: MESSAGE_SCHEDULER_MAX_ATTEMPTS },
+    }, {
+        $set: {
+            scheduledStatus: "processing",
+            scheduledProcessingStartedAt: now,
+            updatedAt: now,
+        },
+        $inc: { scheduledAttempts: 1 },
+    }, { returnDocument: "after" });
+    if (!claimedMessage) {
+        return;
+    }
+    const message = claimedMessage;
+    const conversation = await conversations.findOne({
+        _id: message.conversationId,
+        participants: message.senderId,
+    });
+    if (!conversation) {
+        throw new Error("Conversation not found for scheduled message");
+    }
+    const sentAt = new Date();
+    console.info("[Scheduler] Executing scheduled message.", {
+        messageId: message._id.toString(),
+        conversationId: message.conversationId.toString(),
+        scheduledFor: message.scheduledFor,
+        attempt: message.scheduledAttempts ?? 1,
+    });
+    await messages.updateOne({ _id: message._id, scheduledStatus: "processing" }, {
+        $set: {
+            scheduledStatus: "sent",
+            sentAt,
+            createdAt: sentAt,
+            updatedAt: sentAt,
+            read: false,
+        },
+        $unset: {
+            scheduledLastError: "",
+            scheduledProcessingStartedAt: "",
+        },
+    });
+    await conversations.updateOne({ _id: conversation._id }, { $set: { updatedAt: sentAt } });
+    message.scheduledStatus = "sent";
+    message.sentAt = sentAt;
+    message.createdAt = sentAt;
+    const payload = await emitMessageToConversationAudience(message, conversation);
+    console.info("[Scheduler] Scheduled message delivered.", {
+        messageId: message._id.toString(),
+        status: payload.status,
+    });
+    if (conversation.isAI && readScheduledMessageText(message).trim()) {
+        void handleAiConversationMessage(conversation, payload).catch((error) => {
+            console.error("[Scheduler] AI reply failed for scheduled message:", {
+                messageId: message._id.toString(),
+                error,
+            });
+        });
+    }
+}
+async function runMessageScheduler() {
+    if (messageSchedulerRunning) {
+        return;
+    }
+    const messages = mongoose.connection.db?.collection("messages");
+    if (!messages) {
+        return;
+    }
+    messageSchedulerRunning = true;
+    try {
+        const now = new Date();
+        const dueMessages = await messages
+            .find({
+            scheduledStatus: "pending",
+            scheduledFor: { $lte: now },
+            scheduledAttempts: { $lt: MESSAGE_SCHEDULER_MAX_ATTEMPTS },
+        }, { projection: { _id: 1, senderId: 1, scheduledFor: 1, scheduledAttempts: 1 } })
+            .sort({ scheduledFor: 1, _id: 1 })
+            .limit(MESSAGE_SCHEDULER_BATCH_SIZE)
+            .toArray();
+        if (dueMessages.length > 0) {
+            console.info("[Scheduler] Found due scheduled messages.", {
+                count: dueMessages.length,
+            });
+        }
+        for (const message of dueMessages) {
+            try {
+                await executeScheduledMessage(message._id);
+            }
+            catch (error) {
+                const failedAt = new Date();
+                const lastError = error instanceof Error ? error.message : "Unknown scheduler error";
+                const nextStatus = (message.scheduledAttempts ?? 0) + 1 >= MESSAGE_SCHEDULER_MAX_ATTEMPTS
+                    ? "failed"
+                    : "pending";
+                console.error("[Scheduler] Scheduled message execution failed:", {
+                    messageId: message._id.toString(),
+                    nextStatus,
+                    error,
+                });
+                await messages.updateOne({ _id: message._id, scheduledStatus: "processing" }, {
+                    $set: {
+                        scheduledStatus: nextStatus,
+                        scheduledLastError: lastError,
+                        updatedAt: failedAt,
+                    },
+                    $unset: { scheduledProcessingStartedAt: "" },
+                });
+                io.to(`user_${message.senderId?.toString?.()}`)
+                    .emit("scheduled_message_failed", {
+                    messageId: message._id.toString(),
+                    error: lastError,
+                    retryable: nextStatus === "pending",
+                });
+            }
+        }
+    }
+    finally {
+        messageSchedulerRunning = false;
+    }
+}
+function startMessageScheduler() {
+    if (messageSchedulerStarted) {
+        return;
+    }
+    messageSchedulerStarted = true;
+    void runMessageScheduler();
+    setInterval(() => {
+        void runMessageScheduler();
+    }, MESSAGE_SCHEDULER_INTERVAL_MS);
+}
 function emitAiErrorToHuman({ humanUserId, conversationId, error, }) {
     io.to(`user_${humanUserId.toString()}`).emit("ai_response_error", {
         conversationId: conversationId.toString(),
@@ -745,6 +969,7 @@ async function handleAiConversationMessage(conversation, humanMessage) {
 mongoose.connect(mongoUri).then(() => {
     console.log("MongoDB connected");
     startBackgroundJobs();
+    startMessageScheduler();
 });
 io.on("connection", (socket) => {
     const socketUserIds = new Set();

@@ -29,6 +29,8 @@ type ReceiverDoc = {
   isAI?: boolean;
 };
 
+type ScheduleMode = "now" | "delay" | "later";
+
 const getSocketServerUrl = () => {
   if (process.env.SOCKET_SERVER_URL) {
     return process.env.SOCKET_SERVER_URL.replace(/\/+$/, "");
@@ -105,6 +107,9 @@ export async function POST(req: NextRequest) {
     let receiverId = "";
     let conversationId = "";
     let replyToId: string | undefined;
+    let scheduleMode: ScheduleMode = "now";
+    let scheduledForRaw = "";
+    let delayMsRaw = "";
     let uploadedAttachment:
       | {
           url: string;
@@ -123,6 +128,11 @@ export async function POST(req: NextRequest) {
       receiverId = (formData.get("receiverId") ?? "").toString();
       conversationId = (formData.get("conversationId") ?? "").toString();
       replyToId = (formData.get("replyToId") ?? "").toString() || undefined;
+      scheduleMode =
+        ((formData.get("scheduleMode") ?? "now").toString() as ScheduleMode) ||
+        "now";
+      scheduledForRaw = (formData.get("scheduledFor") ?? "").toString();
+      delayMsRaw = (formData.get("delayMs") ?? "").toString();
       const file = formData.get("file");
 
       if (file instanceof File && file.size > 0) {
@@ -159,6 +169,9 @@ export async function POST(req: NextRequest) {
       receiverId = body?.receiverId as string;
       conversationId = body?.conversationId as string;
       replyToId = body?.replyToId as string | undefined;
+      scheduleMode = (body?.scheduleMode as ScheduleMode) || "now";
+      scheduledForRaw = body?.scheduledFor?.toString?.() ?? "";
+      delayMsRaw = body?.delayMs?.toString?.() ?? "";
       const attachments = Array.isArray(body?.attachments) ? body.attachments : [];
       const firstAttachment = attachments[0];
       if (firstAttachment?.url) {
@@ -313,9 +326,41 @@ export async function POST(req: NextRequest) {
     }
 
     const createdAt = new Date();
+    let scheduledFor: Date | null = null;
+    const normalizedScheduleMode: ScheduleMode =
+      scheduleMode === "delay" || scheduleMode === "later" ? scheduleMode : "now";
+
+    if (normalizedScheduleMode === "delay") {
+      const delayMs = Number(delayMsRaw);
+      if (!Number.isFinite(delayMs) || delayMs < 60_000) {
+        return NextResponse.json(
+          { error: "Delay must be at least 1 minute" },
+          { status: 400 }
+        );
+      }
+      scheduledFor = new Date(createdAt.getTime() + delayMs);
+    } else if (normalizedScheduleMode === "later") {
+      const parsed = new Date(scheduledForRaw);
+      if (Number.isNaN(parsed.getTime())) {
+        return NextResponse.json(
+          { error: "A valid schedule date and time is required" },
+          { status: 400 }
+        );
+      }
+      scheduledFor = parsed;
+    }
+
+    if (scheduledFor && scheduledFor.getTime() <= Date.now() + 10_000) {
+      return NextResponse.json(
+        { error: "Scheduled time must be at least a few seconds in the future" },
+        { status: 400 }
+      );
+    }
+
     const trimmedText = text.trim();
     const encrypted = trimmedText ? encryptChatText(trimmedText) : {};
     const messageType = uploadedAttachment?.type ?? "text";
+    const isScheduled = Boolean(scheduledFor);
 
     const result = await db.collection("messages").insertOne({
       conversationId: conversation._id,
@@ -333,16 +378,35 @@ export async function POST(req: NextRequest) {
       type: messageType,
       ...(uploadedAttachment ? { attachments: [uploadedAttachment] } : {}),
       ...(replyToId ? { replyToId } : {}),
+      ...(isScheduled
+        ? {
+            scheduledFor,
+            scheduledStatus: "pending",
+            scheduledMode: normalizedScheduleMode,
+            scheduledAttempts: 0,
+            sentAt: null,
+          }
+        : { sentAt: createdAt }),
     });
 
-    await db.collection("conversations").updateOne(
-      { _id: conversation._id },
-      { $set: { updatedAt: createdAt } }
-    );
+    if (!isScheduled) {
+      await db.collection("conversations").updateOne(
+        { _id: conversation._id },
+        { $set: { updatedAt: createdAt } }
+      );
+    }
 
-    if (isAiConversation && trimmedText) {
+    if (!isScheduled && isAiConversation && trimmedText) {
       await triggerAiReplyForSavedMessage(result.insertedId.toString());
     }
+
+    console.info(isScheduled ? "[Scheduler] Scheduled message created." : "Message sent.", {
+      messageId: result.insertedId.toString(),
+      conversationId: conversation._id.toString(),
+      senderId: session.user.id,
+      scheduledFor: scheduledFor?.toISOString?.(),
+      chatType: isGroupConversation ? "group" : "direct",
+    });
 
     return NextResponse.json({
       success: true,
@@ -355,7 +419,7 @@ export async function POST(req: NextRequest) {
         receiverId: receiverObjectId?.toString?.() ?? "",
         timestamp: createdAt.toISOString(),
         read: false,
-        status: "sent",
+        status: isScheduled ? "scheduled" : "sent",
         type: messageType,
         attachments: uploadedAttachment ? [uploadedAttachment] : [],
         replyToId,
@@ -365,6 +429,9 @@ export async function POST(req: NextRequest) {
         isHidden: false,
         isAI: false,
         isStreaming: false,
+        scheduledFor: scheduledFor?.toISOString?.(),
+        scheduledStatus: isScheduled ? "pending" : undefined,
+        scheduledAttempts: isScheduled ? 0 : undefined,
         chatType: isGroupConversation ? "group" : "direct",
       },
     });

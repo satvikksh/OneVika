@@ -1607,7 +1607,14 @@ export default function ChatPage() {
   }, [pendingAttachment]);
 
   /* ------------------------------ SEND MESSAGE ------------------------------ */
-  const handleSendMessage = async (e?: React.FormEvent) => {
+  const handleSendMessage = async (
+    schedule?: {
+      scheduleMode: "now" | "delay" | "later";
+      delayMs?: number;
+      scheduledFor?: string;
+    },
+    e?: React.FormEvent
+  ) => {
     e?.preventDefault();
 
     if (
@@ -1638,6 +1645,9 @@ export default function ChatPage() {
         senderId: currentUserId,
         replyToId: replyTo?.id,
         file: pendingAttachment?.file ?? null,
+        scheduleMode: schedule?.scheduleMode ?? "now",
+        delayMs: schedule?.delayMs,
+        scheduledFor: schedule?.scheduledFor,
       });
 
       setNewMessage("");
@@ -1650,6 +1660,101 @@ export default function ChatPage() {
       setSendingMessage(false);
     }
   };
+
+  const patchScheduledMessage = useCallback(
+    async (message: Message, body: Record<string, unknown>) => {
+      const res = await fetch(`/api/messages/scheduled/${message.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to update scheduled message");
+      }
+
+      if (data.message) {
+        addMessages([
+          {
+            ...message,
+            ...data.message,
+            text: data.message.text ?? message.text,
+            content: data.message.content ?? data.message.text ?? message.content,
+          },
+        ]);
+      }
+    },
+    [addMessages]
+  );
+
+  const handleEditScheduledMessage = useCallback(
+    async (message: Message) => {
+      const nextText = window.prompt(
+        "Edit scheduled message",
+        message.text || message.content || ""
+      );
+      if (nextText === null) return;
+
+      try {
+        await patchScheduledMessage(message, { text: nextText });
+      } catch (error) {
+        window.alert(error instanceof Error ? error.message : "Unable to edit message");
+      }
+    },
+    [patchScheduledMessage]
+  );
+
+  const handleRescheduleMessage = useCallback(
+    async (message: Message) => {
+      const currentValue = message.scheduledFor
+        ? new Date(message.scheduledFor).toISOString().slice(0, 16)
+        : "";
+      const nextValue = window.prompt(
+        "Reschedule message. Use YYYY-MM-DDTHH:mm",
+        currentValue
+      );
+      if (!nextValue) return;
+
+      try {
+        await patchScheduledMessage(message, {
+          scheduledFor: new Date(nextValue).toISOString(),
+        });
+      } catch (error) {
+        window.alert(
+          error instanceof Error ? error.message : "Unable to reschedule message"
+        );
+      }
+    },
+    [patchScheduledMessage]
+  );
+
+  const handleCancelScheduledMessage = useCallback(
+    async (message: Message) => {
+      try {
+        await patchScheduledMessage(message, { action: "cancel" });
+      } catch (error) {
+        window.alert(error instanceof Error ? error.message : "Unable to cancel message");
+      }
+    },
+    [patchScheduledMessage]
+  );
+
+  const handleDeleteScheduledMessage = useCallback(
+    async (message: Message) => {
+      const res = await fetch(`/api/messages/scheduled/${message.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        window.alert(data.error || "Unable to delete scheduled message");
+        return;
+      }
+      removeMessage(message.id);
+    },
+    [removeMessage]
+  );
 
   /* ---------------------------- HANDLE ENTER KEY ---------------------------- */
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -3278,6 +3383,10 @@ export default function ChatPage() {
               setNewMessage={setNewMessage}
               sendingMessage={sendingMessage}
               onSendMessage={handleSendMessage}
+              onEditScheduledMessage={handleEditScheduledMessage}
+              onRescheduleMessage={handleRescheduleMessage}
+              onCancelScheduledMessage={handleCancelScheduledMessage}
+              onDeleteScheduledMessage={handleDeleteScheduledMessage}
               handleTyping={handleTyping}
               handleInputFocus={handleInputFocus}
               handleInputBlur={handleInputBlur}
