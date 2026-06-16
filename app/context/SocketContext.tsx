@@ -20,7 +20,7 @@ type OutgoingMessageInput = Partial<Message> & {
   scheduleMode?: "now" | "delay" | "later";
   delayMs?: number;
   scheduledFor?: string;
-  chatMode?: "normal" | "vanish" | "Polished";
+  chatMode?: "normal" | "vanish" | "polished";
   vanishSeconds?: number;
   originalText?: string;
 };
