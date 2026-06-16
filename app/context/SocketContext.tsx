@@ -20,6 +20,9 @@ type OutgoingMessageInput = Partial<Message> & {
   scheduleMode?: "now" | "delay" | "later";
   delayMs?: number;
   scheduledFor?: string;
+  chatMode?: "normal" | "vanish" | "Polished";
+  vanishSeconds?: number;
+  originalText?: string;
 };
 
 interface SocketContextType {
@@ -107,6 +110,10 @@ const messagesAreEqual = (left: Message, right: Message) =>
   left.scheduledAttempts === right.scheduledAttempts &&
   left.scheduledLastError === right.scheduledLastError &&
   String(left.sentAt ?? "") === String(right.sentAt ?? "") &&
+  left.chatMode === right.chatMode &&
+  left.vanishSeconds === right.vanishSeconds &&
+  String(left.vanishExpiresAt ?? "") === String(right.vanishExpiresAt ?? "") &&
+  left.originalText === right.originalText &&
   stringListsAreEqual(left.deliveredToUserIds, right.deliveredToUserIds) &&
   stringListsAreEqual(left.readByUserIds, right.readByUserIds) &&
   attachmentsAreEqual(left.attachments, right.attachments);
@@ -256,6 +263,13 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
         isStarred: false,
         isHidden: false,
         scheduledFor: message.scheduledFor,
+        chatMode: message.chatMode ?? "normal",
+        vanishSeconds: message.vanishSeconds,
+        vanishExpiresAt:
+          message.chatMode === "vanish"
+            ? new Date(Date.now() + (message.vanishSeconds ?? 300) * 1000).toISOString()
+            : undefined,
+        originalText: message.originalText,
         scheduledStatus:
           message.scheduleMode && message.scheduleMode !== "now" ? "pending" : undefined,
         scheduledAttempts:
@@ -291,6 +305,13 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
                 formData.append("scheduledFor", message.scheduledFor);
               }
             }
+            formData.append("chatMode", message.chatMode ?? "normal");
+            if (typeof message.vanishSeconds === "number") {
+              formData.append("vanishSeconds", String(message.vanishSeconds));
+            }
+            if (message.originalText) {
+              formData.append("originalText", message.originalText);
+            }
             formData.append("file", pendingFile);
 
             res = await fetch("/api/messages/send", {
@@ -310,6 +331,9 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
                 scheduleMode: message.scheduleMode ?? "now",
                 delayMs: message.delayMs,
                 scheduledFor: message.scheduledFor,
+                chatMode: message.chatMode ?? "normal",
+                vanishSeconds: message.vanishSeconds,
+                originalText: message.originalText,
               }),
             });
           }
@@ -349,6 +373,10 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
             scheduledAttempts: data.message.scheduledAttempts,
             scheduledLastError: data.message.scheduledLastError,
             sentAt: data.message.sentAt,
+            chatMode: data.message.chatMode,
+            vanishSeconds: data.message.vanishSeconds,
+            vanishExpiresAt: data.message.vanishExpiresAt,
+            originalText: data.message.originalText,
           };
 
           // Replace optimistic temp message with saved DB message
@@ -610,6 +638,28 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
       socket.off("ai_response_error");
     };
   }, [upsertMessage, userId, removeMessage]);
+
+  useEffect(() => {
+    const timers = messages
+      .filter((message) => message.vanishExpiresAt)
+      .map((message) => {
+        const expiresAt = new Date(message.vanishExpiresAt as string | Date).getTime();
+        const delay = expiresAt - Date.now();
+
+        if (!Number.isFinite(expiresAt)) return null;
+        if (delay <= 0) {
+          removeMessage(message.id);
+          return null;
+        }
+
+        return window.setTimeout(() => removeMessage(message.id), delay);
+      })
+      .filter((timer): timer is number => typeof timer === "number");
+
+    return () => {
+      timers.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, [messages, removeMessage]);
 
   const value = useMemo(
     () => ({

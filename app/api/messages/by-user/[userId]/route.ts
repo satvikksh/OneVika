@@ -58,6 +58,10 @@ type StoredMessage = {
   scheduledAttempts?: number;
   scheduledLastError?: string;
   sentAt?: Date;
+  chatMode?: "normal" | "vanish" | "polished";
+  vanishSeconds?: number;
+  vanishExpiresAt?: Date;
+  originalText?: string;
 };
 
 type ConversationDoc = {
@@ -238,6 +242,15 @@ export async function GET(
     const cursorFilter: Record<string, unknown> = {
       conversationId: conversation._id,
       deletedForUserIds: { $ne: senderId },
+      $and: [
+        {
+          $or: [
+            { vanishExpiresAt: { $exists: false } },
+            { vanishExpiresAt: null },
+            { vanishExpiresAt: { $gt: new Date() } },
+          ],
+        },
+      ],
       $or: [
         { scheduledStatus: { $exists: false } },
         { scheduledStatus: { $in: ["sent", "failed"] } },
@@ -262,6 +275,7 @@ export async function GET(
 
     if (beforeIdRaw && cursorMessage?.createdAt) {
       cursorFilter.$and = [
+        ...(Array.isArray(cursorFilter.$and) ? cursorFilter.$and : []),
         {
           $or: [
             { createdAt: { $lt: cursorMessage.createdAt } },
@@ -274,6 +288,7 @@ export async function GET(
       ];
     } else if (afterIdRaw && cursorMessage?.createdAt) {
       cursorFilter.$and = [
+        ...(Array.isArray(cursorFilter.$and) ? cursorFilter.$and : []),
         {
           $or: [
             { createdAt: { $gt: cursorMessage.createdAt } },
@@ -401,6 +416,10 @@ export async function GET(
         scheduledAttempts: message.scheduledAttempts ?? 0,
         scheduledLastError: message.scheduledLastError,
         sentAt: message.sentAt?.toISOString?.(),
+        chatMode: message.chatMode ?? "normal",
+        vanishSeconds: message.vanishSeconds,
+        vanishExpiresAt: message.vanishExpiresAt?.toISOString?.(),
+        originalText: message.originalText,
       };
     });
 

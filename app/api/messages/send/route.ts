@@ -30,6 +30,7 @@ type ReceiverDoc = {
 };
 
 type ScheduleMode = "now" | "delay" | "later";
+type ChatMode = "normal" | "vanish" | "polished";
 
 const getSocketServerUrl = () => {
   if (process.env.SOCKET_SERVER_URL) {
@@ -94,6 +95,15 @@ const getMessageTypeFromMime = (mimeType?: string | null) => {
   return "file" as const;
 };
 
+const normalizeChatMode = (mode: unknown): ChatMode =>
+  mode === "vanish" || mode === "polished" ? mode : "normal";
+
+const normalizeVanishSeconds = (value: unknown) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 300;
+  return Math.min(Math.max(Math.round(parsed), 10), 86_400);
+};
+
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -110,6 +120,9 @@ export async function POST(req: NextRequest) {
     let scheduleMode: ScheduleMode = "now";
     let scheduledForRaw = "";
     let delayMsRaw = "";
+    let chatMode: ChatMode = "normal";
+    let vanishSeconds = 300;
+    let originalText = "";
     let uploadedAttachment:
       | {
           url: string;
@@ -133,6 +146,9 @@ export async function POST(req: NextRequest) {
         "now";
       scheduledForRaw = (formData.get("scheduledFor") ?? "").toString();
       delayMsRaw = (formData.get("delayMs") ?? "").toString();
+      chatMode = normalizeChatMode(formData.get("chatMode"));
+      vanishSeconds = normalizeVanishSeconds(formData.get("vanishSeconds"));
+      originalText = (formData.get("originalText") ?? "").toString();
       const file = formData.get("file");
 
       if (file instanceof File && file.size > 0) {
@@ -172,6 +188,9 @@ export async function POST(req: NextRequest) {
       scheduleMode = (body?.scheduleMode as ScheduleMode) || "now";
       scheduledForRaw = body?.scheduledFor?.toString?.() ?? "";
       delayMsRaw = body?.delayMs?.toString?.() ?? "";
+      chatMode = normalizeChatMode(body?.chatMode);
+      vanishSeconds = normalizeVanishSeconds(body?.vanishSeconds);
+      originalText = (body?.originalText ?? "").toString();
       const attachments = Array.isArray(body?.attachments) ? body.attachments : [];
       const firstAttachment = attachments[0];
       if (firstAttachment?.url) {
@@ -325,6 +344,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (isGroupConversation && chatMode === "polished") {
+      return NextResponse.json(
+        { error: "Polished Mode is only available in personal chats" },
+        { status: 400 }
+      );
+    }
+
     const createdAt = new Date();
     let scheduledFor: Date | null = null;
     const normalizedScheduleMode: ScheduleMode =
@@ -361,6 +387,11 @@ export async function POST(req: NextRequest) {
     const encrypted = trimmedText ? encryptChatText(trimmedText) : {};
     const messageType = uploadedAttachment?.type ?? "text";
     const isScheduled = Boolean(scheduledFor);
+    const effectiveChatMode = chatMode === "polished" ? "polished" : chatMode === "vanish" ? "vanish" : "normal";
+    const vanishExpiresAt =
+      effectiveChatMode === "vanish"
+        ? new Date((scheduledFor ?? createdAt).getTime() + vanishSeconds * 1000)
+        : null;
 
     const result = await db.collection("messages").insertOne({
       conversationId: conversation._id,
@@ -376,6 +407,17 @@ export async function POST(req: NextRequest) {
       hiddenForUserIds: [],
       deletedForUserIds: [],
       type: messageType,
+      chatMode: effectiveChatMode,
+      ...(effectiveChatMode === "polished" && originalText.trim()
+        ? { originalText: originalText.trim() }
+        : {}),
+      ...(vanishExpiresAt
+        ? {
+            vanishSeconds,
+            vanishExpiresAt,
+            deleteAfter: vanishExpiresAt,
+          }
+        : {}),
       ...(uploadedAttachment ? { attachments: [uploadedAttachment] } : {}),
       ...(replyToId ? { replyToId } : {}),
       ...(isScheduled
@@ -432,6 +474,13 @@ export async function POST(req: NextRequest) {
         scheduledFor: scheduledFor?.toISOString?.(),
         scheduledStatus: isScheduled ? "pending" : undefined,
         scheduledAttempts: isScheduled ? 0 : undefined,
+        chatMode: effectiveChatMode,
+        vanishSeconds: vanishExpiresAt ? vanishSeconds : undefined,
+        vanishExpiresAt: vanishExpiresAt?.toISOString?.(),
+        originalText:
+          effectiveChatMode === "polished" && originalText.trim()
+            ? originalText.trim()
+            : undefined,
         chatType: isGroupConversation ? "group" : "direct",
       },
     });

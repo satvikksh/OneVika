@@ -55,6 +55,10 @@ type SocketMessagePayload = {
   scheduledAttempts?: number;
   scheduledLastError?: string;
   sentAt?: string | Date;
+  chatMode?: "normal" | "vanish" | "polished";
+  vanishSeconds?: number;
+  vanishExpiresAt?: string | Date;
+  originalText?: string;
 };
 
 type StoredMessageDoc = {
@@ -71,6 +75,10 @@ type StoredMessageDoc = {
   isAI?: boolean;
   isStreaming?: boolean;
   aiReplyStatus?: "processing" | "completed" | "failed";
+  chatMode?: "normal" | "vanish" | "polished";
+  vanishSeconds?: number;
+  vanishExpiresAt?: Date;
+  originalText?: string;
 };
 
 type ScheduledStoredMessageDoc = StoredMessageDoc & {
@@ -733,6 +741,10 @@ function buildScheduledSocketMessagePayload(
     sentAt: message.sentAt?.toISOString?.(),
     isAI: Boolean(message.isAI),
     isStreaming: Boolean(message.isStreaming),
+    chatMode: message.chatMode ?? "normal",
+    vanishSeconds: message.vanishSeconds,
+    vanishExpiresAt: message.vanishExpiresAt?.toISOString?.(),
+    originalText: message.originalText,
   };
 }
 
@@ -782,6 +794,30 @@ async function emitMessageToConversationAudience(
   audienceIds.forEach((audienceUserId) => {
     io.to(`user_${audienceUserId}`).emit("receive_message", payload);
   });
+
+  if (message.vanishExpiresAt) {
+    const delay = message.vanishExpiresAt.getTime() - Date.now();
+    if (Number.isFinite(delay) && delay > 0 && delay <= 86_400_000) {
+      setTimeout(async () => {
+        try {
+          await mongoose.connection.db?.collection("messages").deleteOne({
+            _id: message._id,
+            chatMode: "vanish",
+            vanishExpiresAt: { $lte: new Date() },
+          });
+
+          audienceIds.forEach((audienceUserId) => {
+            io.to(`user_${audienceUserId}`).emit("message_deleted", {
+              messageId: message._id.toString(),
+              scope: "everyone",
+            });
+          });
+        } catch (error) {
+          console.error("[Vanish] Failed to expire scheduled message:", error);
+        }
+      }, delay);
+    }
+  }
 
   if (deliveredUserIds.length > 0) {
     io.to(`user_${senderId}`).emit("message_delivered", {
@@ -1506,6 +1542,34 @@ io.on("connection", (socket) => {
       audienceIds.forEach((audienceUserId) => {
         io.to(`user_${audienceUserId}`).emit("receive_message", message);
       });
+
+      if (message.vanishExpiresAt && message.id) {
+        const expiresAt = new Date(message.vanishExpiresAt).getTime();
+        const delay = expiresAt - Date.now();
+
+        if (Number.isFinite(delay) && delay > 0 && delay <= 86_400_000) {
+          setTimeout(async () => {
+            try {
+              if (mongoose.Types.ObjectId.isValid(message.id)) {
+                await mongoose.connection.db?.collection("messages").deleteOne({
+                  _id: new mongoose.Types.ObjectId(message.id),
+                  chatMode: "vanish",
+                  vanishExpiresAt: { $lte: new Date() },
+                });
+              }
+
+              audienceIds.forEach((audienceUserId) => {
+                io.to(`user_${audienceUserId}`).emit("message_deleted", {
+                  messageId: message.id,
+                  scope: "everyone",
+                });
+              });
+            } catch (error) {
+              console.error("[Vanish] Failed to expire message:", error);
+            }
+          }, delay);
+        }
+      }
 
       const deliveredUserIds = recipientIds.filter((recipientId) =>
         Boolean(activeUsers.get(recipientId)?.size)

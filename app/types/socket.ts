@@ -39,6 +39,10 @@ export interface Message {
   scheduledAttempts?: number;
   scheduledLastError?: string;
   sentAt?: string | Date;
+  chatMode?: "normal" | "vanish" | "polished";
+  vanishSeconds?: number;
+  vanishExpiresAt?: string | Date;
+  originalText?: string;
 }
 
 export interface ChatAttachment {

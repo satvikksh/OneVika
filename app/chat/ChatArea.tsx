@@ -14,8 +14,11 @@ import {
   FileText,
   Loader2,
   Paperclip,
+  RefreshCw,
   Send,
   Smile,
+  Sparkles,
+  Timer,
   Trash2,
   X,
 } from "lucide-react";
@@ -85,6 +88,21 @@ interface ChatAreaProps {
   isConnected?: boolean; // Optional for connection status
   isChatBlocked?: boolean;
   isPeerTyping?: boolean;
+  chatMode: "normal" | "vanish" | "polished";
+  setChatMode: (mode: "normal" | "vanish" | "polished") => void;
+  vanishSeconds: number;
+  setVanishSeconds: (seconds: number) => void;
+  canUsePolishedMode: boolean;
+  polishedPreview: {
+    originalText: string;
+    enhancedText: string;
+    isGenerating: boolean;
+    error: string | null;
+  } | null;
+  onChangePolishedPreview: (text: string) => void;
+  onRegeneratePolishedPreview: () => void;
+  onCancelPolishedPreview: () => void;
+  onApprovePolishedPreview: () => void;
 }
 
 const formatFileSize = (size?: number) => {
@@ -133,12 +151,12 @@ const renderAttachment = (attachment?: ChatAttachment) => {
         href={targetHref}
         target={isFeedShare ? undefined : "_blank"}
         rel={isFeedShare ? undefined : "noreferrer"}
-        className="mb-2 block w-full max-w-[280px]"
+        className="mb-2 block w-full max-w-full overflow-hidden rounded-xl sm:max-w-[280px]"
       >
         <img
           src={attachment.url}
           alt={attachment.fileName || "Image attachment"}
-          className="block max-h-72 w-full rounded-xl object-cover"
+          className="block h-auto max-h-[55vh] w-full rounded-xl object-contain"
         />
       </a>
     );
@@ -151,7 +169,7 @@ const renderAttachment = (attachment?: ChatAttachment) => {
           href={targetHref}
           target={undefined}
           rel={undefined}
-          className="relative mb-2 block w-full max-w-[280px] overflow-hidden rounded-xl"
+          className="relative mb-2 block w-full max-w-full overflow-hidden rounded-xl sm:max-w-[280px]"
         >
           <video
             src={attachment.url}
@@ -159,7 +177,7 @@ const renderAttachment = (attachment?: ChatAttachment) => {
             playsInline
             loop
             autoPlay
-            className="block max-h-72 w-full rounded-xl bg-black object-cover"
+            className="block max-h-[55vh] w-full rounded-xl bg-black object-contain"
           />
           <div className="absolute inset-0 flex items-center justify-center bg-black/20">
             <div className="rounded-full bg-black/60 px-4 py-2 text-sm font-medium text-white">
@@ -174,17 +192,17 @@ const renderAttachment = (attachment?: ChatAttachment) => {
       <video
         src={attachment.url}
         controls
-        className="mb-2 block max-h-72 w-full max-w-[280px] rounded-xl bg-black"
+        className="mb-2 block max-h-[55vh] w-full max-w-full rounded-xl bg-black sm:max-w-[280px]"
       />
     );
   }
 
   if (attachment.type === "audio") {
     return (
-      <div className="mb-2 rounded-xl bg-black/10 px-3 py-3 dark:bg-white/10">
+      <div className="mb-2 min-w-0 rounded-xl bg-black/10 px-3 py-3 dark:bg-white/10">
         <div className="mb-2 flex items-center gap-2 text-sm font-medium">
           <AudioLines size={16} />
-          <span className="truncate">{attachment.fileName || "Audio file"}</span>
+          <span className="min-w-0 truncate">{attachment.fileName || "Audio file"}</span>
         </div>
         <audio src={attachment.url} controls className="w-full" />
       </div>
@@ -196,10 +214,10 @@ const renderAttachment = (attachment?: ChatAttachment) => {
       href={attachment.url}
       target="_blank"
       rel="noreferrer"
-      className="mb-2 flex w-full max-w-[280px] items-center gap-3 rounded-xl bg-black/10 px-3 py-3 dark:bg-white/10"
+      className="mb-2 flex w-full max-w-full items-center gap-3 rounded-xl bg-black/10 px-3 py-3 dark:bg-white/10 sm:max-w-[280px]"
     >
       <FileText size={18} />
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-medium">
           {attachment.fileName || "Attachment"}
         </div>
@@ -307,6 +325,16 @@ function ChatArea({
   isConnected = true, // Default to true for backward compatibility
   isChatBlocked = false,
   isPeerTyping = false,
+  chatMode,
+  setChatMode,
+  vanishSeconds,
+  setVanishSeconds,
+  canUsePolishedMode,
+  polishedPreview,
+  onChangePolishedPreview,
+  onRegeneratePolishedPreview,
+  onCancelPolishedPreview,
+  onApprovePolishedPreview,
 }: ChatAreaProps) {
   const currentUserId = session?.user?.id;
   const selectedMessageIdSet = React.useMemo(
@@ -450,7 +478,85 @@ function ChatArea({
   const isComposerDisabled = isChatBlocked || isSelectionMode;
 
   return (
-    <div className="flex flex-col h-full w-full bg-white dark:bg-black">
+    <div className="flex h-full w-full min-w-0 flex-col overflow-x-hidden bg-white dark:bg-black">
+      {polishedPreview && (
+        <div className="fixed inset-0 z-[95] flex items-end justify-center bg-black/55 p-3 sm:items-center sm:p-4">
+          <div className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-rose-200 bg-white shadow-2xl dark:border-rose-900/50 dark:bg-gray-950">
+            <div className="border-b border-rose-100 px-4 py-3 dark:border-rose-900/40">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="flex items-center gap-2 text-base font-semibold text-gray-950 dark:text-white">
+                    <Sparkles className="h-4 w-4 text-rose-500" />
+                    Polished preview
+                  </h3>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Review and edit before sending.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={onCancelPolishedPreview}
+                  className="shrink-0 rounded-full p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-900"
+                  aria-label="Close polished preview"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+            <div className="space-y-3 px-4 py-4">
+              <div>
+                <p className="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">
+                  Original
+                </p>
+                <div className="max-h-28 overflow-y-auto rounded-xl bg-gray-100 px-3 py-2 text-sm text-gray-700 dark:bg-gray-900 dark:text-gray-300">
+                  <p className="whitespace-pre-wrap break-words">
+                    {polishedPreview.originalText}
+                  </p>
+                </div>
+              </div>
+              <div>
+                <p className="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">
+                  Enhanced
+                </p>
+                <textarea
+                  value={polishedPreview.enhancedText}
+                  onChange={(event) => onChangePolishedPreview(event.target.value)}
+                  className="min-h-36 w-full resize-y rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-950 outline-none focus:ring-2 focus:ring-rose-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                />
+              </div>
+              {polishedPreview.error ? (
+                <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-200">
+                  {polishedPreview.error}
+                </p>
+              ) : null}
+            </div>
+            <div className="flex flex-col-reverse gap-2 border-t border-gray-100 px-4 py-3 dark:border-gray-800 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={onRegeneratePolishedPreview}
+                disabled={polishedPreview.isGenerating}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 disabled:opacity-60 dark:border-gray-700 dark:text-gray-200"
+              >
+                {polishedPreview.isGenerating ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw size={16} />
+                )}
+                Regenerate
+              </button>
+              <button
+                type="button"
+                onClick={onApprovePolishedPreview}
+                disabled={polishedPreview.isGenerating || !polishedPreview.enhancedText.trim()}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+              >
+                <Send size={16} />
+                Send
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Connection Status Indicator (optional) */}
       {/* {isConnected !== undefined && (
         <div className={`px-4 py-2 text-xs text-center ${isConnected ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
@@ -462,10 +568,10 @@ function ChatArea({
       <div
         ref={scrollContainerRef}
         onScroll={captureScrollMetrics}
-        className={`flex-1 overflow-y-auto ${selectedUser ? 'pb-24' : ''} lg:ml-80`}
+        className={`min-w-0 flex-1 overflow-y-auto overflow-x-hidden ${selectedUser ? 'pb-40 sm:pb-36' : ''} lg:ml-80`}
       >
         {selectedUser ? (
-            <div className="space-y-3 p-4">
+            <div className="w-full min-w-0 space-y-3 p-3 sm:p-4">
               {showHiddenMessages ? (
                 <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-100">
                   Hidden message view is on. Hidden messages stay highlighted until you unhide them.
@@ -596,8 +702,8 @@ function ChatArea({
                         ) : null}
 
                         <div
-                          className={`relative ${
-                            hasAttachment ? "max-w-[320px] w-full" : "max-w-[70%] w-fit"
+                          className={`relative min-w-0 ${
+                            hasAttachment ? "w-[min(320px,82vw)] max-w-full" : "w-fit max-w-[82vw] sm:max-w-[70%]"
                           }`}
                         >
                           {/* Message Bubble */}
@@ -686,7 +792,7 @@ function ChatArea({
 
                             {renderAttachment(msg.attachments?.[0])}
                             {(msg.text || msg.content) && (
-                              <div className="break-words whitespace-pre-wrap">
+                              <div className="break-words whitespace-pre-wrap [overflow-wrap:anywhere]">
                                 {renderMessageText(msg.text || msg.content || "")}
                                 {msg.isStreaming ? (
                                   <span className="ml-1 inline-block h-4 w-1 animate-pulse rounded-full bg-current align-[-2px] opacity-70" />
@@ -822,7 +928,7 @@ function ChatArea({
 
       {/* Input Area - Fixed at bottom within chat area */}
       {selectedUser && (
-        <div className="fixed bottom-0 left-0 lg:left-80 right-0 bg-white dark:bg-black border-t border-gray-200 dark:border-gray-800">
+        <div className="fixed bottom-0 left-0 right-0 max-w-full overflow-x-hidden border-t border-gray-200 bg-white dark:border-gray-800 dark:bg-black lg:left-80">
           {isSelectionMode ? (
             <div className="border-b border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200">
               Selection mode is active. Use the top bar actions or clear the selection to resume chatting.
@@ -851,9 +957,55 @@ function ChatArea({
           )}
           
           {/* Input Form */}
-          <div className="p-4">
+          <div className="p-3 sm:p-4">
             {!isSelectionMode && !isChatBlocked ? (
               <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
+                <div className="inline-flex rounded-xl border border-gray-300 bg-gray-100 p-1 dark:border-gray-700 dark:bg-gray-900">
+                  {(["normal", "vanish"] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setChatMode(mode)}
+                      className={`rounded-lg px-2.5 py-1.5 font-medium capitalize transition ${
+                        chatMode === mode
+                          ? "bg-white text-blue-700 shadow-sm dark:bg-gray-800 dark:text-blue-300"
+                          : "text-gray-600 dark:text-gray-300"
+                      }`}
+                    >
+                      {mode}
+                    </button>
+                  ))}
+                  {canUsePolishedMode ? (
+                    <button
+                      type="button"
+                      onClick={() => setChatMode("polished")}
+                      className={`rounded-lg px-2.5 py-1.5 font-medium transition ${
+                        chatMode === "polished"
+                          ? "bg-white text-rose-700 shadow-sm dark:bg-gray-800 dark:text-rose-300"
+                          : "text-gray-600 dark:text-gray-300"
+                      }`}
+                    >
+                      Polished
+                    </button>
+                  ) : null}
+                </div>
+                {chatMode === "vanish" ? (
+                  <label className="inline-flex items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-2 py-1.5 text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">
+                    <Timer size={14} />
+                    <select
+                      value={vanishSeconds}
+                      onChange={(event) => setVanishSeconds(Number(event.target.value))}
+                      className="bg-transparent outline-none"
+                    >
+                      <option value={30}>30 sec</option>
+                      <option value={60}>1 min</option>
+                      <option value={300}>5 min</option>
+                      <option value={900}>15 min</option>
+                      <option value={3600}>1 hour</option>
+                      <option value={86400}>24 hours</option>
+                    </select>
+                  </label>
+                ) : null}
                 <select
                   value={scheduleMode}
                   onChange={(event) =>
@@ -889,9 +1041,9 @@ function ChatArea({
                 ) : null}
               </div>
             ) : null}
-            <div className="flex items-end space-x-3">
+            <div className="flex min-w-0 items-end gap-2 sm:gap-3">
               {/* Left Sidebar for additional actions */}
-              <div className="flex items-center space-x-2">
+              <div className="flex shrink-0 items-center gap-1 sm:gap-2">
                 {/* File Upload */}
                 <input
                   type="file"
@@ -931,15 +1083,15 @@ function ChatArea({
                   {showEmojiPicker && (
                     <div
                       ref={emojiPickerRef}
-                      className="absolute bottom-full left-0 mb-6 bg-white dark:bg-black rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 p-8 w-105 z-50 animate-fadeIn"
+                      className="absolute bottom-full left-0 z-50 mb-6 w-[min(19rem,calc(100vw-1.5rem))] rounded-xl border border-gray-200 bg-white p-3 shadow-xl animate-fadeIn dark:border-gray-700 dark:bg-black sm:p-5"
                     >
-                      <div className="grid grid-cols-5 gap-4">
+                      <div className="grid grid-cols-5 gap-2 sm:gap-3">
                         {commonEmojis.map((emoji, idx) => (
                           <button
                             key={idx}
                             type="button"
                             onClick={() => handleEmojiClick(emoji)}
-                            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-2xl w-12 h-12"
+                            className="h-10 w-10 rounded-lg p-1 text-xl hover:bg-gray-100 dark:hover:bg-gray-700 sm:h-12 sm:w-12 sm:p-2 sm:text-2xl"
                           >
                             {emoji}
                           </button>
@@ -951,16 +1103,16 @@ function ChatArea({
               </div>
               
               {/* Text Area with Send Button on Side */}
-              <div className="flex-1 flex items-end space-x-3">
-                <div className="flex-1 relative">
+              <div className="flex min-w-0 flex-1 items-end gap-2 sm:gap-3">
+                <div className="relative min-w-0 flex-1">
                   {pendingAttachment && (
-                    <div className="mb-2 rounded-2xl border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800">
+                    <div className="mb-2 w-full max-w-full overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800">
                       <div className="mb-2 flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-gray-900 dark:text-white">
+                        <div className="min-w-0 flex-1">
+                          <p className="max-w-full truncate text-sm font-medium text-gray-900 dark:text-white" title={pendingAttachment.fileName}>
                             {pendingAttachment.fileName}
                           </p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                          <p className="break-words text-xs text-gray-500 dark:text-gray-400">
                             {pendingAttachment.mimeType || pendingAttachment.type} • {formatFileSize(pendingAttachment.size)}
                           </p>
                         </div>
@@ -978,14 +1130,14 @@ function ChatArea({
                         <img
                           src={pendingAttachment.previewUrl}
                           alt={pendingAttachment.fileName}
-                          className="max-h-40 rounded-xl object-cover"
+                          className="block max-h-[32vh] w-full rounded-xl object-contain"
                         />
                       )}
                       {pendingAttachment.type === "video" && (
                         <video
                           src={pendingAttachment.previewUrl}
                           controls
-                          className="max-h-40 rounded-xl bg-black"
+                          className="block max-h-[32vh] w-full rounded-xl bg-black"
                         />
                       )}
                       {pendingAttachment.type === "audio" && (
@@ -1006,8 +1158,8 @@ function ChatArea({
                     onBlur={handleInputBlur}
                     placeholder={isSelectionMode ? "Selection mode active" : isChatBlocked ? "Unblock this user to send messages" : "Type a message..."}
                     disabled={isComposerDisabled}
-                    className="w-full resize-none rounded-xl border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
-                    style={{ minHeight: '30px', maxHeight: '50px' }}
+                    className="w-full resize-none rounded-xl border border-gray-300 bg-gray-50 px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:bg-gray-800 sm:px-4 sm:text-base"
+                    style={{ minHeight: '44px', maxHeight: '104px' }}
                   />
                 </div>
                 

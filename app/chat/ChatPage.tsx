@@ -258,6 +258,19 @@ type MessagePageInfo = {
 };
 
 type MessageFetchMode = "initial" | "older" | "newer";
+type ChatMode = "normal" | "vanish" | "polished";
+
+type PolishedPreviewState = {
+  originalText: string;
+  enhancedText: string;
+  isGenerating: boolean;
+  error: string | null;
+  pendingSchedule?: {
+    scheduleMode: "now" | "delay" | "later";
+    delayMs?: number;
+    scheduledFor?: string;
+  };
+};
 
 const INITIAL_MESSAGE_PAGE_SIZE = 40;
 const MESSAGE_SYNC_DEBOUNCE_MS = 300;
@@ -313,6 +326,9 @@ export default function ChatPage() {
   const [showHiddenMessages, setShowHiddenMessages] = useState(false);
   const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
   const [isSelectionActionBusy, setIsSelectionActionBusy] = useState(false);
+  const [chatMode, setChatModeState] = useState<ChatMode>("normal");
+  const [vanishSeconds, setVanishSecondsState] = useState(300);
+  const [polishedPreview, setPolishedPreview] = useState<PolishedPreviewState | null>(null);
   
   // Chat UI state
   const [replyTo, setReplyTo] = useState<Message | null>(null);
@@ -356,6 +372,7 @@ export default function ChatPage() {
   const selectedConversationId =
     selectedUser?.conversationId ??
     (selectedUser?.chatType === "group" ? selectedUser.id : null);
+  const canUsePolishedMode = selectedUser?.chatType !== "group";
 
   const clearUnreadForChat = useCallback((chatId: string) => {
     setUnreadByUser((prev) =>
@@ -466,6 +483,18 @@ export default function ChatPage() {
         ? `/api/messages/by-user/${conversationId}/read?chatType=group`
         : `/api/messages/by-user/${chat.id}/read`,
     };
+  }, []);
+
+  const setChatMode = useCallback((mode: ChatMode) => {
+    setChatModeState((prev) => {
+      if (!canUsePolishedMode && mode === "polished") return "normal";
+      return prev === mode ? prev : mode;
+    });
+  }, [canUsePolishedMode]);
+
+  const setVanishSeconds = useCallback((seconds: number) => {
+    const normalized = Math.min(Math.max(Math.round(Number(seconds) || 300), 10), 86_400);
+    setVanishSecondsState(normalized);
   }, []);
 
   const openConfirmDialog = useCallback((dialog: Exclude<ConfirmDialogState, null>) => {
@@ -1172,6 +1201,84 @@ export default function ChatPage() {
   }, [selectedUser]);
 
   useEffect(() => {
+    if (!selectedUser) {
+      setChatModeState("normal");
+      setPolishedPreview(null);
+      return;
+    }
+
+    if (selectedUser.chatType === "group" && chatMode === "polished") {
+      setChatModeState("normal");
+      setPolishedPreview(null);
+    }
+  }, [chatMode, selectedUser]);
+
+  useEffect(() => {
+    if (!selectedUser || !currentUserId) return;
+
+    const resource = getChatResource(selectedUser);
+    const controller = new AbortController();
+    const url = new URL("/api/messages/chat-mode", window.location.origin);
+
+    if (resource.conversationId) {
+      url.searchParams.set("conversationId", resource.conversationId);
+    } else {
+      url.searchParams.set("receiverId", selectedUser.id);
+    }
+
+    (async () => {
+      try {
+        const response = await fetch(url.toString(), {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) return;
+
+        const nextMode: ChatMode =
+          selectedUser.chatType === "group" && data.mode === "polished"
+            ? "normal"
+            : data.mode === "vanish" || data.mode === "polished"
+              ? data.mode
+              : "normal";
+
+        setChatModeState(nextMode);
+        if (typeof data.vanishSeconds === "number") {
+          setVanishSecondsState(data.vanishSeconds);
+        }
+      } catch (error) {
+        if ((error as DOMException).name !== "AbortError") {
+          console.warn("Failed to load chat mode preference:", error);
+        }
+      }
+    })();
+
+    return () => controller.abort();
+  }, [currentUserId, getChatResource, selectedConversationId, selectedUser]);
+
+  useEffect(() => {
+    if (!selectedUser || !currentUserId) return;
+
+    const resource = getChatResource(selectedUser);
+    const timeout = setTimeout(() => {
+      fetch("/api/messages/chat-mode", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          receiverId: selectedUser.chatType === "group" ? undefined : selectedUser.id,
+          conversationId: resource.conversationId,
+          mode: selectedUser.chatType === "group" && chatMode === "polished" ? "normal" : chatMode,
+          vanishSeconds,
+        }),
+      }).catch((error) => {
+        console.warn("Failed to save chat mode preference:", error);
+      });
+    }, 250);
+
+    return () => clearTimeout(timeout);
+  }, [chatMode, currentUserId, getChatResource, selectedConversationId, selectedUser, vanishSeconds]);
+
+  useEffect(() => {
     const activeUser = selectedUserRef.current;
     if (!activeUser || !selectedUserId) return;
 
@@ -1607,6 +1714,112 @@ export default function ChatPage() {
   }, [pendingAttachment]);
 
   /* ------------------------------ SEND MESSAGE ------------------------------ */
+  const generatePolishedPreview = useCallback(
+    async (
+      originalText: string,
+      pendingSchedule?: PolishedPreviewState["pendingSchedule"]
+    ) => {
+      setPolishedPreview({
+        originalText,
+        enhancedText: "",
+        isGenerating: true,
+        error: null,
+        pendingSchedule,
+      });
+
+      try {
+        const response = await fetch("/api/messages/polished-preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: originalText,
+            chatType: selectedUser?.chatType === "group" ? "group" : "direct",
+          }),
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok || !data.enhancedText) {
+          throw new Error(data.error || "Unable to generate polished preview");
+        }
+
+        setPolishedPreview({
+          originalText,
+          enhancedText: data.enhancedText,
+          isGenerating: false,
+          error: null,
+          pendingSchedule,
+        });
+      } catch (error) {
+        setPolishedPreview((prev) => ({
+          originalText,
+          enhancedText: prev?.enhancedText ?? "",
+          isGenerating: false,
+          pendingSchedule,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Unable to generate polished preview",
+        }));
+      }
+    },
+    [selectedUser?.chatType]
+  );
+
+  const sendComposedMessage = useCallback(async (
+    messageText: string,
+    schedule?: {
+      scheduleMode: "now" | "delay" | "later";
+      delayMs?: number;
+      scheduledFor?: string;
+    },
+    modeOverride?: ChatMode,
+    originalTextOverride?: string
+  ) => {
+    if (!selectedUser || !currentUserId) return;
+
+    const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const resource = getChatResource(selectedUser);
+    const effectiveMode =
+      selectedUser.chatType === "group" && modeOverride === "polished"
+        ? "normal"
+        : modeOverride ?? chatMode;
+
+    socketSendMessage({
+      id: tempId,
+      content: messageText,
+      receiverId:
+        selectedUser.chatType === "group" ? undefined : selectedUser.id,
+      conversationId: resource.conversationId ?? undefined,
+      senderId: currentUserId,
+      replyToId: replyTo?.id,
+      file: pendingAttachment?.file ?? null,
+      scheduleMode: schedule?.scheduleMode ?? "now",
+      delayMs: schedule?.delayMs,
+      scheduledFor: schedule?.scheduledFor,
+      chatMode: effectiveMode,
+      vanishSeconds: effectiveMode === "vanish" ? vanishSeconds : undefined,
+      originalText: originalTextOverride,
+    });
+
+    setNewMessage("");
+    setReplyTo(null);
+    setShowEmojiPicker(false);
+    clearPendingAttachment();
+    setPolishedPreview(null);
+
+    inputRef.current?.focus();
+  }, [
+    chatMode,
+    clearPendingAttachment,
+    currentUserId,
+    getChatResource,
+    pendingAttachment?.file,
+    replyTo?.id,
+    selectedUser,
+    socketSendMessage,
+    vanishSeconds,
+  ]);
+
   const handleSendMessage = async (
     schedule?: {
       scheduleMode: "now" | "delay" | "later";
@@ -1630,36 +1843,64 @@ export default function ChatPage() {
     if (!messageText && !pendingAttachment) {
       return;
     }
-    const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-    const resource = getChatResource(selectedUser);
+
+    if (
+      chatMode === "polished" &&
+      selectedUser.chatType !== "group" &&
+      messageText
+    ) {
+      await generatePolishedPreview(messageText, schedule);
+      return;
+    }
 
     try {
       setSendingMessage(true);
-
-      socketSendMessage({
-        id: tempId,
-        content: messageText,
-        receiverId:
-          selectedUser.chatType === "group" ? undefined : selectedUser.id,
-        conversationId: resource.conversationId ?? undefined,
-        senderId: currentUserId,
-        replyToId: replyTo?.id,
-        file: pendingAttachment?.file ?? null,
-        scheduleMode: schedule?.scheduleMode ?? "now",
-        delayMs: schedule?.delayMs,
-        scheduledFor: schedule?.scheduledFor,
-      });
-
-      setNewMessage("");
-      setReplyTo(null);
-      setShowEmojiPicker(false);
-      clearPendingAttachment();
-
-      inputRef.current?.focus();
+      await sendComposedMessage(messageText, schedule, chatMode);
     } finally {
       setSendingMessage(false);
     }
   };
+
+  const handleChangePolishedPreview = useCallback((text: string) => {
+    setPolishedPreview((prev) =>
+      prev ? { ...prev, enhancedText: text, error: null } : prev
+    );
+  }, []);
+
+  const handleRegeneratePolishedPreview = useCallback(() => {
+    if (!polishedPreview?.originalText || polishedPreview.isGenerating) return;
+    void generatePolishedPreview(
+      polishedPreview.originalText,
+      polishedPreview.pendingSchedule
+    );
+  }, [generatePolishedPreview, polishedPreview]);
+
+  const handleCancelPolishedPreview = useCallback(() => {
+    setPolishedPreview(null);
+  }, []);
+
+  const handleApprovePolishedPreview = useCallback(async () => {
+    if (
+      !polishedPreview ||
+      polishedPreview.isGenerating ||
+      !polishedPreview.enhancedText.trim() ||
+      sendingMessage
+    ) {
+      return;
+    }
+
+    try {
+      setSendingMessage(true);
+      await sendComposedMessage(
+        polishedPreview.enhancedText.trim(),
+        polishedPreview.pendingSchedule,
+        "polished",
+        polishedPreview.originalText
+      );
+    } finally {
+      setSendingMessage(false);
+    }
+  }, [polishedPreview, sendComposedMessage, sendingMessage]);
 
   const patchScheduledMessage = useCallback(
     async (message: Message, body: Record<string, unknown>) => {
@@ -3418,6 +3659,16 @@ export default function ChatPage() {
               isPeerTyping={Boolean(
                 selectedUser && typingUsers.has(selectedUser.id)
               )}
+              chatMode={chatMode}
+              setChatMode={setChatMode}
+              vanishSeconds={vanishSeconds}
+              setVanishSeconds={setVanishSeconds}
+              canUsePolishedMode={canUsePolishedMode}
+              polishedPreview={polishedPreview}
+              onChangePolishedPreview={handleChangePolishedPreview}
+              onRegeneratePolishedPreview={handleRegeneratePolishedPreview}
+              onCancelPolishedPreview={handleCancelPolishedPreview}
+              onApprovePolishedPreview={handleApprovePolishedPreview}
             />
           </div>
         ) : null}
