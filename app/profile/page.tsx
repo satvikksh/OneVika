@@ -677,7 +677,7 @@ if (postsResponse.ok) {
                     <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg flex-shrink-0">
                       <MapPin
                         size={18}
-                        className="text-green-600 dark:text-green-400"
+                        className="text-green-600 dark:text-green-600"
                       />
                     </div>
                     <div>
@@ -865,7 +865,7 @@ if (postsResponse.ok) {
                   <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
                     <Shield
                       size={18}
-                      className="text-green-600 dark:text-green-400"
+                      className="text-green-600 dark:text-green-600"
                     />
                   </div>
                   <div>

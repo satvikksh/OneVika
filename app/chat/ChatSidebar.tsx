@@ -384,13 +384,13 @@ const ChatPasswordDialog: React.FC<{
           {isUpdateLockMode || isRemoveLockMode ? (
             <label className="block">
               <span className="mb-2 block text-sm font-medium text-gray-800 dark:text-gray-200">Current password</span>
-              <input type="password" value={currentPassword} onChange={(event) => onCurrentPasswordChange(event.target.value)} autoFocus className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white" placeholder="Enter current password" />
+              <input type="password" value={currentPassword} onChange={(event) => onCurrentPasswordChange(event.target.value)} autoFocus className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-gray-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white" placeholder="Enter current password" />
             </label>
           ) : null}
           {isUnlockMode ? (
             <label className="block">
               <span className="mb-2 block text-sm font-medium text-gray-800 dark:text-gray-200">Password</span>
-              <input type="password" value={password} onChange={(event) => onPasswordChange(event.target.value)} autoFocus className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white" placeholder="Enter password" />
+              <input type="password" value={password} onChange={(event) => onPasswordChange(event.target.value)} autoFocus className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-gray-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white" placeholder="Enter password" />
             </label>
           ) : null}
           {canRecover ? (
@@ -409,7 +409,7 @@ const ChatPasswordDialog: React.FC<{
             <>
               <label className="block">
                 <span className="mb-2 block text-sm font-medium text-gray-800 dark:text-gray-200">Security question</span>
-                <select value={securityQuestion} onChange={(event) => onSecurityQuestionChange(event.target.value as SecurityKey | "")} autoFocus className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white">
+                <select value={securityQuestion} onChange={(event) => onSecurityQuestionChange(event.target.value as SecurityKey | "")} autoFocus className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-gray-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white">
                   <option value="">Select security question</option>
                   {SECURITY_QUESTIONS.map((question) => (
                     <option key={question.key} value={question.key}>
@@ -420,7 +420,7 @@ const ChatPasswordDialog: React.FC<{
               </label>
               <label className="block">
                 <span className="mb-2 block text-sm font-medium text-gray-800 dark:text-gray-200">Security answer</span>
-                <input type="text" value={securityAnswer} onChange={(event) => onSecurityAnswerChange(event.target.value)} className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white" placeholder="Enter security answer" />
+                <input type="text" value={securityAnswer} onChange={(event) => onSecurityAnswerChange(event.target.value)} className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-gray-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white" placeholder="Enter security answer" />
               </label>
             </>
           ) : null}
@@ -428,18 +428,18 @@ const ChatPasswordDialog: React.FC<{
             <>
               <label className="block">
                 <span className="mb-2 block text-sm font-medium text-gray-800 dark:text-gray-200">New password</span>
-                <input type="password" value={password} onChange={(event) => onPasswordChange(event.target.value)} autoFocus={isLockMode} className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white" placeholder="Choose a new password" />
+                <input type="password" value={password} onChange={(event) => onPasswordChange(event.target.value)} autoFocus={isLockMode} className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-gray-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white" placeholder="Choose a new password" />
               </label>
               <label className="block">
                 <span className="mb-2 block text-sm font-medium text-gray-800 dark:text-gray-200">Confirm new password</span>
-                <input type="password" value={confirmPassword} onChange={(event) => onConfirmPasswordChange(event.target.value)} className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white" placeholder="Re-enter new password" />
+                <input type="password" value={confirmPassword} onChange={(event) => onConfirmPasswordChange(event.target.value)} className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-gray-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white" placeholder="Re-enter new password" />
               </label>
               {showVisibilityOptions ? (
                 <div className="grid grid-cols-2 gap-3">
-                <button type="button" onClick={() => onVisibilityChange("blur")} className={`rounded-2xl border px-4 py-3 text-left transition ${visibility === "blur" ? "border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300" : "border-gray-200 bg-gray-50 text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300"}`}>
+                <button type="button" onClick={() => onVisibilityChange("blur")} className={`rounded-2xl border px-4 py-3 text-left transition ${visibility === "blur" ? "border-gray-500 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300" : "border-gray-200 bg-gray-50 text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300"}`}>
                   <div className="flex items-center gap-2 font-medium"><Shield size={16} /> Blur</div>
                 </button>
-                <button type="button" onClick={() => onVisibilityChange("hidden")} className={`rounded-2xl border px-4 py-3 text-left transition ${visibility === "hidden" ? "border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300" : "border-gray-200 bg-gray-50 text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300"}`}>
+                <button type="button" onClick={() => onVisibilityChange("hidden")} className={`rounded-2xl border px-4 py-3 text-left transition ${visibility === "hidden" ? "border-gray-500 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300" : "border-gray-200 bg-gray-50 text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300"}`}>
                   <div className="flex items-center gap-2 font-medium"><EyeOff size={16} /> Hide</div>
                 </button>
                 </div>
@@ -1228,7 +1228,7 @@ function ChatSidebar({
         >
           <div className="relative flex-shrink-0">
             {isGroupChat ? (
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-100 text-blue-600 dark:bg-blue-950/40 dark:text-blue-300">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gray-100 text-gray-600 dark:bg-gray-950/40 dark:text-gray-300">
                 <Users size={20} />
               </div>
             ) : isLockedHidden ? (
@@ -1238,7 +1238,7 @@ function ChatSidebar({
                 <PremiumAvatar src={typeof user.avatar === "string" ? user.avatar : null} alt={getChatDisplayName(user)} fallback={getChatDisplayName(user)} size={48} isPremium={Boolean(user.isPremium)} />
               </div>
             )}
-            {isOnline && !isLockedHidden && !isGroupChat ? <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-white bg-green-500 dark:border-gray-950" /> : null}
+            {isOnline && !isLockedHidden && !isGroupChat ? <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-white bg-green-600 dark:border-gray-950" /> : null}
             {user.isLocked && !isGroupChat ? <span className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border border-white bg-gray-900 text-white dark:border-gray-950 dark:bg-gray-100 dark:text-gray-900"><Lock size={12} /></span> : null}
           </div>
           <div className="min-w-0 flex-1">
@@ -1255,21 +1255,21 @@ function ChatSidebar({
             <div className="mt-1 flex items-center justify-between gap-3">
               <p className="min-w-0 truncate text-sm text-gray-500 dark:text-gray-400">
                 {isGroupChat ? (
-                  <span className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400">
+                  <span className="inline-flex items-center gap-1 text-green-600 dark:text-gray-400">
                     <Users size={12} />
                     {user.subtitle || `${user.memberCount ?? user.memberIds?.length ?? 0} members`}
                   </span>
                 ) : typingUsers.has(user.id) && !user.isLocked ? (
-                  <span className="italic text-blue-600 dark:text-blue-400">typing...</span>
+                  <span className="italic text-gray-600 dark:text-gray-400">typing...</span>
                 ) : (
-                  <span className={isOnline && !user.isLocked ? "text-green-600 dark:text-green-400" : undefined}>{getPresentedStatus(user, typingUsers, isOnline)}</span>
+                  <span className={isOnline && !user.isLocked ? "text-green-600 dark:text-green-600" : undefined}>{getPresentedStatus(user, typingUsers, isOnline)}</span>
                 )}
               </p>
               {unreadCount > 0 ? <span className="flex min-w-[24px] flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-pink-600 px-2 py-1 text-xs font-bold text-white shadow-lg">{unreadCount > 99 ? "99+" : unreadCount}</span> : null}
             </div>
           </div>
         </button>
-        <div className={`pointer-events-none absolute inset-x-0 bottom-0 h-1 origin-left bg-gradient-to-r from-blue-500 via-cyan-400 to-sky-500 transition-transform duration-75 ${pressingUserId === user.id ? "opacity-100" : "opacity-0"}`} style={{ transform: `scaleX(${pressingUserId === user.id ? pressProgress : 0})` }} />
+        <div className={`pointer-events-none absolute inset-x-0 bottom-0 h-1 origin-left bg-gradient-to-r from-gray-500 via-cyan-400 to-sky-500 transition-transform duration-75 ${pressingUserId === user.id ? "opacity-100" : "opacity-0"}`} style={{ transform: `scaleX(${pressingUserId === user.id ? pressProgress : 0})` }} />
         {isHighlighted ? <div className="pointer-events-none absolute inset-0 rounded-2xl border border-blue-400/50" /> : null}
       </div>
     );
@@ -1298,32 +1298,33 @@ function ChatSidebar({
               onClick={() => handleUserSelect(visibleAiChat)}
               className={`flex w-full items-center gap-3 rounded-2xl border px-3 py-3 text-left transition ${
                 selectedUser?.id === visibleAiChat.id
-                  ? "border-blue-500 bg-white shadow-sm dark:border-blue-400 dark:bg-gray-900"
-                  : "border-blue-200/80 bg-white/80 hover:border-blue-300 hover:bg-white dark:border-blue-900/80 dark:bg-gray-950/70 dark:hover:border-blue-700"
+                  ? "border-gray-500 bg-white shadow-sm dark:border-gray-400 dark:bg-gray-900"
+                  : "border-gray-200/80 bg-white/80 hover:border-blue-300 hover:bg-white dark:border-gray-700 dark:bg-gray-950/70 dark:hover:border-blue-700"
               }`}
             >
               <div className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 via-cyan-500 to-violet-600 text-white">
                 {typeof visibleAiChat.avatar === "string" && visibleAiChat.avatar ? (
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={visibleAiChat.avatar}
-                    alt=""
+                    src="/icons/orbitoai.png"
+                    alt="avatar"
                     className="h-full w-full object-cover"
                   />
                 ) : (
                   <Sparkles size={20} />
                 )}
-                <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-white bg-blue-400 dark:border-gray-950" />
+                <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-white bg-green-700 dark:border-gray-950" />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="truncate font-semibold text-gray-900 dark:text-white">
                     {getChatDisplayName(visibleAiChat)}
                   </span>
-                  <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-blue-700 dark:bg-blue-950 dark:text-blue-200">
+                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-700 dark:bg-gray-950 dark:text-gray-200">
                     AI
                   </span>
                 </div>
-                <p className="mt-1 truncate text-sm text-blue-700 dark:text-blue-300">
+                <p className="mt-1 truncate text-sm text-gray-700 dark:text-gray-300">
                   {typingUsers.has(visibleAiChat.id)
                     ? "typing..."
                     : "Chat privately with Orbit"}

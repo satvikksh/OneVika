@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import mongoose from "mongoose";
 import { authOptions } from "@/app/lib/authOptions";
 import { getNativeDb } from "@/app/lib/mongodb";
+import { isPremiumActive } from "@/app/lib/premium";
 
 const { ObjectId } = mongoose.Types;
 
@@ -14,6 +15,11 @@ type ConversationDoc = {
   _id: mongoose.Types.ObjectId;
   participants?: mongoose.Types.ObjectId[];
   isGroup?: boolean;
+};
+
+type UserPremiumDoc = {
+  isPremium?: boolean;
+  premiumExpiresAt?: Date | string | null;
 };
 
 const normalizeMode = (mode: unknown): ChatMode =>
@@ -127,6 +133,23 @@ export async function PATCH(req: NextRequest) {
     const mode = conversation.isGroup && requestedMode === "polished"
       ? "normal"
       : requestedMode;
+
+    if (mode === "polished") {
+      const user = await db.collection<UserPremiumDoc>("users").findOne(
+        { _id: currentUserId },
+        { projection: { isPremium: 1, premiumExpiresAt: 1 } }
+      );
+
+      if (!isPremiumActive(user)) {
+        return NextResponse.json(
+          {
+            error: "Polished Chat is a Premium feature.",
+            code: "PREMIUM_REQUIRED",
+          },
+          { status: 402 }
+        );
+      }
+    }
     const vanishSeconds = normalizeVanishSeconds(body.vanishSeconds);
     const now = new Date();
 

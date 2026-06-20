@@ -18,6 +18,7 @@ export interface Message {
   text?: string;
   content?: string;
   senderId: string;
+  senderName?: string;
   receiverId: string;
   timestamp: string | Date;
   chatId?: string;
@@ -66,6 +67,11 @@ export interface User {
   image?: string;
   unreadCount?: number;
   lastMessageAt?: string | null;
+  lastMessagePreview?: string | null;
+  lastMessageType?: "text" | "image" | "video" | "audio" | "file" | "system";
+  lastMessageSenderId?: string | null;
+  lastMessageStatus?: "sending" | "scheduled" | "sent" | "delivered" | "read" | "failed";
+  lastMessageIsAI?: boolean;
   isPinned?: boolean;
   isArchived?: boolean;
   isLocked?: boolean;

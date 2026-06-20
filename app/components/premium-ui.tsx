@@ -111,7 +111,7 @@ export function PremiumAvatar({
             "flex h-full w-full items-center justify-center overflow-hidden rounded-full",
             isPremium
               ? "bg-gradient-to-br from-stone-950 via-amber-950 to-slate-500 ring-2 ring-amber-50/80"
-              : "bg-gradient-to-br from-blue-500 to-blue-600 ring-2 ring-white dark:ring-gray-900",
+              : "bg-gradient-to-br from-gray-500 to-gray-800 ring-2 ring-white dark:ring-gray-900",
             innerClassName
           )}
         >

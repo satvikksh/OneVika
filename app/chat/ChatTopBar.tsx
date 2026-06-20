@@ -406,13 +406,13 @@ function ChatTopBar({
                   }`}
                 >
                   {isGroupChat ? (
-                    <span className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400">
-                      <span className="h-2 w-2 rounded-full bg-blue-500" />
+                    <span className="inline-flex items-center gap-1 text-green-600 dark:text-gray-400">
+                      <span className="h-2 w-2 rounded-full bg-gray-500" />
                       {selectedUser.memberCount ?? selectedUser.memberIds?.length ?? 0} members
                     </span>
                   ) : isAiChat ? (
-                    <span className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400">
-                      <span className="h-2 w-2 rounded-full bg-blue-500" />
+                    <span className="inline-flex items-center gap-1 text-green-600 dark:text-gray-400">
+                      <span className="h-2 w-2 rounded-full bg-green-600" />
                       AI assistant online
                     </span>
                   ) : selectedUser.isBlocked ? (
@@ -421,9 +421,9 @@ function ChatTopBar({
                       Messaging blocked
                     </span>
                   ) : typingUsers.has(selectedUser.id) ? (
-                    <span className="italic text-blue-600 dark:text-blue-400">typing...</span>
+                    <span className="italic text-gray-600 dark:text-gray-400">typing...</span>
                   ) : isUserOnline ? (
-                    <span className="inline-flex items-center gap-1 text-green-600 dark:text-green-400">
+                    <span className="inline-flex items-center gap-1 text-green-600 dark:text-green-600">
                       <span className="h-2 w-2 rounded-full bg-green-500" />
                       Online
                     </span>

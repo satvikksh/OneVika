@@ -93,6 +93,7 @@ const messagesAreEqual = (left: Message, right: Message) =>
   left.text === right.text &&
   left.content === right.content &&
   left.senderId === right.senderId &&
+  left.senderName === right.senderName &&
   left.receiverId === right.receiverId &&
   left.chatId === right.chatId &&
   left.conversationId === right.conversationId &&
@@ -348,6 +349,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
             content: data.message.text ?? messageText,
             text: data.message.text ?? messageText,
             senderId: data.message.senderId ?? userId,
+            senderName: data.message.senderName,
             receiverId: data.message.receiverId ?? message.receiverId ?? "",
             chatId: data.message.conversationId,
             conversationId: data.message.conversationId ?? message.conversationId,

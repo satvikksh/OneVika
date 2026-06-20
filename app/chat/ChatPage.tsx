@@ -227,6 +227,26 @@ const getMessageTimestamp = (message: Message) => {
   return Number.isNaN(ts) ? 0 : ts;
 };
 
+const buildLatestMessagePreview = (message: Message, currentUserId?: string) => {
+  const attachment = message.attachments?.[0];
+  const type = message.type || attachment?.type || "text";
+  const prefix =
+    message.senderId === currentUserId
+      ? "You: "
+      : message.isAI
+        ? "AI: "
+        : "";
+  const text = (message.text || message.content || "").trim();
+
+  if (message.chatMode === "polished" && text) return `${prefix}Polished: ${text}`;
+  if (text) return `${prefix}${text}`;
+  if (type === "image") return `${prefix}Photo`;
+  if (type === "video") return `${prefix}Video`;
+  if (type === "audio") return `${prefix}Voice note`;
+  if (type === "file") return `${prefix}${attachment?.fileName || "Document"}`;
+  return `${prefix}System message`;
+};
+
 type ChatPageCache = {
   users: User[];
   selectedUserId: string | null;
@@ -329,6 +349,7 @@ export default function ChatPage() {
   const [chatMode, setChatModeState] = useState<ChatMode>("normal");
   const [vanishSeconds, setVanishSecondsState] = useState(300);
   const [polishedPreview, setPolishedPreview] = useState<PolishedPreviewState | null>(null);
+  const [isPremiumUser, setIsPremiumUser] = useState(false);
   
   // Chat UI state
   const [replyTo, setReplyTo] = useState<Message | null>(null);
@@ -488,9 +509,10 @@ export default function ChatPage() {
   const setChatMode = useCallback((mode: ChatMode) => {
     setChatModeState((prev) => {
       if (!canUsePolishedMode && mode === "polished") return "normal";
+      if (!isPremiumUser && mode === "polished") return prev;
       return prev === mode ? prev : mode;
     });
-  }, [canUsePolishedMode]);
+  }, [canUsePolishedMode, isPremiumUser]);
 
   const setVanishSeconds = useCallback((seconds: number) => {
     const normalized = Math.min(Math.max(Math.round(Number(seconds) || 300), 10), 86_400);
@@ -805,6 +827,32 @@ export default function ChatPage() {
       }
     })();
   }, [session?.user?.id, status]);
+
+  useEffect(() => {
+    if (status !== "authenticated") {
+      setIsPremiumUser(false);
+      return;
+    }
+
+    const controller = new AbortController();
+
+    (async () => {
+      try {
+        const response = await fetch("/api/premium/status", {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const data = await response.json().catch(() => ({}));
+        setIsPremiumUser(Boolean(response.ok && data.isPremium));
+      } catch (error) {
+        if ((error as DOMException).name !== "AbortError") {
+          setIsPremiumUser(false);
+        }
+      }
+    })();
+
+    return () => controller.abort();
+  }, [status]);
 
   useEffect(() => {
     if (!users.length) return;
@@ -1207,11 +1255,14 @@ export default function ChatPage() {
       return;
     }
 
-    if (selectedUser.chatType === "group" && chatMode === "polished") {
+    if (
+      (selectedUser.chatType === "group" || !isPremiumUser) &&
+      chatMode === "polished"
+    ) {
       setChatModeState("normal");
       setPolishedPreview(null);
     }
-  }, [chatMode, selectedUser]);
+  }, [chatMode, isPremiumUser, selectedUser]);
 
   useEffect(() => {
     if (!selectedUser || !currentUserId) return;
@@ -1236,7 +1287,8 @@ export default function ChatPage() {
         if (!response.ok) return;
 
         const nextMode: ChatMode =
-          selectedUser.chatType === "group" && data.mode === "polished"
+          (selectedUser.chatType === "group" || !isPremiumUser) &&
+          data.mode === "polished"
             ? "normal"
             : data.mode === "vanish" || data.mode === "polished"
               ? data.mode
@@ -1254,7 +1306,7 @@ export default function ChatPage() {
     })();
 
     return () => controller.abort();
-  }, [currentUserId, getChatResource, selectedConversationId, selectedUser]);
+  }, [currentUserId, getChatResource, isPremiumUser, selectedConversationId, selectedUser]);
 
   useEffect(() => {
     if (!selectedUser || !currentUserId) return;
@@ -1267,7 +1319,11 @@ export default function ChatPage() {
         body: JSON.stringify({
           receiverId: selectedUser.chatType === "group" ? undefined : selectedUser.id,
           conversationId: resource.conversationId,
-          mode: selectedUser.chatType === "group" && chatMode === "polished" ? "normal" : chatMode,
+          mode:
+            (selectedUser.chatType === "group" || !isPremiumUser) &&
+            chatMode === "polished"
+              ? "normal"
+              : chatMode,
           vanishSeconds,
         }),
       }).catch((error) => {
@@ -1276,7 +1332,7 @@ export default function ChatPage() {
     }, 250);
 
     return () => clearTimeout(timeout);
-  }, [chatMode, currentUserId, getChatResource, selectedConversationId, selectedUser, vanishSeconds]);
+  }, [chatMode, currentUserId, getChatResource, isPremiumUser, selectedConversationId, selectedUser, vanishSeconds]);
 
   useEffect(() => {
     const activeUser = selectedUserRef.current;
@@ -1780,7 +1836,8 @@ export default function ChatPage() {
     const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
     const resource = getChatResource(selectedUser);
     const effectiveMode =
-      selectedUser.chatType === "group" && modeOverride === "polished"
+      (selectedUser.chatType === "group" || !isPremiumUser) &&
+      modeOverride === "polished"
         ? "normal"
         : modeOverride ?? chatMode;
 
@@ -1813,6 +1870,7 @@ export default function ChatPage() {
     clearPendingAttachment,
     currentUserId,
     getChatResource,
+    isPremiumUser,
     pendingAttachment?.file,
     replyTo?.id,
     selectedUser,
@@ -1847,6 +1905,7 @@ export default function ChatPage() {
     if (
       chatMode === "polished" &&
       selectedUser.chatType !== "group" &&
+      isPremiumUser &&
       messageText
     ) {
       await generatePolishedPreview(messageText, schedule);
@@ -1860,6 +1919,23 @@ export default function ChatPage() {
       setSendingMessage(false);
     }
   };
+
+  const handleSendOriginalPolishedPreview = useCallback(async () => {
+    if (!polishedPreview?.originalText.trim() || sendingMessage) {
+      return;
+    }
+
+    try {
+      setSendingMessage(true);
+      await sendComposedMessage(
+        polishedPreview.originalText.trim(),
+        polishedPreview.pendingSchedule,
+        "normal"
+      );
+    } finally {
+      setSendingMessage(false);
+    }
+  }, [polishedPreview, sendComposedMessage, sendingMessage]);
 
   const handleChangePolishedPreview = useCallback((text: string) => {
     setPolishedPreview((prev) =>
@@ -3397,7 +3473,7 @@ export default function ChatPage() {
   const usersSortedByRecentMessage = useMemo(() => {
     if (!currentUserId) return users;
 
-    const latestByUser = new Map<string, number>();
+    const latestByUser = new Map<string, Message>();
 
     socketMessages.forEach((msg) => {
       const otherUserId = resolveChatUserIdForMessage(msg);
@@ -3406,13 +3482,27 @@ export default function ChatPage() {
       const ts = getMessageTimestamp(msg);
       if (ts <= 0) return;
 
-      const prev = latestByUser.get(otherUserId) ?? 0;
-      if (ts > prev) {
-        latestByUser.set(otherUserId, ts);
+      const prev = latestByUser.get(otherUserId);
+      if (ts > (prev ? getMessageTimestamp(prev) : 0)) {
+        latestByUser.set(otherUserId, msg);
       }
     });
 
-    return [...users].sort((a, b) => {
+    return users.map((user) => {
+      const latestMessage = latestByUser.get(user.id);
+      if (!latestMessage) return user;
+
+      const latestTimestamp = new Date(getMessageTimestamp(latestMessage)).toISOString();
+      return {
+        ...user,
+        lastMessageAt: latestTimestamp,
+        lastMessagePreview: buildLatestMessagePreview(latestMessage, currentUserId),
+        lastMessageType: latestMessage.type,
+        lastMessageSenderId: latestMessage.senderId,
+        lastMessageStatus: latestMessage.status,
+        lastMessageIsAI: Boolean(latestMessage.isAI),
+      };
+    }).sort((a, b) => {
       const aArchived = Number(Boolean(a.isArchived));
       const bArchived = Number(Boolean(b.isArchived));
       if (aArchived !== bArchived) return aArchived - bArchived;
@@ -3430,8 +3520,8 @@ export default function ChatPage() {
         ? new Date(b.lastMessageAt).getTime()
         : 0;
 
-      const aTs = Math.max(latestByUser.get(a.id) ?? 0, aInitialTs);
-      const bTs = Math.max(latestByUser.get(b.id) ?? 0, bInitialTs);
+      const aTs = aInitialTs;
+      const bTs = bInitialTs;
       if (aTs !== bTs) return bTs - aTs;
 
       const aPinned = Number(Boolean(a.isPinned));
@@ -3664,11 +3754,13 @@ export default function ChatPage() {
               vanishSeconds={vanishSeconds}
               setVanishSeconds={setVanishSeconds}
               canUsePolishedMode={canUsePolishedMode}
+              isPremiumUser={isPremiumUser}
               polishedPreview={polishedPreview}
               onChangePolishedPreview={handleChangePolishedPreview}
               onRegeneratePolishedPreview={handleRegeneratePolishedPreview}
               onCancelPolishedPreview={handleCancelPolishedPreview}
               onApprovePolishedPreview={handleApprovePolishedPreview}
+              onSendOriginalPolishedPreview={handleSendOriginalPolishedPreview}
             />
           </div>
         ) : null}

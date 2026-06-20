@@ -11,7 +11,7 @@ export const AI_ASSISTANT_EMAIL = (
 export const AI_ASSISTANT_NAME =
   process.env.AI_ASSISTANT_NAME || "Orbito AI";
 export const AI_ASSISTANT_AVATAR =
-  process.env.AI_ASSISTANT_AVATAR || "/icons/deepseek-ai.svg";
+  process.env.AI_ASSISTANT_AVATAR || "/icons/orbitoai.png";
 
 type AiConversationDoc = {
   _id: mongoose.Types.ObjectId;

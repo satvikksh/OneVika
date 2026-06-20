@@ -172,7 +172,7 @@ export function ProjectCard({
             <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-gradient-to-r from-blue-500 to-cyan-500">
               {project.user.avatar ? (
                 <Image
-                  src={project.user.avatar}
+                  src="/icons/orbitoai.png"
                   alt={project.user.name}
                   width={40}
                   height={40}

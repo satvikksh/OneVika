@@ -238,6 +238,23 @@ export async function GET(
           .map((participant) => participant?.toString?.())
           .filter(Boolean) as string[]
       : [];
+    const senderNameById = new Map<string, string>();
+
+    if (isGroupChat && participantIds.length > 0) {
+      const participantUsers = await db
+        .collection("users")
+        .find(
+          { _id: { $in: participantIds.map((id) => new ObjectId(id)) } },
+          { projection: { name: 1, email: 1 } }
+        )
+        .toArray();
+
+      participantUsers.forEach((user) => {
+        const id = user._id?.toString?.();
+        if (!id) return;
+        senderNameById.set(id, user.name || user.email || "Member");
+      });
+    }
 
     const cursorFilter: Record<string, unknown> = {
       conversationId: conversation._id,
@@ -384,6 +401,7 @@ export async function GET(
         text,
         content: text,
         senderId: senderIdString,
+        senderName: senderNameById.get(senderIdString),
         receiverId: receiverIdString,
         conversationId: message.conversationId.toString(),
         timestamp: message.createdAt,

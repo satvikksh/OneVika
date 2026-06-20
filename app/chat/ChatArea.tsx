@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-html-link-for-pages */
 // ChatArea.tsx
 "use client";
 
@@ -13,6 +14,7 @@ import {
   Edit3,
   FileText,
   Loader2,
+  Lock,
   Paperclip,
   RefreshCw,
   Send,
@@ -93,6 +95,7 @@ interface ChatAreaProps {
   vanishSeconds: number;
   setVanishSeconds: (seconds: number) => void;
   canUsePolishedMode: boolean;
+  isPremiumUser: boolean;
   polishedPreview: {
     originalText: string;
     enhancedText: string;
@@ -103,6 +106,7 @@ interface ChatAreaProps {
   onRegeneratePolishedPreview: () => void;
   onCancelPolishedPreview: () => void;
   onApprovePolishedPreview: () => void;
+  onSendOriginalPolishedPreview: () => void;
 }
 
 const formatFileSize = (size?: number) => {
@@ -151,7 +155,7 @@ const renderAttachment = (attachment?: ChatAttachment) => {
         href={targetHref}
         target={isFeedShare ? undefined : "_blank"}
         rel={isFeedShare ? undefined : "noreferrer"}
-        className="mb-2 block w-full max-w-full overflow-hidden rounded-xl sm:max-w-[280px]"
+        className="mb-2 block w-[min(72vw,22rem)] max-w-full overflow-hidden rounded-xl"
       >
         <img
           src={attachment.url}
@@ -169,7 +173,7 @@ const renderAttachment = (attachment?: ChatAttachment) => {
           href={targetHref}
           target={undefined}
           rel={undefined}
-          className="relative mb-2 block w-full max-w-full overflow-hidden rounded-xl sm:max-w-[280px]"
+          className="relative mb-2 block w-[min(72vw,22rem)] max-w-full overflow-hidden rounded-xl"
         >
           <video
             src={attachment.url}
@@ -192,7 +196,7 @@ const renderAttachment = (attachment?: ChatAttachment) => {
       <video
         src={attachment.url}
         controls
-        className="mb-2 block max-h-[55vh] w-full max-w-full rounded-xl bg-black sm:max-w-[280px]"
+        className="mb-2 block max-h-[55vh] w-[min(72vw,22rem)] max-w-full rounded-xl bg-black object-contain"
       />
     );
   }
@@ -214,7 +218,7 @@ const renderAttachment = (attachment?: ChatAttachment) => {
       href={attachment.url}
       target="_blank"
       rel="noreferrer"
-      className="mb-2 flex w-full max-w-full items-center gap-3 rounded-xl bg-black/10 px-3 py-3 dark:bg-white/10 sm:max-w-[280px]"
+      className="mb-2 flex w-[min(72vw,22rem)] max-w-full items-center gap-3 rounded-xl bg-black/10 px-3 py-3 dark:bg-white/10"
     >
       <FileText size={18} />
       <div className="min-w-0 flex-1">
@@ -330,11 +334,13 @@ function ChatArea({
   vanishSeconds,
   setVanishSeconds,
   canUsePolishedMode,
+  isPremiumUser,
   polishedPreview,
   onChangePolishedPreview,
   onRegeneratePolishedPreview,
   onCancelPolishedPreview,
   onApprovePolishedPreview,
+  onSendOriginalPolishedPreview,
 }: ChatAreaProps) {
   const currentUserId = session?.user?.id;
   const selectedMessageIdSet = React.useMemo(
@@ -357,6 +363,8 @@ function ChatArea({
   const [scheduleMode, setScheduleMode] = React.useState<"now" | "delay" | "later">("now");
   const [delayMs, setDelayMs] = React.useState(60_000);
   const [customDateTime, setCustomDateTime] = React.useState("");
+  const [showPremiumPrompt, setShowPremiumPrompt] = React.useState(false);
+  const polishedTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
 
   React.useEffect(() => {
     const interval = window.setInterval(() => setNow(Date.now()), 1000);
@@ -481,16 +489,16 @@ function ChatArea({
     <div className="flex h-full w-full min-w-0 flex-col overflow-x-hidden bg-white dark:bg-black">
       {polishedPreview && (
         <div className="fixed inset-0 z-[95] flex items-end justify-center bg-black/55 p-3 sm:items-center sm:p-4">
-          <div className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-rose-200 bg-white shadow-2xl dark:border-rose-900/50 dark:bg-gray-950">
-            <div className="border-b border-rose-100 px-4 py-3 dark:border-rose-900/40">
+          <div className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-gray-800 dark:bg-gray-950">
+            <div className="border-b border-gray-100 px-4 py-3 dark:border-gray-800">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <h3 className="flex items-center gap-2 text-base font-semibold text-gray-950 dark:text-white">
                     <Sparkles className="h-4 w-4 text-rose-500" />
-                    Polished preview
+                    Polished Chat preview
                   </h3>
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    Review and edit before sending.
+                    Review, edit, regenerate, or send the original.
                   </p>
                 </div>
                 <button
@@ -519,6 +527,7 @@ function ChatArea({
                   Enhanced
                 </p>
                 <textarea
+                  ref={polishedTextareaRef}
                   value={polishedPreview.enhancedText}
                   onChange={(event) => onChangePolishedPreview(event.target.value)}
                   className="min-h-36 w-full resize-y rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-950 outline-none focus:ring-2 focus:ring-rose-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
@@ -530,7 +539,24 @@ function ChatArea({
                 </p>
               ) : null}
             </div>
-            <div className="flex flex-col-reverse gap-2 border-t border-gray-100 px-4 py-3 dark:border-gray-800 sm:flex-row sm:justify-end">
+            <div className="flex flex-col-reverse gap-2 border-t border-gray-100 px-4 py-3 dark:border-gray-800 sm:flex-row sm:flex-wrap sm:justify-end">
+              <button
+                type="button"
+                onClick={onCancelPolishedPreview}
+                disabled={polishedPreview.isGenerating}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 disabled:opacity-60 dark:border-gray-700 dark:text-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => polishedTextareaRef.current?.focus()}
+                disabled={polishedPreview.isGenerating}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 disabled:opacity-60 dark:border-gray-700 dark:text-gray-200"
+              >
+                <Edit3 size={16} />
+                Edit
+              </button>
               <button
                 type="button"
                 onClick={onRegeneratePolishedPreview}
@@ -544,6 +570,16 @@ function ChatArea({
                 )}
                 Regenerate
               </button>
+              {polishedPreview.error ? (
+                <button
+                  type="button"
+                  onClick={onSendOriginalPolishedPreview}
+                  disabled={polishedPreview.isGenerating || sendingMessage}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 disabled:opacity-60 dark:border-gray-700 dark:text-gray-200"
+                >
+                  Send original
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={onApprovePolishedPreview}
@@ -551,7 +587,7 @@ function ChatArea({
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
               >
                 <Send size={16} />
-                Send
+                Approve & Send
               </button>
             </div>
           </div>
@@ -643,8 +679,8 @@ function ChatArea({
                       msg.scheduledStatus ?? ""
                     );
                   const bubbleBaseClasses = isCurrentUser
-                    ? "bg-blue-600 text-white rounded-br-none"
-                    : "bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-white rounded-bl-none";
+                    ? "bg-gray-900 text-white rounded-br-md dark:bg-gray-500 dark:text-black dark:ring-gray-700"
+                    : "bg-gray-100 text-gray-950 rounded-bl-md ring-1 ring-gray-200 dark:bg-gray-900 dark:text-gray-200 dark:ring-gray-800";
                   const hiddenBubbleClasses =
                     showHiddenMessages && isHiddenMessage
                       ? isCurrentUser
@@ -701,14 +737,10 @@ function ChatArea({
                           </button>
                         ) : null}
 
-                        <div
-                          className={`relative min-w-0 ${
-                            hasAttachment ? "w-[min(320px,82vw)] max-w-full" : "w-fit max-w-[82vw] sm:max-w-[70%]"
-                          }`}
-                        >
+                        <div className="relative min-w-0 max-w-[min(86vw,44rem)] sm:max-w-[min(74vw,46rem)] lg:max-w-[min(68%,48rem)]">
                           {/* Message Bubble */}
                           <div
-                            className={`rounded-2xl ${
+                            className={`w-fit max-w-full rounded-2xl shadow-sm ${
                               hasAttachment && !hasText ? "px-2 py-2" : "px-4 py-3"
                             } ${hiddenBubbleClasses} ${msg.status === 'sending' ? 'opacity-80' : ''} ${
                               isScheduledMessage ? "border border-violet-300/70 bg-violet-600 text-white" : ""
@@ -769,6 +801,12 @@ function ChatArea({
                               </div>
                             ) : null}
 
+                            {selectedUser?.chatType === "group" && !isCurrentUser ? (
+                              <div className="mb-1 max-w-full truncate text-xs font-semibold text-blue-600 dark:text-blue-300">
+                                {msg.senderName || "Member"}
+                              </div>
+                            ) : null}
+
                             {isScheduledMessage ? (
                               <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-violet-100">
                                 <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-1">
@@ -792,7 +830,7 @@ function ChatArea({
 
                             {renderAttachment(msg.attachments?.[0])}
                             {(msg.text || msg.content) && (
-                              <div className="break-words whitespace-pre-wrap [overflow-wrap:anywhere]">
+                              <div className="whitespace-pre-wrap break-words text-[15px] leading-relaxed [overflow-wrap:break-word]">
                                 {renderMessageText(msg.text || msg.content || "")}
                                 {msg.isStreaming ? (
                                   <span className="ml-1 inline-block h-4 w-1 animate-pulse rounded-full bg-current align-[-2px] opacity-70" />
@@ -976,17 +1014,64 @@ function ChatArea({
                     </button>
                   ))}
                   {canUsePolishedMode ? (
-                    <button
-                      type="button"
-                      onClick={() => setChatMode("polished")}
-                      className={`rounded-lg px-2.5 py-1.5 font-medium transition ${
-                        chatMode === "polished"
-                          ? "bg-white text-rose-700 shadow-sm dark:bg-gray-800 dark:text-rose-300"
-                          : "text-gray-600 dark:text-gray-300"
-                      }`}
-                    >
-                      Polished
-                    </button>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!isPremiumUser) {
+                            setShowPremiumPrompt(true);
+                            return;
+                          }
+                          setChatMode("polished");
+                        }}
+                        title={
+                          isPremiumUser
+                            ? "Polished Chat"
+                            : "Premium required for Polished Chat"
+                        }
+                        className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-medium transition ${
+                          chatMode === "polished"
+                            ? "bg-white text-rose-700 shadow-sm dark:bg-gray-800 dark:text-rose-300"
+                            : isPremiumUser
+                              ? "text-gray-600 dark:text-gray-300"
+                              : "text-gray-500 dark:text-gray-400"
+                        }`}
+                      >
+                        {!isPremiumUser ? <Lock size={13} /> : <Sparkles size={13} />}
+                        Polished
+                        {!isPremiumUser ? (
+                          <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-amber-700 dark:bg-amber-950 dark:text-amber-200">
+                            Premium
+                          </span>
+                        ) : null}
+                      </button>
+                      {showPremiumPrompt && !isPremiumUser ? (
+                        <div className="absolute bottom-full left-0 z-50 mb-2 w-72 rounded-2xl border border-amber-200 bg-white p-3 text-gray-800 shadow-xl dark:border-amber-900/60 dark:bg-gray-950 dark:text-gray-100">
+                          <div className="mb-1 flex items-center gap-2 text-sm font-semibold">
+                            <Lock size={15} className="text-amber-600" />
+                            Premium feature
+                          </div>
+                          <p className="text-xs leading-relaxed text-gray-500 dark:text-gray-400">
+                            Polished Chat refines your message with AI before sending.
+                          </p>
+                          <div className="mt-3 flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setShowPremiumPrompt(false)}
+                              className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-900"
+                            >
+                              Not now
+                            </button>
+                            <a
+                              href="/profile#premium-membership"
+                              className="rounded-lg bg-amber-500 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-amber-600"
+                            >
+                              Upgrade
+                            </a>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
                   ) : null}
                 </div>
                 {chatMode === "vanish" ? (
@@ -1158,7 +1243,7 @@ function ChatArea({
                     onBlur={handleInputBlur}
                     placeholder={isSelectionMode ? "Selection mode active" : isChatBlocked ? "Unblock this user to send messages" : "Type a message..."}
                     disabled={isComposerDisabled}
-                    className="w-full resize-none rounded-xl border border-gray-300 bg-gray-50 px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:bg-gray-800 sm:px-4 sm:text-base"
+                    className="w-full resize-none rounded-xl border border-gray-300 bg-gray-50 px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:bg-gray-800 sm:px-4 sm:text-base"
                     style={{ minHeight: '44px', maxHeight: '104px' }}
                   />
                 </div>

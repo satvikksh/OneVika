@@ -30,6 +30,18 @@ type ConversationRow = {
 type LastMessageRow = {
   _id?: mongoose.Types.ObjectId;
   lastMessageAt?: Date;
+  text?: string;
+  type?: "text" | "image" | "video" | "audio" | "file" | "system";
+  attachments?: Array<{
+    type?: "image" | "video" | "audio" | "file";
+    fileName?: string;
+  }>;
+  senderId?: mongoose.Types.ObjectId;
+  chatMode?: "normal" | "vanish" | "polished";
+  isAI?: boolean;
+  scheduledStatus?: "pending" | "processing" | "sent" | "cancelled" | "failed";
+  deliveredToUserIds?: mongoose.Types.ObjectId[];
+  readByUserIds?: mongoose.Types.ObjectId[];
 };
 
 type UnreadCountRow = {
@@ -283,7 +295,17 @@ export async function GET(req: NextRequest) {
       .filter(Boolean)
       .map((id) => new ObjectId(id as string));
 
-    const lastMessageByConversationId = new Map<string, string>();
+    const lastMessageByConversationId = new Map<
+      string,
+      {
+        lastMessageAt: string;
+        preview: string;
+        type: "text" | "image" | "video" | "audio" | "file" | "system";
+        senderId: string | null;
+        status: "scheduled" | "sent" | "delivered" | "read";
+        isAI: boolean;
+      }
+    >();
     const unreadByConversationId = new Map<string, number>();
 
     if (allConversationIds.length > 0) {
@@ -298,6 +320,15 @@ export async function GET(req: NextRequest) {
             $group: {
               _id: "$conversationId",
               lastMessageAt: { $first: "$createdAt" },
+              text: { $first: "$text" },
+              type: { $first: "$type" },
+              attachments: { $first: "$attachments" },
+              senderId: { $first: "$senderId" },
+              chatMode: { $first: "$chatMode" },
+              isAI: { $first: "$isAI" },
+              scheduledStatus: { $first: "$scheduledStatus" },
+              deliveredToUserIds: { $first: "$deliveredToUserIds" },
+              readByUserIds: { $first: "$readByUserIds" },
             },
           },
         ])
@@ -306,10 +337,43 @@ export async function GET(req: NextRequest) {
       lastMessages.forEach((row) => {
         const key = row?._id?.toString?.();
         if (!key || !row.lastMessageAt) return;
-        lastMessageByConversationId.set(
-          key,
-          new Date(row.lastMessageAt).toISOString()
-        );
+        const attachment = Array.isArray(row.attachments) ? row.attachments[0] : null;
+        const messageType =
+          row.type || attachment?.type || (row.text?.trim() ? "text" : "system");
+        const attachmentLabel =
+          messageType === "image"
+            ? "Photo"
+            : messageType === "video"
+              ? "Video"
+              : messageType === "audio"
+                ? "Voice note"
+                : messageType === "file"
+                  ? attachment?.fileName || "Document"
+                  : "System message";
+        const preview =
+          row.chatMode === "polished" && row.text?.trim()
+            ? `Polished: ${row.text.trim()}`
+            : row.isAI && row.text?.trim()
+              ? `AI: ${row.text.trim()}`
+              : row.text?.trim() || attachmentLabel;
+        const readBy = (row.readByUserIds || []).map((id) => id.toString());
+        const deliveredTo = (row.deliveredToUserIds || []).map((id) => id.toString());
+        const status =
+          row.scheduledStatus === "pending" || row.scheduledStatus === "processing"
+            ? "scheduled"
+            : readBy.length > 1
+              ? "read"
+              : deliveredTo.length > 1
+                ? "delivered"
+                : "sent";
+        lastMessageByConversationId.set(key, {
+          lastMessageAt: new Date(row.lastMessageAt).toISOString(),
+          preview,
+          type: messageType,
+          senderId: row.senderId?.toString?.() ?? null,
+          status,
+          isAI: Boolean(row.isAI),
+        });
       });
 
       const unreadCounts = await db
@@ -387,6 +451,9 @@ export async function GET(req: NextRequest) {
       const userId = user._id.toString();
       const conv = conversationByOtherUserId.get(userId);
       const conversationId = conv?.conversationId?.toString?.();
+      const lastMessage = conversationId
+        ? lastMessageByConversationId.get(conversationId)
+        : null;
       const preference = preferenceByUserId.get(userId);
       const isUnlocked = preference?.isLocked
         ? hasUnlockedChatCookie(req, session.user.id, userId)
@@ -408,8 +475,13 @@ export async function GET(req: NextRequest) {
           ? unreadByConversationId.get(conversationId) ?? 0
           : 0,
         lastMessageAt: conversationId
-          ? lastMessageByConversationId.get(conversationId) ?? null
+          ? lastMessage?.lastMessageAt ?? null
           : null,
+        lastMessagePreview: lastMessage?.preview ?? null,
+        lastMessageType: lastMessage?.type ?? undefined,
+        lastMessageSenderId: lastMessage?.senderId ?? null,
+        lastMessageStatus: lastMessage?.status ?? undefined,
+        lastMessageIsAI: Boolean(lastMessage?.isAI),
         isPinned: chatPreference.isPinned,
         isArchived: chatPreference.isArchived,
         isLocked: chatPreference.isLocked,
@@ -437,6 +509,7 @@ export async function GET(req: NextRequest) {
 
     const groupChats = groupConversations.map((conversation) => {
       const conversationId = conversation._id.toString();
+      const lastMessage = lastMessageByConversationId.get(conversationId);
       const memberIds = (conversation.participants || [])
         .map((participant) => participant?.toString?.())
         .filter(Boolean) as string[];
@@ -468,6 +541,11 @@ export async function GET(req: NextRequest) {
         lastSeen: null,
         unreadCount: unreadByConversationId.get(conversationId) ?? 0,
         lastMessageAt: lastMessageByConversationId.get(conversationId) ?? null,
+        lastMessagePreview: lastMessage?.preview ?? null,
+        lastMessageType: lastMessage?.type ?? undefined,
+        lastMessageSenderId: lastMessage?.senderId ?? null,
+        lastMessageStatus: lastMessage?.status ?? undefined,
+        lastMessageIsAI: Boolean(lastMessage?.isAI),
         isPinned: false,
         isArchived: false,
         isLocked: false,

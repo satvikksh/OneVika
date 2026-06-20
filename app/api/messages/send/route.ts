@@ -7,6 +7,7 @@ import { getNativeDb } from "@/app/lib/mongodb";
 import mongoose from "mongoose";
 import { encryptChatText } from "@/app/lib/chatCrypto";
 import cloudinary from "@/app/lib/cloudinary";
+import { isPremiumActive } from "@/app/lib/premium";
 const { Types } = mongoose;
 const { ObjectId } = Types;
 
@@ -27,6 +28,11 @@ type ConversationDoc = {
 
 type ReceiverDoc = {
   isAI?: boolean;
+};
+
+type UserPremiumDoc = {
+  isPremium?: boolean;
+  premiumExpiresAt?: Date | string | null;
 };
 
 type ScheduleMode = "now" | "delay" | "later";
@@ -344,11 +350,43 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const trimmedText = text.trim();
+    const senderProfile = await db.collection("users").findOne(
+      { _id: senderObjectId },
+      { projection: { name: 1, email: 1 } }
+    );
+    const senderName =
+      senderProfile?.name || senderProfile?.email || session.user.name || "Member";
+
     if (isGroupConversation && chatMode === "polished") {
       return NextResponse.json(
         { error: "Polished Mode is only available in personal chats" },
         { status: 400 }
       );
+    }
+
+    if (chatMode === "polished") {
+      const sender = await db.collection<UserPremiumDoc>("users").findOne(
+        { _id: senderObjectId },
+        { projection: { isPremium: 1, premiumExpiresAt: 1 } }
+      );
+
+      if (!isPremiumActive(sender)) {
+        return NextResponse.json(
+          {
+            error: "Polished Chat is a Premium feature.",
+            code: "PREMIUM_REQUIRED",
+          },
+          { status: 402 }
+        );
+      }
+
+      if (!trimmedText) {
+        return NextResponse.json(
+          { error: "Polished Chat requires message text." },
+          { status: 400 }
+        );
+      }
     }
 
     const createdAt = new Date();
@@ -383,7 +421,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const trimmedText = text.trim();
     const encrypted = trimmedText ? encryptChatText(trimmedText) : {};
     const messageType = uploadedAttachment?.type ?? "text";
     const isScheduled = Boolean(scheduledFor);
@@ -458,6 +495,7 @@ export async function POST(req: NextRequest) {
         text: trimmedText,
         content: trimmedText,
         senderId: session.user.id,
+        senderName,
         receiverId: receiverObjectId?.toString?.() ?? "",
         timestamp: createdAt.toISOString(),
         read: false,
