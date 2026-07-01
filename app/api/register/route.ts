@@ -5,6 +5,17 @@ import bcrypt from "bcryptjs";
 import User from "../../models/User";
 import { dbConnect } from "../../lib/mongodb";
 import cloudinary from "../../lib/cloudinary";
+import OtpChallenge from "../../models/OtpChallenge";
+import {
+  generateOtp,
+  generateOtpSalt,
+  hashOtp,
+  normalizeEmail,
+  OTP_EXPIRY_MS,
+  OTP_MAX_ATTEMPTS,
+  OTP_RESEND_DELAY_MS,
+  sendOtpEmail,
+} from "../../lib/otp";
 
 type SignupPayload = {
   name: string;
@@ -45,7 +56,7 @@ export async function POST(req: Request) {
     await dbConnect();
     const { name, email, password, securityQuestion, securityAnswer, file } =
       await parseSignupPayload(req);
-    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedEmail = normalizeEmail(email);
     const validQuestions = new Set(["favoritePet", "favoriteColor", "nickname"]);
 
     if (
@@ -94,30 +105,46 @@ export async function POST(req: Request) {
       avatarUrl = uploadResult.secure_url || "";
     }
 
-    // Create user
-    await User.create({
-      name,
+    await OtpChallenge.updateMany(
+      { email: normalizedEmail, purpose: "registration", usedAt: null },
+      { $set: { usedAt: new Date() } }
+    );
+
+    const otp = generateOtp();
+    const salt = generateOtpSalt();
+    const challenge = await OtpChallenge.create({
       email: normalizedEmail,
-      password: hashedPassword,
-      avatar: avatarUrl,
-      image: avatarUrl,
-      favoritePet:
-        securityQuestion === "favoritePet"
-          ? String(securityAnswer).trim().toLowerCase()
-          : "",
-      favoriteColor:
-        securityQuestion === "favoriteColor"
-          ? String(securityAnswer).trim().toLowerCase()
-          : "",
-      nickname:
-        securityQuestion === "nickname"
-          ? String(securityAnswer).trim().toLowerCase()
-          : "",
+      purpose: "registration",
+      otpHash: hashOtp(otp, salt),
+      otpSalt: salt,
+      expiresAt: new Date(Date.now() + OTP_EXPIRY_MS),
+      attempts: 0,
+      maxAttempts: OTP_MAX_ATTEMPTS,
+      resendCount: 0,
+      resendAvailableAt: new Date(Date.now() + OTP_RESEND_DELAY_MS),
+      registration: {
+        name: name.trim(),
+        passwordHash: hashedPassword,
+        avatar: avatarUrl,
+        securityQuestion,
+        securityAnswer: String(securityAnswer).trim().toLowerCase(),
+      },
     });
 
+    try {
+      await sendOtpEmail({ email: normalizedEmail, otp, purpose: "registration" });
+    } catch (error) {
+      await OtpChallenge.findByIdAndDelete(challenge._id);
+      throw error;
+    }
+
     return NextResponse.json(
-      { message: "User registered successfully" },
-      { status: 201 }
+      {
+        message: "Verification code sent",
+        challengeId: challenge.id,
+        resendAfter: 60,
+      },
+      { status: 202 }
     );
   } catch (error) {
     console.error("Signup Error:", error);

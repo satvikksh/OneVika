@@ -925,7 +925,18 @@ if (postsResponse.ok) {
                   posts.map((post) => (
                     <div
                       key={post.id}
-                      className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-6 border border-gray-200 dark:border-gray-700"
+                      role="link"
+                      tabIndex={0}
+                      onClick={(event) => {
+                        if ((event.target as HTMLElement).closest("button,a,input,textarea,video")) return;
+                        router.push(`/feed?postId=${encodeURIComponent(post.id)}`);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          router.push(`/feed?postId=${encodeURIComponent(post.id)}`);
+                        }
+                      }}
+                      className="cursor-pointer bg-gray-50 dark:bg-gray-800 rounded-2xl p-6 border border-gray-200 dark:border-gray-700"
                     >
                       {isCurrentUser && (
                         <div className="flex justify-end gap-2 mb-4">

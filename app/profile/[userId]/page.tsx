@@ -1475,7 +1475,18 @@ export default function UserProfilePage() {
                   posts.map((post) => (
                     <div
                       key={post.id}
-                      className={postCardClass}
+                      role="link"
+                      tabIndex={0}
+                      onClick={(event) => {
+                        if ((event.target as HTMLElement).closest("button,a,input,textarea,video")) return;
+                        router.push(`/feed?postId=${encodeURIComponent(post.id)}`);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          router.push(`/feed?postId=${encodeURIComponent(post.id)}`);
+                        }
+                      }}
+                      className={`${postCardClass} cursor-pointer`}
                     >
                       {/* Post actions (only for own posts) */}
                       {isCurrentUser && (
@@ -1576,7 +1587,17 @@ export default function UserProfilePage() {
                       return (
                         <div
                           key={post.id}
-                          className={visitorPostCardClass}
+                          role="link"
+                          tabIndex={0}
+                          onClick={() =>
+                            router.push(`/feed?postId=${encodeURIComponent(post.id)}`)
+                          }
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              router.push(`/feed?postId=${encodeURIComponent(post.id)}`);
+                            }
+                          }}
+                          className={`${visitorPostCardClass} cursor-pointer`}
                         >
                           <div className={visitorPreviewClass}>
                             {primaryMedia ? (

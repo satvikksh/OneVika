@@ -935,6 +935,7 @@ const SCROLL_UNLOCK_DELAY_MS = 260;
 const FEED_CACHE_WRITE_DELAY_MS = 250;
 const BLINK_STATUS_BANNER_DURATION_MS = 3500;
 const SETTINGS_STORAGE_KEY = "orbitbyte.settings.v1";
+const SAVED_POSTS_KEY = "orbitbyte:saved-posts";
 
 function readBlinkScrollSetting() {
   if (typeof window === "undefined") return true;
@@ -988,6 +989,7 @@ export default function FeedPage() {
   // NAVBAR & OPTIONS VISIBILITY STATE
   const [isNavbarVisible, setIsNavbarVisible] = useState(true);
   const [showOptions, setShowOptions] = useState(false);
+  const [savedPostIds, setSavedPostIds] = useState<string[]>([]);
 
   // Video controls
   const [isVideoPlaying, setIsVideoPlaying] = useState<Record<string, boolean>>(
@@ -1073,6 +1075,15 @@ export default function FeedPage() {
   useEffect(() => {
     currentPostIndexRef.current = currentPostIndex;
   }, [currentPostIndex]);
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(SAVED_POSTS_KEY) || "[]");
+      setSavedPostIds(Array.isArray(saved) ? saved : []);
+    } catch {
+      setSavedPostIds([]);
+    }
+  }, []);
 
   useEffect(() => {
     postsRef.current = posts;
@@ -1714,6 +1725,16 @@ export default function FeedPage() {
       post: selectedPost,
     });
     setIsNavbarVisible(true);
+  };
+
+  const toggleSavedPost = (postId: string) => {
+    setSavedPostIds((current) => {
+      const next = current.includes(postId)
+        ? current.filter((id) => id !== postId)
+        : [...current, postId];
+      window.localStorage.setItem(SAVED_POSTS_KEY, JSON.stringify(next));
+      return next;
+    });
   };
 
   const openLikeModal = (postId: string, likeCount: number) => {
@@ -2363,8 +2384,28 @@ export default function FeedPage() {
                   <span className="text-white text-xs font-medium drop-shadow-md"></span>
                 </div>
 
-                <button className="flex flex-col items-center gap-1 pointer-events-auto transition-transform active:scale-90">
-                  <Bookmark size={24} className="text-white drop-shadow-md" />
+                <button
+                  onClick={() => toggleSavedPost(currentPost._id)}
+                  className="flex flex-col items-center gap-1 pointer-events-auto transition-transform active:scale-90"
+                  aria-label={
+                    savedPostIds.includes(currentPost._id)
+                      ? "Unsave post"
+                      : "Save post"
+                  }
+                >
+                  <Bookmark
+                    size={24}
+                    fill={
+                      savedPostIds.includes(currentPost._id)
+                        ? "currentColor"
+                        : "none"
+                    }
+                    className={
+                      savedPostIds.includes(currentPost._id)
+                        ? "text-blue-400 drop-shadow-md"
+                        : "text-white drop-shadow-md"
+                    }
+                  />
                   <span className="text-white text-xs font-medium drop-shadow-md"></span>
                 </button>
 

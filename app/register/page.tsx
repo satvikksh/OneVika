@@ -40,6 +40,7 @@ export default function SignupPage() {
   const [showCropper, setShowCropper] = useState(false);
   const [error, setError] = useState("");
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (status === "authenticated") {
@@ -75,9 +76,11 @@ export default function SignupPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    setSubmitting(true);
 
     if (!securityQuestion || !securityAnswer.trim()) {
       setError("Please select 1 security question and enter the answer.");
+      setSubmitting(false);
       return;
     }
 
@@ -97,13 +100,17 @@ export default function SignupPage() {
       body: payload,
     });
 
-    if (req.status === 201) {
-      router.push("/login");
+    const data = await req.json().catch(() => null);
+
+    if (req.status === 202 && data?.challengeId) {
+      router.push(
+        `/verify-otp?purpose=registration&challenge=${encodeURIComponent(data.challengeId)}`
+      );
       return;
     }
 
-    const data = await req.json().catch(() => null);
     setError(data?.error || "Signup failed");
+    setSubmitting(false);
   }
 
   // 🔹 Google signup/login (same thing)
@@ -239,9 +246,10 @@ export default function SignupPage() {
 
           <button
             type="submit"
-            className="w-full py-3 rounded-xl bg-linear-to-r from-blue-600 to-blue-500 text-white font-semibold"
+            disabled={submitting}
+            className="w-full py-3 rounded-xl bg-linear-to-r from-blue-600 to-blue-500 text-white font-semibold disabled:opacity-60"
           >
-            Sign Up
+            {submitting ? "Sending verification code..." : "Sign Up"}
           </button>
         </form>
 
