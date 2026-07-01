@@ -93,10 +93,89 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
   const searchSelectionLockRef = useRef(false);
   const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const mobileDrawerHistoryRef = useRef(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Keep the mobile drawer in the browser history so the Android/browser Back
+  // button dismisses it before navigating away.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const isPhone = window.matchMedia("(max-width: 767px)").matches;
+    if (!isPhone || !isMobileMenuOpen) return;
+
+    const historyKey = "__orbitbyteMobileDrawer";
+    if (!window.history.state?.[historyKey]) {
+      window.history.pushState(
+        { ...window.history.state, [historyKey]: true },
+        "",
+        window.location.href
+      );
+      mobileDrawerHistoryRef.current = true;
+    }
+
+    const handlePopState = () => {
+      mobileDrawerHistoryRef.current = false;
+      setIsMobileMenuOpen(false);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [isMobileMenuOpen]);
+
+  // Lock only the phone viewport while the off-canvas drawer is visible.
+  useEffect(() => {
+    if (typeof window === "undefined" || !isMobileMenuOpen) return;
+    if (!window.matchMedia("(max-width: 767px)").matches) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isMobileMenuOpen]);
+
+  const closeMobileMenu = useCallback(() => {
+    if (
+      typeof window !== "undefined" &&
+      window.matchMedia("(max-width: 767px)").matches &&
+      mobileDrawerHistoryRef.current &&
+      window.history.state?.__orbitbyteMobileDrawer
+    ) {
+      window.history.back();
+      return;
+    }
+
+    setIsMobileMenuOpen(false);
+  }, []);
+
+  const navigateFromMobileMenu = useCallback(
+    (path: string) => {
+      const shouldConsumeDrawerHistory =
+        typeof window !== "undefined" &&
+        window.matchMedia("(max-width: 767px)").matches &&
+        mobileDrawerHistoryRef.current &&
+        window.history.state?.__orbitbyteMobileDrawer;
+
+      setIsMobileMenuOpen(false);
+
+      if (shouldConsumeDrawerHistory) {
+        mobileDrawerHistoryRef.current = false;
+        window.addEventListener("popstate", () => router.push(path), {
+          once: true,
+        });
+        window.history.back();
+        return;
+      }
+
+      router.push(path);
+    },
+    [router]
+  );
 
   // Event listener for chat text area focus
   useEffect(() => {
@@ -227,7 +306,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
     setIsMobileMenuOpen(false);
     setSearchQuery("");
     setSearchResults([]);
-    router.push(`/profile/${userId}`);
+    navigateFromMobileMenu(`/profile/${userId}`);
   };
 
   const navItems: NavItem[] = [
@@ -313,7 +392,10 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
         setShowSearchSuggestions(false);
       }
 
-      if (clickedOutsideMobileMenu) {
+      if (
+        clickedOutsideMobileMenu &&
+        window.matchMedia("(min-width: 768px)").matches
+      ) {
         setIsMobileMenuOpen(false);
       }
     };
@@ -397,35 +479,32 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
 
   const handleChatClick = () => {
     clearMessages();
-    router.push("/chat");
-    setIsMobileMenuOpen(false);
+    navigateFromMobileMenu("/chat");
   };
 
   const handleNotificationClick = () => {
-    router.push("/notifications");
-    setIsMobileMenuOpen(false);
+    navigateFromMobileMenu("/notifications");
   };
 
   // Handle post creation
   const handlePostCreate = () => {
-    router.push("/post");
-    setIsMobileMenuOpen(false);
+    navigateFromMobileMenu("/post");
   };
 
   return (
     <>
       <header
-        className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${
+        className={`fixed top-0 inset-x-0 z-50 max-md:z-[70] transition-all duration-300 ${
           scrolled
             ? "bg-white/80 dark:bg-gray-950/80 backdrop-blur-xl border-b border-gray-200 dark:border-gray-800 shadow-sm"
             : "bg-white/0 dark:bg-gray-950/0 backdrop-blur-md"
         }`}
       >
-        <div className="container mx-auto px-4 sm:px-6 h-16  flex items-center justify-between">
+        <div className="container mx-auto px-4 sm:px-6 h-16 flex items-center justify-between max-md:gap-2 max-md:px-3">
           {/* Logo & Mobile Menu Button */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 max-md:flex-none">
             <Link href="/" className="flex items-center gap-3 group">
-              <div className="relative w-10 h-10 transition-transform group-hover:scale-105">
+              <div className="relative w-10 h-10 transition-transform group-hover:scale-105 max-md:h-9 max-md:w-9">
                 <Image
                   src="/img/orbitbyte1.png"
                   alt="OrbitByte"
@@ -437,7 +516,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
               </div>
 
               {/* Title + Subtitle */}
-              <div className="flex flex-col leading-tight">
+              <div className="flex flex-col leading-tight max-md:hidden">
                 <span className="font-bold text-lg sm:text-xl bg-gradient-to-r from-blue-500 to-teal-400 bg-clip-text text-transparent">
                   {title}
                 </span>
@@ -447,6 +526,77 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
               </div>
             </Link>
           </div>
+
+          {/* Phone Search - remains in the navbar while the drawer is open */}
+          {showSearch && (
+            <div
+              ref={mobileSearchRef}
+              className="relative hidden min-w-0 flex-1 max-md:block"
+            >
+              <form onSubmit={handleMobileSearchSubmit} className="relative">
+                <Search
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                  size={17}
+                />
+                <input
+                  type="search"
+                  placeholder="Search users..."
+                  aria-label="Search users"
+                  className="h-10 w-full rounded-full border border-gray-200/80 bg-gray-100/80 pl-9 pr-3 text-sm text-gray-900 shadow-inner outline-none transition focus:border-blue-500/60 focus:bg-white focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-900/80 dark:text-white dark:focus:bg-gray-950"
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setShowSearchSuggestions(e.target.value.length > 0);
+                  }}
+                  onFocus={() =>
+                    setShowSearchSuggestions(searchQuery.length > 0)
+                  }
+                />
+              </form>
+
+              {showSearchSuggestions && searchQuery.trim().length > 0 && (
+                <div className="absolute right-0 top-full z-[80] mt-2 max-h-[min(55vh,24rem)] w-[min(82vw,22rem)] touch-pan-y overflow-y-auto overscroll-contain rounded-2xl border border-gray-200 bg-white p-2 shadow-2xl dark:border-gray-800 dark:bg-gray-950">
+                  {isSearchLoading && (
+                    <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
+                      Searching users...
+                    </div>
+                  )}
+
+                  {!isSearchLoading && searchResults.length === 0 && (
+                    <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
+                      No users found
+                    </div>
+                  )}
+
+                  {!isSearchLoading &&
+                    searchResults.slice(0, 6).map((user) => (
+                      <button
+                        key={user._id}
+                        type="button"
+                        onClick={() => selectSearchUser(user._id)}
+                        className="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-gray-50 active:bg-gray-100 dark:hover:bg-gray-900 dark:active:bg-gray-800"
+                        aria-label={`Open profile for ${user.name || "user"}`}
+                      >
+                        <PremiumAvatar
+                          src={user.avatar}
+                          alt={user.name}
+                          fallback={user.name}
+                          size={32}
+                          isPremium={Boolean(user.isPremium)}
+                        />
+                        <PremiumName
+                          name={user.name || "Unknown user"}
+                          isPremium={Boolean(user.isPremium)}
+                          badgeLabel="Premium"
+                          badgeClassName="px-1.5 py-0.5 text-[9px]"
+                          textClassName="truncate text-sm font-medium text-gray-900 dark:text-white"
+                        />
+                      </button>
+                    ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Desktop Nav */}
           <nav className="hidden lg:flex items-center gap-1 mx-4 p-1 rounded-2xl bg-gray-50/50 dark:bg-gray-800/30 border border-gray-100 dark:border-gray-800/50 backdrop-blur-sm">
@@ -799,24 +949,72 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
 
           {/* Mobile Menu Button - Hidden on mobile since we have bottom nav */}
           <button
-            className="lg:hidden p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2 transition-colors"
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            aria-label="Toggle menu"
+            className="lg:hidden p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2 transition-colors max-md:flex-none"
+            onClick={() =>
+              isMobileMenuOpen
+                ? closeMobileMenu()
+                : setIsMobileMenuOpen(true)
+            }
+            aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={isMobileMenuOpen}
+            aria-controls="mobile-navigation"
           >
-            {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            <span className="md:hidden">
+              <Menu size={24} />
+            </span>
+            <span className="hidden md:block">
+              {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            </span>
           </button>
         </div>
 
-        {/* Mobile Menu Dropdown - Just for extra items not in bottom nav */}
-        {isMobileMenuOpen && (
-          <div
-            ref={mobileMenuRef}
-            className="lg:hidden fixed top-16 inset-x-0 bg-white/95 dark:bg-gray-950/95 backdrop-blur-xl border-t border-gray-100 dark:border-gray-800 shadow-2xl h-[calc(100vh-4rem)] overflow-y-auto z-50 animate-in slide-in-from-top-5"
-          >
-            <div className="p-4 pb-24">
-              {/* Mobile Search */}
+        {/* Phone overlay. Tablet keeps its existing full-width dropdown. */}
+        <button
+          type="button"
+          aria-label="Close navigation menu"
+          onClick={closeMobileMenu}
+          className={`absolute inset-x-0 top-16 z-40 h-[calc(100dvh-4rem)] bg-black/55 backdrop-blur-[2px] transition-opacity duration-[350ms] md:hidden ${
+            isMobileMenuOpen
+              ? "pointer-events-auto opacity-100"
+              : "pointer-events-none opacity-0"
+          }`}
+        />
+
+        <div
+          ref={mobileMenuRef}
+          id="mobile-navigation"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Navigation menu"
+          className={`absolute left-0 top-16 z-50 h-[calc(100dvh-4rem)] w-[82vw] max-w-sm overflow-y-auto rounded-r-3xl border-r border-blue-100/70 bg-white/[0.98] shadow-2xl shadow-black/30 backdrop-blur-xl transition-transform duration-[350ms] ease-out dark:border-blue-950/70 dark:bg-gray-950/[0.98] lg:hidden md:fixed md:inset-x-0 md:h-[calc(100vh-4rem)] md:w-auto md:max-w-none md:rounded-none md:border-r-0 md:border-t md:border-gray-100 md:bg-white/95 md:shadow-2xl md:dark:border-gray-800 md:dark:bg-gray-950/95 ${
+            isMobileMenuOpen
+              ? "translate-x-0 md:block md:animate-in md:slide-in-from-top-5"
+              : "pointer-events-none -translate-x-full md:hidden"
+          }`}
+        >
+          <div className="p-4 pb-24">
+              <div className="mb-5 flex items-center justify-between border-b border-gray-200/80 pb-4 md:hidden dark:border-gray-800">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-500">
+                    OrbitByte
+                  </p>
+                  <h2 className="mt-1 text-lg font-bold text-gray-900 dark:text-white">
+                    Explore
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeMobileMenu}
+                  className="rounded-full border border-gray-200 bg-gray-50 p-2.5 text-gray-700 shadow-sm transition hover:border-blue-300 hover:text-blue-600 active:scale-95 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200"
+                  aria-label="Close navigation menu"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Existing tablet search; phone search stays in the top navbar. */}
               {showSearch && (
-                <div ref={mobileSearchRef} className="relative z-[61] mb-6">
+                <div className="relative z-[61] mb-6 hidden md:block">
                   <form onSubmit={handleMobileSearchSubmit} className="relative">
                     <Search
                       className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
@@ -905,7 +1103,14 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                   {session?.user && (
                     <Link
                       href="/settings"
-                      onClick={() => setIsMobileMenuOpen(false)}
+                      onClick={(event) => {
+                        if (window.matchMedia("(max-width: 767px)").matches) {
+                          event.preventDefault();
+                          navigateFromMobileMenu("/settings");
+                        } else {
+                          setIsMobileMenuOpen(false);
+                        }
+                      }}
                       className={`flex items-center justify-between px-4 py-3.5 rounded-2xl transition-all ${
                         pathname === "/settings"
                           ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400"
@@ -927,7 +1132,14 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                     <Link
                       key={item.path}
                       href={item.path}
-                      onClick={() => setIsMobileMenuOpen(false)}
+                      onClick={(event) => {
+                        if (window.matchMedia("(max-width: 767px)").matches) {
+                          event.preventDefault();
+                          navigateFromMobileMenu(item.path);
+                        } else {
+                          setIsMobileMenuOpen(false);
+                        }
+                      }}
                       className={`flex items-center justify-between px-4 py-3.5 rounded-2xl transition-all ${
                         pathname === item.path
                           ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400"
@@ -991,19 +1203,13 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
               {!session?.user && (
                 <div className="flex flex-col gap-3 mt-6">
                   <button
-                    onClick={() => {
-                      setIsMobileMenuOpen(false);
-                      router.push("/login");
-                    }}
+                    onClick={() => navigateFromMobileMenu("/login")}
                     className="w-full py-3.5 rounded-2xl border border-gray-200 dark:border-gray-800 font-semibold"
                   >
                     Login
                   </button>
                   <button
-                    onClick={() => {
-                      setIsMobileMenuOpen(false);
-                      router.push("/register");
-                    }}
+                    onClick={() => navigateFromMobileMenu("/register")}
                     className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 to-pink-600 text-white font-semibold shadow-lg shadow-blue-500/30"
                   >
                     Sign Up
@@ -1023,8 +1229,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                 </button>
               )}
             </div>
-          </div>
-        )}
+        </div>
       </header>
 
       {/* FIXED FULL-WIDTH BOTTOM NAVIGATION (Mobile Only) */}
