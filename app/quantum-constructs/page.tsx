@@ -168,6 +168,7 @@ export default function QuantumConstructsPage() {
   const [filterStability, setFilterStability] = useState<number | null>(null);
   const [isInitializing, setIsInitializing] = useState(false);
   const [initializedConstruct, setInitializedConstruct] = useState<string | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [particles, setParticles] = useState<any[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -184,6 +185,7 @@ export default function QuantumConstructsPage() {
         opacity: Math.random() * 0.3 + 0.1
       });
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setParticles(particlesArray);
   }, []);
 
