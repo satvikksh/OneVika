@@ -7,6 +7,7 @@ import admin from "firebase-admin";
 import User from "./app/models/User.js";
 import Notification from "./app/models/Notification.js";
 import { decryptChatText, encryptChatText } from "./app/lib/chatCrypto.js";
+import { registerCallHandlers } from "./app/socket/call.socket.js";
 
 type NotificationPayload = {
   _id?: string;
@@ -1497,6 +1498,8 @@ io.on("connection", (socket) => {
   socket.on("join", (joinedUserId?: string) => {
     registerSocketUser(joinedUserId);
   });
+
+  registerCallHandlers({ io, socket, activeUsers, pushNotificationToUser });
 
   socket.on("send_message", async (message: SocketMessagePayload) => {
     try {

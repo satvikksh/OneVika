@@ -32,6 +32,8 @@
     "firebase": "^12.9.0",
     "firebase-admin": "^13.6.1",
     "framer-motion": "^12.23.26",
+    "livekit-client": "^2.20.0",
+    "livekit-server-sdk": "^2.16.0",
     "lucide-react": "^0.560.0",
     "mongoose": "^9.0.1",
     "multer": "^2.0.2",

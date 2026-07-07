@@ -13,19 +13,16 @@ import {
   Info,
   Menu,
   MoreVertical,
-  Phone,
   ShieldOff,
   Trash2,
   Users,
-  Video,
   X,
   XCircle,
 } from "lucide-react";
-import { useSession } from "next-auth/react";
 import { useSocket } from "../context/SocketContext";
 import { useRouter } from "next/navigation";
-import { useAudioCall } from "../hooks/useAudioCall";
-import AudioCallModal from "../components/AudioCallModal";
+import CallButtons from "../components/chat/CallButtons";
+import { StartCallTarget } from "../context/CallContext";
 import { PremiumAvatar, PremiumName } from "../components/premium-ui";
 
 interface ChatTopBarProps {
@@ -93,14 +90,10 @@ function ChatTopBar({
   canDeleteSelectedMessages = false,
   isSelectionActionBusy = false,
 }: ChatTopBarProps) {
-  const { data: session } = useSession();
   const router = useRouter();
   const { onlineUsers } = useSocket();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-
-  const roomName = `audio-${session?.user?.id}-${selectedUser?.id}`;
-  const { startCall, endCall, inCall, loading, isReady } = useAudioCall(roomName);
 
   const desktopLeft = "lg:left-80";
   const mobileClasses = isMobile ? "left-0 right-0" : "";
@@ -182,8 +175,6 @@ function ChatTopBar({
             </div>
           </div>
         </header>
-
-        <AudioCallModal incoming={false} onAccept={startCall} onReject={() => {}} inCall={inCall} onEnd={endCall} />
       </>
     );
   }
@@ -265,11 +256,23 @@ function ChatTopBar({
             </div>
           </div>
         </header>
-
-        <AudioCallModal incoming={false} onAccept={startCall} onReject={() => {}} inCall={inCall} onEnd={endCall} />
       </>
     );
   }
+
+  const callTarget: StartCallTarget | null =
+    selectedUser && !isAiChat
+      ? {
+          id: selectedUser.id,
+          name: selectedUser.name || (isGroupChat ? "Group" : "User"),
+          avatar:
+            typeof selectedUser.avatar === "string" ? selectedUser.avatar : null,
+          isGroup: isGroupChat,
+          conversationId: selectedUser.conversationId,
+          memberIds: selectedUser.memberIds,
+          groupName: isGroupChat ? selectedUser.name : undefined,
+        }
+      : null;
 
   const menuItems = [
     {
@@ -441,22 +444,13 @@ function ChatTopBar({
           <div className="flex flex-shrink-0 items-center gap-1 sm:gap-2" ref={menuRef}>
             {!isGroupChat && !isAiChat ? (
               <>
-                <button
-                  onClick={startCall}
-                  disabled={!isReady || loading || Boolean(selectedUser.isBlocked)}
-                  className="rounded-xl p-2 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-gray-800"
-                  aria-label="Voice call"
-                >
-                  <Phone size={18} />
-                </button>
-
-                <button
-                  disabled={Boolean(selectedUser.isBlocked)}
-                  className="hidden rounded-xl p-2 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-gray-800 sm:inline-flex"
-                  aria-label="Video call"
-                >
-                  <Video size={18} />
-                </button>
+                {callTarget ? (
+                  <CallButtons
+                    target={callTarget}
+                    disabled={Boolean(selectedUser.isBlocked)}
+                    hideVideoOnMobile
+                  />
+                ) : null}
 
                 <button
                   onClick={handleUserProfileClick}
@@ -467,16 +461,22 @@ function ChatTopBar({
                 </button>
               </>
             ) : (
-              <button
-                onClick={onOpenGroupInfo}
-                disabled={!onOpenGroupInfo}
-                className={`rounded-xl p-2 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-gray-800 ${
-                  isGroupInfoOpen ? "bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300" : ""
-                }`}
-                aria-label="Open group info"
-              >
-                <Info size={18} />
-              </button>
+              <>
+                {isGroupChat && callTarget ? (
+                  <CallButtons target={callTarget} hideVideoOnMobile />
+                ) : null}
+
+                <button
+                  onClick={onOpenGroupInfo}
+                  disabled={!onOpenGroupInfo}
+                  className={`rounded-xl p-2 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-gray-800 ${
+                    isGroupInfoOpen ? "bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300" : ""
+                  }`}
+                  aria-label="Open group info"
+                >
+                  <Info size={18} />
+                </button>
+              </>
             )}
 
             {menuItems.length > 0 ? (
@@ -541,8 +541,6 @@ function ChatTopBar({
           </div>
         </div>
       </header>
-
-      <AudioCallModal incoming={false} onAccept={startCall} onReject={() => {}} inCall={inCall} onEnd={endCall} />
     </>
   );
 }
