@@ -3,6 +3,7 @@ import ClientLayout from "./ClientLayout";
 import { Inter } from "next/font/google";
 import { SocketProvider } from "./context/SocketContext";
 import { NotificationProvider } from "./context/NotificationContext";
+import { CallProvider } from "./context/CallContext";
 import Script from "next/script";
 import { getServerSession } from "next-auth";
 import { dbConnect } from "./lib/mongodb";
@@ -73,16 +74,11 @@ export default async function RootLayout({
           } as React.CSSProperties
         }
       >
-        <Script
-          src="https://cdn.metered.ca/sdk/frame/1.4.3/sdk-frame.min.js"
-          strategy="beforeInteractive"
-        />
-
         <ClientLayout>
           <SocketProvider>
             <NotificationProvider>
               <NotificationListener />
-              {children}
+              <CallProvider>{children}</CallProvider>
             </NotificationProvider>
           </SocketProvider>
         </ClientLayout>
