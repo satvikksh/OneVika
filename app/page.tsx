@@ -5,13 +5,11 @@ import MoodStory from "./components/home/MoodStory";
 import NewPosts from "./components/home/NewPosts";
 import Thoughts from "./components/home/Thoughts";
 import FeedToggle from "./components/home/FeedToggle";
-import RoomModal from "./components/room/RoomModal";
 
 export default function Home() {
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
   const [greeting, setGreeting] = useState("Good afternoon");
   const [activeTab, setActiveTab] = useState<"thoughts" | "posts">("thoughts");
-  const [showRoomModal, setShowRoomModal] = useState(false);
 
   const updateGreeting = (hours: number) => {
     if (hours < 12) setGreeting("Good morning");
@@ -59,16 +57,6 @@ export default function Home() {
               })}
             </p>
           </div>
-
-          {/* Right Side - Room Button */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowRoomModal(true)}
-              className="text-xs px-3 py-1.5 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-800 hover:to-cyan-700 rounded-full text-white transition"
-            >
-              🎥 Talk in
-            </button>
-          </div>
         </header>
 
         {/* ✅ STORIES (ONLY ONCE) */}
@@ -92,11 +80,6 @@ export default function Home() {
         <footer className="text-center pt-6">
           <p className="text-xs text-stone-500 dark:text-stone-600">Designed by Satvik&#39;s Group.</p>
         </footer>
-
-        <RoomModal
-          isOpen={showRoomModal}
-          onClose={() => setShowRoomModal(false)}
-        />
       </div>
     </main>
   );

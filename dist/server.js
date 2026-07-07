@@ -7,6 +7,7 @@ import admin from "firebase-admin";
 import User from "./app/models/User.js";
 import Notification from "./app/models/Notification.js";
 import { decryptChatText, encryptChatText } from "./app/lib/chatCrypto.js";
+import { registerCallHandlers } from "./app/socket/call.socket.js";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://orbitbyte.vercel.app";
 const PREMIUM_REMINDER_WINDOW_MS = 24 * 60 * 60 * 1000;
 const BACKGROUND_JOB_INTERVAL_MS = Number(process.env.BACKGROUND_JOB_INTERVAL_MS || "300000");
@@ -468,6 +469,10 @@ function buildScheduledSocketMessagePayload(message, status = "sent") {
         sentAt: message.sentAt?.toISOString?.(),
         isAI: Boolean(message.isAI),
         isStreaming: Boolean(message.isStreaming),
+        chatMode: message.chatMode ?? "normal",
+        vanishSeconds: message.vanishSeconds,
+        vanishExpiresAt: message.vanishExpiresAt?.toISOString?.(),
+        originalText: message.originalText,
     };
 }
 async function emitMessageToConversationAudience(message, conversation) {
@@ -493,6 +498,29 @@ async function emitMessageToConversationAudience(message, conversation) {
     audienceIds.forEach((audienceUserId) => {
         io.to(`user_${audienceUserId}`).emit("receive_message", payload);
     });
+    if (message.vanishExpiresAt) {
+        const delay = message.vanishExpiresAt.getTime() - Date.now();
+        if (Number.isFinite(delay) && delay > 0 && delay <= 86_400_000) {
+            setTimeout(async () => {
+                try {
+                    await mongoose.connection.db?.collection("messages").deleteOne({
+                        _id: message._id,
+                        chatMode: "vanish",
+                        vanishExpiresAt: { $lte: new Date() },
+                    });
+                    audienceIds.forEach((audienceUserId) => {
+                        io.to(`user_${audienceUserId}`).emit("message_deleted", {
+                            messageId: message._id.toString(),
+                            scope: "everyone",
+                        });
+                    });
+                }
+                catch (error) {
+                    console.error("[Vanish] Failed to expire scheduled message:", error);
+                }
+            }, delay);
+        }
+    }
     if (deliveredUserIds.length > 0) {
         io.to(`user_${senderId}`).emit("message_delivered", {
             messageId: message._id.toString(),
@@ -988,6 +1016,7 @@ io.on("connection", (socket) => {
     socket.on("join", (joinedUserId) => {
         registerSocketUser(joinedUserId);
     });
+    registerCallHandlers({ io, socket, activeUsers, pushNotificationToUser });
     socket.on("send_message", async (message) => {
         try {
             if (!message.senderId) {
@@ -1020,6 +1049,32 @@ io.on("connection", (socket) => {
             audienceIds.forEach((audienceUserId) => {
                 io.to(`user_${audienceUserId}`).emit("receive_message", message);
             });
+            if (message.vanishExpiresAt && message.id) {
+                const expiresAt = new Date(message.vanishExpiresAt).getTime();
+                const delay = expiresAt - Date.now();
+                if (Number.isFinite(delay) && delay > 0 && delay <= 86_400_000) {
+                    setTimeout(async () => {
+                        try {
+                            if (mongoose.Types.ObjectId.isValid(message.id)) {
+                                await mongoose.connection.db?.collection("messages").deleteOne({
+                                    _id: new mongoose.Types.ObjectId(message.id),
+                                    chatMode: "vanish",
+                                    vanishExpiresAt: { $lte: new Date() },
+                                });
+                            }
+                            audienceIds.forEach((audienceUserId) => {
+                                io.to(`user_${audienceUserId}`).emit("message_deleted", {
+                                    messageId: message.id,
+                                    scope: "everyone",
+                                });
+                            });
+                        }
+                        catch (error) {
+                            console.error("[Vanish] Failed to expire message:", error);
+                        }
+                    }, delay);
+                }
+            }
             const deliveredUserIds = recipientIds.filter((recipientId) => Boolean(activeUsers.get(recipientId)?.size));
             if (deliveredUserIds.length > 0 &&
                 message.id &&
