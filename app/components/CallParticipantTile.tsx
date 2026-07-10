@@ -6,7 +6,6 @@ import type { CallTile } from "../hooks/useLiveKitRoom";
 
 export default function CallParticipantTile({ tile }: { tile: CallTile }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
 
   useEffect(() => {
     const el = videoRef.current;
@@ -16,15 +15,6 @@ export default function CallParticipantTile({ tile }: { tile: CallTile }) {
       tile.videoTrack?.detach(el);
     };
   }, [tile.videoTrack]);
-
-  useEffect(() => {
-    const el = audioRef.current;
-    if (!el || !tile.audioTrack || tile.isLocal) return;
-    tile.audioTrack.attach(el);
-    return () => {
-      tile.audioTrack?.detach(el);
-    };
-  }, [tile.audioTrack, tile.isLocal]);
 
   const showVideo = tile.isCameraEnabled && tile.videoTrack;
 
@@ -49,8 +39,6 @@ export default function CallParticipantTile({ tile }: { tile: CallTile }) {
           </div>
         </div>
       )}
-
-      <audio ref={audioRef} autoPlay />
 
       <div className="absolute bottom-2 left-2 flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 text-xs text-white">
         {tile.isMicEnabled ? <Mic size={12} /> : <MicOff size={12} className="text-red-400" />}

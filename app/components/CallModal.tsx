@@ -27,13 +27,14 @@ export default function CallModal() {
     tiles,
     isMicEnabled,
     isCameraEnabled,
+    isSpeakerEnabled,
     isScreenShareEnabled,
     toggleMic,
     toggleCamera,
+    toggleSpeaker,
     toggleScreenShare,
     connectError,
   } = useCall();
-  const [isSpeakerEnabled, setIsSpeakerEnabled] = useState(true);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   useEffect(() => {
@@ -203,7 +204,7 @@ export default function CallModal() {
         ) : null}
 
         <button
-          onClick={() => setIsSpeakerEnabled((prev) => !prev)}
+          onClick={toggleSpeaker}
           className={`flex h-12 w-12 items-center justify-center rounded-full transition ${
             isSpeakerEnabled ? "bg-gray-700 hover:bg-gray-600" : "bg-gray-800 text-gray-400 hover:bg-gray-700"
           }`}

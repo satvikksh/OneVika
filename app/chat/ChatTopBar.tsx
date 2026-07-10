@@ -459,13 +459,13 @@ function ChatTopBar({
             </div>
           </div>
 
-          <div className="flex flex-shrink-0 items-center gap-1 sm:gap-2" ref={menuRef}>
+          <div className="flex flex-shrink-0 items-center gap-0.5 sm:gap-2" ref={menuRef}>
             {!isGroupChat && !isAiChat ? (
               <>
                 <button
                   onClick={() => handleStartCall(false)}
                   disabled={isCallDisabled}
-                  className="rounded-xl p-2 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-gray-800"
+                  className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-gray-800 sm:h-10 sm:w-10"
                   aria-label="Voice call"
                 >
                   <Phone size={18} />
@@ -474,7 +474,7 @@ function ChatTopBar({
                 <button
                   onClick={() => handleStartCall(true)}
                   disabled={isCallDisabled}
-                  className="hidden rounded-xl p-2 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-gray-800 sm:inline-flex"
+                  className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-gray-800 sm:h-10 sm:w-10"
                   aria-label="Video call"
                 >
                   <Video size={18} />
@@ -482,7 +482,7 @@ function ChatTopBar({
 
                 <button
                   onClick={handleUserProfileClick}
-                  className="hidden rounded-xl p-2 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 md:inline-flex"
+                  className="hidden h-10 w-10 flex-shrink-0 items-center justify-center rounded-full transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 md:inline-flex"
                   aria-label="User info"
                 >
                   <Info size={20} />
@@ -505,7 +505,7 @@ function ChatTopBar({
               <button
                 onClick={() => setIsMenuOpen((prev) => !prev)}
                 disabled={isActionBusy}
-                className="rounded-xl p-2 transition-colors hover:bg-gray-100 disabled:opacity-60 dark:hover:bg-gray-800"
+                className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full transition-colors hover:bg-gray-100 disabled:opacity-60 dark:hover:bg-gray-800 sm:h-10 sm:w-10"
                 aria-label="Chat options"
                 aria-expanded={isMenuOpen}
                 aria-haspopup="menu"

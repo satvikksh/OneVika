@@ -12,6 +12,11 @@ import React, {
 import { useSession } from "next-auth/react";
 import { useSocket } from "./SocketContext";
 import { useLiveKitRoom } from "../hooks/useLiveKitRoom";
+import {
+  playVideoIncoming,
+  playVoiceIncoming,
+  stopRingtone,
+} from "../lib/ringtone";
 import type {
   ActiveCallState,
   CallAcceptPayload,
@@ -41,9 +46,11 @@ interface CallContextValue {
   tiles: ReturnType<typeof useLiveKitRoom>["tiles"];
   isMicEnabled: boolean;
   isCameraEnabled: boolean;
+  isSpeakerEnabled: boolean;
   isScreenShareEnabled: boolean;
   toggleMic: () => void;
   toggleCamera: () => void;
+  toggleSpeaker: () => void;
   toggleScreenShare: () => void;
   connectError: string | null;
 }
@@ -64,7 +71,14 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const activeCallIdRef = useRef<string | null>(null);
   const missedTimerRef = useRef<number | null>(null);
 
+  useEffect(() => {
+    return () => {
+      stopRingtone();
+    };
+  }, []);
+
   const resetCallState = useCallback(() => {
+    stopRingtone();
     if (missedTimerRef.current) {
       window.clearTimeout(missedTimerRef.current);
       missedTimerRef.current = null;
@@ -211,6 +225,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       ],
     });
     setIncomingCall(null);
+    stopRingtone();
 
     emitEvent("call:accepted", { callId, userId, roomId: incomingCall.roomId } as CallAcceptPayload);
     emitEvent("call:participant-joined", {
@@ -229,6 +244,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       reason: "declined",
     } as CallRejectPayload);
     void finishCallRecord(incomingCall, "Rejected");
+    stopRingtone();
     setIncomingCall(null);
   }, [incomingCall, userId, emitEvent, finishCallRecord]);
 
@@ -273,6 +289,11 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         } as CallRejectPayload);
         return;
       }
+      if (payload.video) {
+        playVideoIncoming();
+      } else {
+        playVoiceIncoming();
+      }
       setIncomingCall(payload);
       emitEvent("call:ringing", { callId: payload.callId, userId } as CallRingingPayload);
     });
@@ -312,12 +333,14 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
     const unsubCancel = subscribeEvent("call:cancelled", (payload: CallCancelPayload) => {
       if (incomingCall?.callId === payload.callId) {
+        stopRingtone();
         setIncomingCall(null);
       }
     });
 
     const unsubMissed = subscribeEvent("call:missed", (payload: CallCancelPayload) => {
       if (incomingCall?.callId === payload.callId) {
+        stopRingtone();
         setIncomingCall(null);
       }
       if (payload.callId === activeCallIdRef.current) {
@@ -329,6 +352,10 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     });
 
     const unsubEnd = subscribeEvent("call:ended", (payload: CallEndPayload) => {
+      if (incomingCall?.callId === payload.callId) {
+        stopRingtone();
+        setIncomingCall(null);
+      }
       if (payload.callId === activeCallIdRef.current) {
         resetCallState();
       }
@@ -359,9 +386,11 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     tiles,
     isMicEnabled,
     isCameraEnabled,
+    isSpeakerEnabled,
     isScreenShareEnabled,
     toggleMic,
     toggleCamera,
+    toggleSpeaker,
     toggleScreenShare,
     error,
     isConnected: roomConnected,
@@ -392,9 +421,11 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       tiles,
       isMicEnabled,
       isCameraEnabled,
+      isSpeakerEnabled,
       isScreenShareEnabled,
       toggleMic,
       toggleCamera,
+      toggleSpeaker,
       toggleScreenShare,
       connectError: error,
     }),
@@ -409,9 +440,11 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       tiles,
       isMicEnabled,
       isCameraEnabled,
+      isSpeakerEnabled,
       isScreenShareEnabled,
       toggleMic,
       toggleCamera,
+      toggleSpeaker,
       toggleScreenShare,
       error,
     ]
