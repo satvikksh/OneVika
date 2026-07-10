@@ -24,6 +24,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import DateSeparator from "./DateSeparator";
 
 interface ChatAreaProps {
   selectedUser: User | null;
@@ -141,6 +142,44 @@ const renderMessageText = (value: string) => {
     }
 
     return <span key={`text-${index}`}>{part}</span>;
+  });
+};
+
+type MessageWithCreatedAt = Message & {
+  createdAt?: string | Date;
+};
+
+const getMessageTimestamp = (message: MessageWithCreatedAt) =>
+  message.createdAt ?? message.sentAt ?? message.timestamp;
+
+const getLocalDateKey = (value: string | Date | undefined) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const formatDateSeparatorLabel = (value: string | Date | undefined) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  const messageKey = getLocalDateKey(date);
+  if (messageKey === getLocalDateKey(today)) return "Today";
+  if (messageKey === getLocalDateKey(yesterday)) return "Yesterday";
+
+  return date.toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
   });
 };
 
@@ -667,7 +706,18 @@ function ChatArea({
                   </p>
                 </div>
               ) : (
-                messages.map((msg) => {
+                messages.map((msg, index) => {
+                  const messageTimestamp = getMessageTimestamp(msg);
+                  const previousMessage = index > 0 ? messages[index - 1] : null;
+                  const messageDateKey = getLocalDateKey(messageTimestamp);
+                  const previousDateKey = previousMessage
+                    ? getLocalDateKey(getMessageTimestamp(previousMessage))
+                    : "";
+                  const shouldShowDateSeparator =
+                    Boolean(messageDateKey) && messageDateKey !== previousDateKey;
+                  const dateSeparatorLabel = shouldShowDateSeparator
+                    ? formatDateSeparatorLabel(messageTimestamp)
+                    : "";
                   const isCurrentUser = msg.senderId === currentUserId;
                   const isHiddenMessage = Boolean(msg.isHidden);
                   const isSelected = selectedMessageIdSet.has(msg.id);
@@ -707,13 +757,16 @@ function ChatArea({
                   };
                   
                   return (
-                    <div
-                      key={msg.id}
-                      id={`message-${msg.id}`}
-                      className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
-                      onMouseEnter={() => setHoveredMessageId(msg.id)}
-                      onMouseLeave={() => setHoveredMessageId(null)}
-                    >
+                    <React.Fragment key={msg.id}>
+                      {dateSeparatorLabel ? (
+                        <DateSeparator label={dateSeparatorLabel} />
+                      ) : null}
+                      <div
+                        id={`message-${msg.id}`}
+                        className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
+                        onMouseEnter={() => setHoveredMessageId(msg.id)}
+                        onMouseLeave={() => setHoveredMessageId(null)}
+                      >
                       <div
                         className={`group flex items-start gap-2 ${
                           isCurrentUser ? "flex-row-reverse" : ""
@@ -930,7 +983,8 @@ function ChatArea({
                           )}
                         </div>
                       </div>
-                    </div>
+                      </div>
+                    </React.Fragment>
                   );
                 })
               )}
