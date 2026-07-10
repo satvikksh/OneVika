@@ -20,13 +20,16 @@ export interface CallTile {
   isSpeaking: boolean;
   isCameraEnabled: boolean;
   isMicEnabled: boolean;
+  isScreenShareEnabled: boolean;
   videoTrack?: Track;
   audioTrack?: Track;
+  screenShareTrack?: Track;
 }
 
 function participantToTile(participant: Participant): CallTile {
   const videoPub = participant.getTrackPublication(Track.Source.Camera);
   const audioPub = participant.getTrackPublication(Track.Source.Microphone);
+  const screenSharePub = participant.getTrackPublication(Track.Source.ScreenShare);
 
   return {
     identity: participant.identity,
@@ -35,10 +38,20 @@ function participantToTile(participant: Participant): CallTile {
     isSpeaking: participant.isSpeaking,
     isCameraEnabled: Boolean(videoPub?.track && !videoPub?.isMuted),
     isMicEnabled: Boolean(audioPub?.track && !audioPub?.isMuted),
-    videoTrack: videoPub?.track,
+    isScreenShareEnabled: Boolean(screenSharePub?.track && !screenSharePub?.isMuted),
+    videoTrack: screenSharePub?.track ?? videoPub?.track,
     audioTrack: audioPub?.track,
+    screenShareTrack: screenSharePub?.track,
   };
 }
+
+const canSelectAudioOutput = () =>
+  typeof HTMLMediaElement !== "undefined" &&
+  "setSinkId" in HTMLMediaElement.prototype;
+
+const canShareScreen = () =>
+  typeof navigator !== "undefined" &&
+  Boolean(navigator.mediaDevices?.getDisplayMedia);
 
 /**
  * Manages the lifecycle of a single LiveKit Room connection. Pass `null` for
@@ -56,13 +69,18 @@ export function useLiveKitRoom({
   const roomRef = useRef<Room | null>(null);
   const remoteAudioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
   const speakerEnabledRef = useRef(true);
+  const restoreCameraAfterShareRef = useRef(false);
+  const screenShareEndedCleanupRef = useRef<(() => void) | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tiles, setTiles] = useState<CallTile[]>([]);
   const [isMicEnabled, setIsMicEnabled] = useState(true);
   const [isCameraEnabled, setIsCameraEnabled] = useState(video);
   const [isSpeakerEnabled, setIsSpeakerEnabled] = useState(true);
+  const [isSpeakerToggleSupported] = useState(canSelectAudioOutput);
   const [isScreenShareEnabled, setIsScreenShareEnabled] = useState(false);
+  const [isScreenShareSupported] = useState(canShareScreen);
+  const [screenShareError, setScreenShareError] = useState<string | null>(null);
 
   const refreshTiles = useCallback((room: Room) => {
     const all: Participant[] = [room.localParticipant, ...Array.from(room.remoteParticipants.values())];
@@ -134,9 +152,11 @@ export function useLiveKitRoom({
 
   const subscribeRemoteAudio = useCallback((room: Room) => {
     room.remoteParticipants.forEach((participant) => {
-      participant.audioTrackPublications.forEach((publication) => {
-        publication.setSubscribed(true);
-        if (publication.track) {
+      participant.trackPublications.forEach((publication) => {
+        if (publication.kind === Track.Kind.Audio) {
+          publication.setSubscribed(true);
+        }
+        if (publication.kind === Track.Kind.Audio && publication.track) {
           attachRemoteAudio(publication.track, publication);
         }
       });
@@ -154,7 +174,10 @@ export function useLiveKitRoom({
       setTiles([]);
       speakerEnabledRef.current = true;
       setIsSpeakerEnabled(true);
+      screenShareEndedCleanupRef.current?.();
+      screenShareEndedCleanupRef.current = null;
       setIsScreenShareEnabled(false);
+      setScreenShareError(null);
       return;
     }
 
@@ -240,6 +263,8 @@ export function useLiveKitRoom({
       cancelled = true;
       room.removeAllListeners();
       detachRemoteAudio();
+      screenShareEndedCleanupRef.current?.();
+      screenShareEndedCleanupRef.current = null;
       void room.localParticipant.setMicrophoneEnabled(false).catch(() => {});
       void room.localParticipant.setCameraEnabled(false).catch(() => {});
       void room.localParticipant.setScreenShareEnabled(false).catch(() => {});
@@ -268,6 +293,11 @@ export function useLiveKitRoom({
   }, [isCameraEnabled]);
 
   const toggleSpeaker = useCallback(() => {
+    if (!isSpeakerToggleSupported) {
+      setError("Speaker selection is not supported in this browser.");
+      return;
+    }
+
     setIsSpeakerEnabled((prev) => {
       const next = !prev;
       speakerEnabledRef.current = next;
@@ -276,21 +306,73 @@ export function useLiveKitRoom({
       });
       return next;
     });
-  }, []);
+  }, [isSpeakerToggleSupported]);
 
   const toggleScreenShare = useCallback(async () => {
     const room = roomRef.current;
     if (!room) return;
     const next = !isScreenShareEnabled;
+
+    if (next && !isScreenShareSupported) {
+      setScreenShareError("Screen sharing is not supported in this browser.");
+      return;
+    }
+
     try {
-      await room.localParticipant.setScreenShareEnabled(next);
+      setScreenShareError(null);
+      if (next) {
+        restoreCameraAfterShareRef.current = isCameraEnabled;
+      }
+
+      const publication = await room.localParticipant.setScreenShareEnabled(next);
       setIsScreenShareEnabled(next);
+
+      screenShareEndedCleanupRef.current?.();
+      screenShareEndedCleanupRef.current = null;
+
+      if (next && publication?.track?.mediaStreamTrack) {
+        const handleEnded = () => {
+          setIsScreenShareEnabled(false);
+          screenShareEndedCleanupRef.current?.();
+          screenShareEndedCleanupRef.current = null;
+          if (restoreCameraAfterShareRef.current) {
+            void room.localParticipant.setCameraEnabled(true).then(() => {
+              setIsCameraEnabled(true);
+              refreshTiles(room);
+            });
+          }
+          refreshTiles(room);
+        };
+
+        publication.track.mediaStreamTrack.addEventListener("ended", handleEnded, {
+          once: true,
+        });
+        screenShareEndedCleanupRef.current = () => {
+          publication.track?.mediaStreamTrack.removeEventListener("ended", handleEnded);
+        };
+      }
+
+      if (!next && restoreCameraAfterShareRef.current && video) {
+        await room.localParticipant.setCameraEnabled(true);
+        setIsCameraEnabled(true);
+      }
       refreshTiles(room);
     } catch (err) {
-      console.error("[LiveKit] Failed to toggle screen share:", err);
-      setError(err instanceof Error ? err.message : "Unable to share screen");
+      const message = err instanceof Error ? err.message : "Unable to share screen";
+      const isCancelled =
+        err instanceof DOMException &&
+        (err.name === "NotAllowedError" || err.name === "AbortError");
+
+      if (!isCancelled) {
+        console.error("[LiveKit] Failed to toggle screen share:", err);
+      }
+
+      setScreenShareError(
+        isCancelled ? "Screen sharing was cancelled." : message
+      );
+      setIsScreenShareEnabled(false);
     }
-  }, [isScreenShareEnabled, refreshTiles]);
+  }, [isScreenShareEnabled, isScreenShareSupported, isCameraEnabled, video, refreshTiles]);
 
   return {
     isConnected,
@@ -299,7 +381,10 @@ export function useLiveKitRoom({
     isMicEnabled,
     isCameraEnabled,
     isSpeakerEnabled,
+    isSpeakerToggleSupported,
     isScreenShareEnabled,
+    isScreenShareSupported,
+    screenShareError,
     toggleMic,
     toggleCamera,
     toggleSpeaker,

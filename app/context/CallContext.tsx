@@ -13,6 +13,7 @@ import { useSession } from "next-auth/react";
 import { useSocket } from "./SocketContext";
 import { useLiveKitRoom } from "../hooks/useLiveKitRoom";
 import {
+  playOutgoingRing,
   playVideoIncoming,
   playVoiceIncoming,
   stopRingtone,
@@ -47,7 +48,10 @@ interface CallContextValue {
   isMicEnabled: boolean;
   isCameraEnabled: boolean;
   isSpeakerEnabled: boolean;
+  isSpeakerToggleSupported: boolean;
   isScreenShareEnabled: boolean;
+  isScreenShareSupported: boolean;
+  screenShareError: string | null;
   toggleMic: () => void;
   toggleCamera: () => void;
   toggleSpeaker: () => void;
@@ -179,6 +183,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         participants: targets,
       });
 
+      playOutgoingRing();
       emitEvent("call:incoming", payload);
 
       if (data.token && data.url) {
@@ -305,6 +310,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
     const unsubAccept = subscribeEvent("call:accepted", (payload: CallAcceptPayload) => {
       if (payload.callId !== activeCallIdRef.current) return;
+      stopRingtone();
       if (missedTimerRef.current) {
         window.clearTimeout(missedTimerRef.current);
         missedTimerRef.current = null;
@@ -318,6 +324,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       // want to just remove that participant instead of tearing down the
       // whole call — extend here if needed.
       if (activeCall && !activeCall.isGroup) {
+        stopRingtone();
         resetCallState();
       }
     });
@@ -387,7 +394,10 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     isMicEnabled,
     isCameraEnabled,
     isSpeakerEnabled,
+    isSpeakerToggleSupported,
     isScreenShareEnabled,
+    isScreenShareSupported,
+    screenShareError,
     toggleMic,
     toggleCamera,
     toggleSpeaker,
@@ -422,7 +432,10 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       isMicEnabled,
       isCameraEnabled,
       isSpeakerEnabled,
+      isSpeakerToggleSupported,
       isScreenShareEnabled,
+      isScreenShareSupported,
+      screenShareError,
       toggleMic,
       toggleCamera,
       toggleSpeaker,
@@ -441,7 +454,10 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       isMicEnabled,
       isCameraEnabled,
       isSpeakerEnabled,
+      isSpeakerToggleSupported,
       isScreenShareEnabled,
+      isScreenShareSupported,
+      screenShareError,
       toggleMic,
       toggleCamera,
       toggleSpeaker,

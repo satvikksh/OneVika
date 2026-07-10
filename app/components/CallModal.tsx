@@ -13,6 +13,7 @@ import {
   Users,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useSession } from "next-auth/react";
 import { useCall } from "../context/CallContext";
 import CallParticipantTile from "./CallParticipantTile";
 
@@ -28,13 +29,17 @@ export default function CallModal() {
     isMicEnabled,
     isCameraEnabled,
     isSpeakerEnabled,
+    isSpeakerToggleSupported,
     isScreenShareEnabled,
+    isScreenShareSupported,
+    screenShareError,
     toggleMic,
     toggleCamera,
     toggleSpeaker,
     toggleScreenShare,
     connectError,
   } = useCall();
+  const { data: session } = useSession();
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   useEffect(() => {
@@ -110,35 +115,47 @@ export default function CallModal() {
   if (!activeCall) return null;
 
   const isRinging = activeCall.status === "ringing-outgoing";
-  const otherNames = activeCall.participants.map((p) => p.name || p.id).join(", ");
+  const remoteParticipants = activeCall.participants.filter(
+    (participant) => participant.id !== session?.user?.id
+  );
+  const primaryRemote = remoteParticipants[0] ?? activeCall.participants[0];
+  const otherNames =
+    remoteParticipants.map((p) => p.name || p.id).join(", ") ||
+    primaryRemote?.name ||
+    "Participant";
+  const localTile = tiles.find((tile) => tile.isLocal);
+  const remoteTiles = tiles.filter((tile) => !tile.isLocal);
+  const primaryRemoteTile = remoteTiles.find((tile) => tile.videoTrack) ?? remoteTiles[0];
+  const statusText = isRinging
+    ? "Ringing..."
+    : activeCall.status === "connecting"
+      ? "Connecting..."
+      : formattedDuration;
+  const activeError = screenShareError || connectError;
 
   return (
     <div className="fixed inset-0 z-[100] flex flex-col bg-black text-white">
-      <div className="flex items-center justify-between px-5 py-4">
+      <div className="flex items-center justify-between px-4 py-3 sm:px-5 sm:py-4">
         <div>
           <p className="text-sm font-semibold">
             {activeCall.isGroup ? "Group call" : otherNames}
           </p>
-          <p className="text-xs text-gray-400">
-            {isRinging
-              ? "Ringing…"
-              : activeCall.status === "connecting"
-                ? "Connecting…"
-                : formattedDuration}
-          </p>
+          <p className="text-xs text-gray-400">{statusText}</p>
         </div>
-        {connectError ? (
-          <p className="text-xs text-red-400">{connectError}</p>
+        {activeError ? (
+          <p className="max-w-[52vw] truncate text-right text-xs text-red-400">
+            {activeError}
+          </p>
         ) : null}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-5 pb-4">
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 sm:px-5 sm:pb-4">
         {isRinging ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-gray-400">
             <div className="flex h-28 w-28 animate-pulse items-center justify-center overflow-hidden rounded-full bg-blue-600/20 ring-4 ring-white/10">
-              {activeCall.participants[0]?.avatar ? (
+              {primaryRemote?.avatar ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={activeCall.participants[0].avatar ?? ""} alt="" className="h-full w-full object-cover" />
+                <img src={primaryRemote.avatar} alt="" className="h-full w-full object-cover" />
               ) : activeCall.video ? (
                 <Video size={36} />
               ) : (
@@ -146,22 +163,32 @@ export default function CallModal() {
               )}
             </div>
             <p className="text-lg font-medium text-white">{otherNames}</p>
-            <p className="text-sm">{activeCall.status === "connecting" ? "Connecting…" : "Calling…"}</p>
+            <p className="text-sm">{activeCall.status === "connecting" ? "Connecting..." : "Calling..."}</p>
           </div>
         ) : !activeCall.video ? (
           <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
             <div className="flex h-32 w-32 items-center justify-center overflow-hidden rounded-full bg-gray-800 ring-4 ring-white/10">
-              {activeCall.participants[0]?.avatar ? (
+              {primaryRemote?.avatar ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={activeCall.participants[0].avatar ?? ""} alt="" className="h-full w-full object-cover" />
+                <img src={primaryRemote.avatar} alt="" className="h-full w-full object-cover" />
               ) : (
                 <Phone size={42} className="text-gray-300" />
               )}
             </div>
             <div>
               <p className="text-xl font-semibold">{otherNames}</p>
+              <p className="mt-1 text-xs text-emerald-400">Connected</p>
               <p className="mt-1 text-sm text-gray-400">{formattedDuration}</p>
             </div>
+          </div>
+        ) : remoteTiles.length <= 1 && primaryRemoteTile ? (
+          <div className="relative h-full min-h-[22rem] overflow-hidden rounded-2xl bg-gray-950">
+            <CallParticipantTile tile={primaryRemoteTile} fill />
+            {localTile ? (
+              <div className="absolute bottom-3 right-3 w-28 overflow-hidden rounded-xl border border-white/20 shadow-2xl sm:w-40">
+                <CallParticipantTile tile={localTile} compact />
+              </div>
+            ) : null}
           </div>
         ) : (
           <div
@@ -180,10 +207,10 @@ export default function CallModal() {
         )}
       </div>
 
-      <div className="flex items-center justify-center gap-4 px-5 py-6">
+      <div className="flex flex-wrap items-center justify-center gap-2 px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 sm:gap-4 sm:px-5 sm:py-6">
         <button
           onClick={toggleMic}
-          className={`flex h-12 w-12 items-center justify-center rounded-full transition ${
+          className={`flex h-11 w-11 items-center justify-center rounded-full transition sm:h-12 sm:w-12 ${
             isMicEnabled ? "bg-gray-700 hover:bg-gray-600" : "bg-red-600 hover:bg-red-500"
           }`}
           aria-label="Toggle microphone"
@@ -194,7 +221,7 @@ export default function CallModal() {
         {activeCall.video ? (
           <button
             onClick={toggleCamera}
-            className={`flex h-12 w-12 items-center justify-center rounded-full transition ${
+            className={`flex h-11 w-11 items-center justify-center rounded-full transition sm:h-12 sm:w-12 ${
               isCameraEnabled ? "bg-gray-700 hover:bg-gray-600" : "bg-red-600 hover:bg-red-500"
             }`}
             aria-label="Toggle camera"
@@ -205,10 +232,20 @@ export default function CallModal() {
 
         <button
           onClick={toggleSpeaker}
-          className={`flex h-12 w-12 items-center justify-center rounded-full transition ${
-            isSpeakerEnabled ? "bg-gray-700 hover:bg-gray-600" : "bg-gray-800 text-gray-400 hover:bg-gray-700"
+          disabled={!isSpeakerToggleSupported}
+          className={`flex h-11 w-11 items-center justify-center rounded-full transition sm:h-12 sm:w-12 ${
+            !isSpeakerToggleSupported
+              ? "cursor-not-allowed bg-gray-900 text-gray-600"
+              : isSpeakerEnabled
+                ? "bg-gray-700 hover:bg-gray-600"
+                : "bg-gray-800 text-gray-400 hover:bg-gray-700"
           }`}
           aria-label="Toggle speaker"
+          title={
+            isSpeakerToggleSupported
+              ? "Toggle speaker"
+              : "Speaker selection is not supported in this browser"
+          }
         >
           {isSpeakerEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
         </button>
@@ -216,10 +253,20 @@ export default function CallModal() {
         {activeCall.video ? (
           <button
             onClick={toggleScreenShare}
-            className={`flex h-12 w-12 items-center justify-center rounded-full transition ${
-              isScreenShareEnabled ? "bg-blue-600 hover:bg-blue-500" : "bg-gray-700 hover:bg-gray-600"
+            disabled={!isScreenShareSupported}
+            className={`flex h-11 w-11 items-center justify-center rounded-full transition sm:h-12 sm:w-12 ${
+              !isScreenShareSupported
+                ? "cursor-not-allowed bg-gray-900 text-gray-600"
+                : isScreenShareEnabled
+                  ? "bg-blue-600 hover:bg-blue-500"
+                  : "bg-gray-700 hover:bg-gray-600"
             }`}
             aria-label="Toggle screen share"
+            title={
+              isScreenShareSupported
+                ? "Toggle screen share"
+                : "Screen sharing is not supported in this browser"
+            }
           >
             <MonitorUp size={18} />
           </button>
@@ -227,7 +274,7 @@ export default function CallModal() {
 
         <button
           onClick={isRinging ? cancelOutgoingCall : endCall}
-          className="flex h-14 w-14 items-center justify-center rounded-full bg-red-600 transition hover:bg-red-500"
+          className="flex h-12 w-12 items-center justify-center rounded-full bg-red-600 transition hover:bg-red-500 sm:h-14 sm:w-14"
           aria-label="End call"
         >
           <PhoneOff size={22} />

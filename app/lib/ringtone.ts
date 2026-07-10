@@ -2,9 +2,11 @@
 
 const VOICE_INCOMING_SRC = "/sounds/voiceincoming.mp3";
 const VIDEO_INCOMING_SRC = "/sounds/videoincoming.mp3";
+const OUTGOING_RING_SRC = "/sounds/outgoingring.mp3";
 
 let ringtone: HTMLAudioElement | null = null;
 let currentSrc: string | null = null;
+let currentKind: "voice-incoming" | "video-incoming" | "outgoing" | null = null;
 let resumeHandler: (() => void) | null = null;
 
 function removeResumeHandler() {
@@ -28,10 +30,13 @@ function installResumeHandler(audio: HTMLAudioElement) {
   window.addEventListener("keydown", resumeHandler, { once: true });
 }
 
-function playIncoming(src: string) {
+function playManagedRingtone(
+  src: string,
+  kind: "voice-incoming" | "video-incoming" | "outgoing"
+) {
   if (typeof window === "undefined") return;
 
-  if (ringtone && currentSrc === src) {
+  if (ringtone && currentSrc === src && currentKind === kind) {
     ringtone.currentTime = 0;
     void ringtone.play().catch(() => installResumeHandler(ringtone!));
     return;
@@ -46,6 +51,7 @@ function playIncoming(src: string) {
 
   ringtone = audio;
   currentSrc = src;
+  currentKind = kind;
 
   audio.play().catch(() => {
     installResumeHandler(audio);
@@ -53,11 +59,21 @@ function playIncoming(src: string) {
 }
 
 export function playVoiceIncoming() {
-  playIncoming(VOICE_INCOMING_SRC);
+  playManagedRingtone(VOICE_INCOMING_SRC, "voice-incoming");
 }
 
 export function playVideoIncoming() {
-  playIncoming(VIDEO_INCOMING_SRC);
+  playManagedRingtone(VIDEO_INCOMING_SRC, "video-incoming");
+}
+
+export function playOutgoingRing() {
+  playManagedRingtone(OUTGOING_RING_SRC, "outgoing");
+}
+
+export function stopOutgoingRing() {
+  if (currentKind === "outgoing") {
+    stopRingtone();
+  }
 }
 
 export function stopRingtone() {
@@ -65,6 +81,7 @@ export function stopRingtone() {
 
   if (!ringtone) {
     currentSrc = null;
+    currentKind = null;
     return;
   }
 
@@ -79,5 +96,6 @@ export function stopRingtone() {
   } finally {
     ringtone = null;
     currentSrc = null;
+    currentKind = null;
   }
 }
