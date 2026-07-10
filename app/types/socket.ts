@@ -25,7 +25,7 @@ export interface Message {
   conversationId?: string;
   read?: boolean;
   status?: "sending" | "scheduled" | "sent" | "delivered" | "read" | "failed";
-  type?: "text" | "image" | "video" | "audio" | "file";
+  type?: "text" | "image" | "video" | "audio" | "file" | "system";
   attachments?: ChatAttachment[];
   replyToId?: string;
   seenBy?: string[];

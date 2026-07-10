@@ -24,9 +24,8 @@ import {
 import { useSession } from "next-auth/react";
 import { useSocket } from "../context/SocketContext";
 import { useRouter } from "next/navigation";
-import { useAudioCall } from "../hooks/useAudioCall";
-import AudioCallModal from "../components/AudioCallModal";
 import { PremiumAvatar, PremiumName } from "../components/premium-ui";
+import { useCall } from "../context/CallContext";
 
 interface ChatTopBarProps {
   selectedUser: User | null;
@@ -96,11 +95,9 @@ function ChatTopBar({
   const { data: session } = useSession();
   const router = useRouter();
   const { onlineUsers } = useSocket();
+  const { activeCall, startCall } = useCall();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-
-  const roomName = `audio-${session?.user?.id}-${selectedUser?.id}`;
-  const { startCall, endCall, inCall, loading, isReady } = useAudioCall(roomName);
 
   const desktopLeft = "lg:left-80";
   const mobileClasses = isMobile ? "left-0 right-0" : "";
@@ -108,6 +105,11 @@ function ChatTopBar({
   const isGroupChat = selectedUser?.chatType === "group";
   const isAiChat = Boolean(selectedUser?.isAI);
   const isSelectionMode = selectedMessageCount > 0;
+  const isCallDisabled =
+    !session?.user?.id ||
+    Boolean(activeCall) ||
+    Boolean(selectedUser?.isBlocked) ||
+    Boolean(selectedUser?.hasBlockedCurrentUser);
 
   const isUserOnline = selectedUser?.id
     ? !isGroupChat && onlineUsers.includes(selectedUser.id)
@@ -158,6 +160,27 @@ function ChatTopBar({
     callback?.();
   };
 
+  const handleStartCall = (video: boolean) => {
+    if (!selectedUser || isGroupChat || isAiChat || isCallDisabled) return;
+
+    void startCall(
+      [
+        {
+          id: selectedUser.id,
+          name: selectedUser.name,
+          avatar:
+            typeof selectedUser.avatar === "string"
+              ? selectedUser.avatar
+              : selectedUser.image ?? null,
+        },
+      ],
+      {
+        video,
+        conversationId: selectedUser.conversationId,
+      }
+    );
+  };
+
   if (!selectedUser) {
     return (
       <>
@@ -183,7 +206,6 @@ function ChatTopBar({
           </div>
         </header>
 
-        <AudioCallModal incoming={false} onAccept={startCall} onReject={() => {}} inCall={inCall} onEnd={endCall} />
       </>
     );
   }
@@ -266,7 +288,6 @@ function ChatTopBar({
           </div>
         </header>
 
-        <AudioCallModal incoming={false} onAccept={startCall} onReject={() => {}} inCall={inCall} onEnd={endCall} />
       </>
     );
   }
@@ -442,8 +463,8 @@ function ChatTopBar({
             {!isGroupChat && !isAiChat ? (
               <>
                 <button
-                  onClick={startCall}
-                  disabled={!isReady || loading || Boolean(selectedUser.isBlocked)}
+                  onClick={() => handleStartCall(false)}
+                  disabled={isCallDisabled}
                   className="rounded-xl p-2 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-gray-800"
                   aria-label="Voice call"
                 >
@@ -451,7 +472,8 @@ function ChatTopBar({
                 </button>
 
                 <button
-                  disabled={Boolean(selectedUser.isBlocked)}
+                  onClick={() => handleStartCall(true)}
+                  disabled={isCallDisabled}
                   className="hidden rounded-xl p-2 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-gray-800 sm:inline-flex"
                   aria-label="Video call"
                 >
@@ -542,7 +564,6 @@ function ChatTopBar({
         </div>
       </header>
 
-      <AudioCallModal incoming={false} onAccept={startCall} onReject={() => {}} inCall={inCall} onEnd={endCall} />
     </>
   );
 }

@@ -127,6 +127,7 @@ const io = new Server(httpServer, {
     },
 });
 const activeUsers = new Map();
+const activeCallParticipants = new Map();
 const addSocketToActiveUser = (userId, socketId) => {
     const existingSockets = activeUsers.get(userId);
     const wasOffline = !existingSockets || existingSockets.size === 0;
@@ -468,6 +469,10 @@ function buildScheduledSocketMessagePayload(message, status = "sent") {
         sentAt: message.sentAt?.toISOString?.(),
         isAI: Boolean(message.isAI),
         isStreaming: Boolean(message.isStreaming),
+        chatMode: message.chatMode ?? "normal",
+        vanishSeconds: message.vanishSeconds,
+        vanishExpiresAt: message.vanishExpiresAt?.toISOString?.(),
+        originalText: message.originalText,
     };
 }
 async function emitMessageToConversationAudience(message, conversation) {
@@ -493,6 +498,29 @@ async function emitMessageToConversationAudience(message, conversation) {
     audienceIds.forEach((audienceUserId) => {
         io.to(`user_${audienceUserId}`).emit("receive_message", payload);
     });
+    if (message.vanishExpiresAt) {
+        const delay = message.vanishExpiresAt.getTime() - Date.now();
+        if (Number.isFinite(delay) && delay > 0 && delay <= 86_400_000) {
+            setTimeout(async () => {
+                try {
+                    await mongoose.connection.db?.collection("messages").deleteOne({
+                        _id: message._id,
+                        chatMode: "vanish",
+                        vanishExpiresAt: { $lte: new Date() },
+                    });
+                    audienceIds.forEach((audienceUserId) => {
+                        io.to(`user_${audienceUserId}`).emit("message_deleted", {
+                            messageId: message._id.toString(),
+                            scope: "everyone",
+                        });
+                    });
+                }
+                catch (error) {
+                    console.error("[Vanish] Failed to expire scheduled message:", error);
+                }
+            }, delay);
+        }
+    }
     if (deliveredUserIds.length > 0) {
         io.to(`user_${senderId}`).emit("message_delivered", {
             messageId: message._id.toString(),
@@ -1020,6 +1048,32 @@ io.on("connection", (socket) => {
             audienceIds.forEach((audienceUserId) => {
                 io.to(`user_${audienceUserId}`).emit("receive_message", message);
             });
+            if (message.vanishExpiresAt && message.id) {
+                const expiresAt = new Date(message.vanishExpiresAt).getTime();
+                const delay = expiresAt - Date.now();
+                if (Number.isFinite(delay) && delay > 0 && delay <= 86_400_000) {
+                    setTimeout(async () => {
+                        try {
+                            if (mongoose.Types.ObjectId.isValid(message.id)) {
+                                await mongoose.connection.db?.collection("messages").deleteOne({
+                                    _id: new mongoose.Types.ObjectId(message.id),
+                                    chatMode: "vanish",
+                                    vanishExpiresAt: { $lte: new Date() },
+                                });
+                            }
+                            audienceIds.forEach((audienceUserId) => {
+                                io.to(`user_${audienceUserId}`).emit("message_deleted", {
+                                    messageId: message.id,
+                                    scope: "everyone",
+                                });
+                            });
+                        }
+                        catch (error) {
+                            console.error("[Vanish] Failed to expire message:", error);
+                        }
+                    }, delay);
+                }
+            }
             const deliveredUserIds = recipientIds.filter((recipientId) => Boolean(activeUsers.get(recipientId)?.size));
             if (deliveredUserIds.length > 0 &&
                 message.id &&
@@ -1110,6 +1164,92 @@ io.on("connection", (socket) => {
             });
         }
         io.emit("message_read", { messageId, userId });
+    });
+    const rememberCallParticipants = (payload) => {
+        if (!payload.callId)
+            return new Set();
+        const participantIds = new Set([
+            ...(activeCallParticipants.get(payload.callId) ?? []),
+            ...(payload.fromUserId ? [payload.fromUserId] : []),
+            ...(payload.userId ? [payload.userId] : []),
+            ...(Array.isArray(payload.toUserIds) ? payload.toUserIds : []),
+            ...(Array.isArray(payload.participants)
+                ? payload.participants
+                    .map((participant) => participant.id)
+                    .filter((id) => Boolean(id))
+                : []),
+        ]);
+        if (participantIds.size > 0) {
+            activeCallParticipants.set(payload.callId, participantIds);
+        }
+        return participantIds;
+    };
+    const emitCallToUsers = (eventName, payload, userIds) => {
+        Array.from(new Set(Array.from(userIds).filter(Boolean))).forEach((targetUserId) => {
+            io.to(`user_${targetUserId}`).emit(eventName, payload);
+        });
+    };
+    socket.on("call:incoming", (payload) => {
+        if (!payload?.callId || !payload.fromUserId)
+            return;
+        if (handshakeUserId && payload.fromUserId !== handshakeUserId) {
+            console.warn("[Call] Ignored incoming call with mismatched caller.", {
+                socketId: socket.id,
+                handshakeUserId,
+                fromUserId: payload.fromUserId,
+            });
+            return;
+        }
+        const participants = rememberCallParticipants(payload);
+        emitCallToUsers("call:incoming", payload, payload.toUserIds ?? []);
+        const offlineTargets = (payload.toUserIds ?? []).filter((targetUserId) => !activeUsers.get(targetUserId)?.size);
+        if (offlineTargets.length > 0) {
+            emitCallToUsers("call:missed", payload, participants);
+        }
+    });
+    socket.on("call:ringing", (payload) => {
+        const participants = rememberCallParticipants(payload);
+        emitCallToUsers("call:ringing", payload, participants);
+    });
+    socket.on("call:accepted", (payload) => {
+        const participants = rememberCallParticipants(payload);
+        emitCallToUsers("call:accepted", payload, participants);
+    });
+    socket.on("call:rejected", (payload) => {
+        const participants = rememberCallParticipants(payload);
+        emitCallToUsers("call:rejected", payload, participants);
+        if (payload.callId)
+            activeCallParticipants.delete(payload.callId);
+    });
+    socket.on("call:busy", (payload) => {
+        const participants = rememberCallParticipants(payload);
+        emitCallToUsers("call:busy", payload, participants);
+    });
+    socket.on("call:cancelled", (payload) => {
+        const participants = rememberCallParticipants(payload);
+        emitCallToUsers("call:cancelled", payload, participants);
+        if (payload.callId)
+            activeCallParticipants.delete(payload.callId);
+    });
+    socket.on("call:missed", (payload) => {
+        const participants = rememberCallParticipants(payload);
+        emitCallToUsers("call:missed", payload, participants);
+        if (payload.callId)
+            activeCallParticipants.delete(payload.callId);
+    });
+    socket.on("call:ended", (payload) => {
+        const participants = rememberCallParticipants(payload);
+        emitCallToUsers("call:ended", payload, participants);
+        if (payload.callId)
+            activeCallParticipants.delete(payload.callId);
+    });
+    socket.on("call:participant-joined", (payload) => {
+        const participants = rememberCallParticipants(payload);
+        emitCallToUsers("call:participant-joined", payload, participants);
+    });
+    socket.on("call:participant-left", (payload) => {
+        const participants = rememberCallParticipants(payload);
+        emitCallToUsers("call:participant-left", payload, participants);
     });
     socket.on("disconnect", () => {
         console.log("Socket disconnected:", socket.id);

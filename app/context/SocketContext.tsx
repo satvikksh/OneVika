@@ -43,6 +43,11 @@ interface SocketContextType {
   leaveChat: (chatId: string) => void;
   clearMessages: () => void;
   markChatMessagesSeen: (chatId: string) => void;
+  emitEvent: <TPayload = unknown>(eventName: string, payload?: TPayload) => void;
+  subscribeEvent: <TPayload = unknown>(
+    eventName: string,
+    handler: (payload: TPayload) => void
+  ) => () => void;
 }
 
 const SocketContext = createContext<SocketContextType>({
@@ -59,6 +64,8 @@ const SocketContext = createContext<SocketContextType>({
   leaveChat: () => {},
   clearMessages: () => {},
   markChatMessagesSeen: () => {},
+  emitEvent: () => {},
+  subscribeEvent: () => () => {},
 });
 
 const attachmentsAreEqual = (
@@ -439,6 +446,27 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     [userId]
   );
 
+  const emitEvent = useCallback(<TPayload,>(eventName: string, payload?: TPayload) => {
+    const socket = socketRef.current;
+    if (!socket || !eventName) return;
+    socket.emit(eventName, payload);
+  }, []);
+
+  const subscribeEvent = useCallback(
+    <TPayload,>(eventName: string, handler: (payload: TPayload) => void) => {
+      const socket = socketRef.current;
+      if (!socket || !eventName) {
+        return () => {};
+      }
+
+      socket.on(eventName, handler as (...args: unknown[]) => void);
+      return () => {
+        socket.off(eventName, handler as (...args: unknown[]) => void);
+      };
+    },
+    []
+  );
+
   useEffect(() => {
     if (!userId || socketRef.current) return;
 
@@ -678,6 +706,8 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
       leaveChat: () => {},
       clearMessages: () => setMessages([]),
       markChatMessagesSeen: () => {},
+      emitEvent,
+      subscribeEvent,
     }),
     [
       isConnected,
@@ -689,6 +719,8 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
       emitMessageDelete,
       addMessages,
       markMessageAsRead,
+      emitEvent,
+      subscribeEvent,
     ]
   );
 

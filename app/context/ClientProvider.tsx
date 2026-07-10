@@ -3,6 +3,8 @@
 import { ReactNode } from "react";
 import { AuthProvider } from "./AuthProvider";
 import { SocketProvider } from "./SocketContext";
+import { CallProvider } from "./CallContext";
+import CallModal from "../components/CallModal";
 
 interface ClientProviderProps {
   children: ReactNode;
@@ -10,8 +12,13 @@ interface ClientProviderProps {
 
 export function ClientProvider({ children }: ClientProviderProps) {
   return (
-    <AuthProvider>
-      <SocketProvider>{children}</SocketProvider>
+   <AuthProvider>
+      <SocketProvider>
+        <CallProvider>
+          {children}
+          <CallModal />
+        </CallProvider>
+      </SocketProvider>
     </AuthProvider>
   );
 }

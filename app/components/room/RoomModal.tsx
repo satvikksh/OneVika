@@ -15,40 +15,15 @@ export default function RoomModal({ isOpen, onClose }: Props) {
 
   if (!isOpen) return null;
 
-  // ✅ Create Room (via backend API)
   const createRoom = async () => {
-  try {
-    setLoading(true);
-
-    const roomName = Math.random().toString(36).substring(2, 8);
-
-    const res = await fetch("/api/metered", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ roomName }),
-    });
-
-    const data = await res.json();
-
-    console.log("Room API Response:", data);
-
-    // 🔥 FIX: check res.ok instead of data.success
-    if (!res.ok) {
-      alert("Failed to create room");
-      return;
+    try {
+      setLoading(true);
+      const roomName = `call-public-${crypto.randomUUID()}`;
+      router.push(`/room/${roomName}`);
+    } finally {
+      setLoading(false);
     }
-
-    router.push(`/room/${data.roomName}`);
-
-  } catch (error) {
-    console.log(error);
-    alert("Something went wrong");
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   // ✅ Join Room
   const joinRoom = () => {
@@ -66,16 +41,14 @@ export default function RoomModal({ isOpen, onClose }: Props) {
           Start or Join Talk
         </h2>
 
-        {/* Create Room */}
         <button
           onClick={createRoom}
           disabled={loading}
           className="bg-gradient-to-r from-blue-700 to-cyan-500 hover:from-blue-800 hover:to-cyan-600 py-2 rounded-lg text-sm"
         >
-          {loading ? "Creating..." : "➕ Create Talk"}
+          {loading ? "Creating..." : "Create Talk"}
         </button>
 
-        {/* Join Room */}
         <div className="flex flex-col gap-2">
           <input
             type="text"
@@ -89,11 +62,10 @@ export default function RoomModal({ isOpen, onClose }: Props) {
             onClick={joinRoom}
             className="bg-green-600 hover:bg-green-700 py-2 rounded-lg text-sm"
           >
-            🔗 Join Talk
+            Join Talk
           </button>
         </div>
 
-        {/* Close */}
         <button
           onClick={onClose}
           className="text-xs text-stone-400 hover:text-white mt-2"

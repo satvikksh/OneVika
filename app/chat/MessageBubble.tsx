@@ -9,11 +9,8 @@ import {
   Reply,
   Copy,
   Forward,
-  Pin,
-  Star,
   Flag,
   Trash2,
-  X,
 } from "lucide-react";
 
 interface MessageBubbleProps {
@@ -31,35 +28,14 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   isCurrentUser,
   onContextMenu,
   senderName,
-  showStatus = true,
   isGrouped = false,
   onAction,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
-  const [showActions, setShowActions] = useState(false);
   const [isQuickMenuOpen, setIsQuickMenuOpen] = useState(false);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const bubbleRef = useRef<HTMLDivElement>(null);
-
-  const formatMessageTime = (ts?: string) => {
-    if (!ts) return "";
-    try {
-      const date = new Date(ts);
-      const now = new Date();
-      const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
-      
-      if (diffInHours < 24) {
-        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      } else if (diffInHours < 48) {
-        return 'Yesterday';
-      } else {
-        return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-      }
-    } catch {
-      return "";
-    }
-  };
 
   const handleTouchStart = (e: React.TouchEvent) => {
     const touch = e.touches[0];
@@ -81,6 +57,16 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
     }
     touchStartRef.current = null;
   };
+
+  if (message.type === "system") {
+    return (
+      <div className="my-3 flex justify-center px-4">
+        <div className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+          {message.content || message.text || "System message"}
+        </div>
+      </div>
+    );
+  }
 
   const handleTouchMove = (e: React.TouchEvent) => {
     if (longPressTimerRef.current && touchStartRef.current) {

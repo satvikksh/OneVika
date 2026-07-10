@@ -2,12 +2,14 @@ import "./globals.css";
 import ClientLayout from "./ClientLayout";
 import { Inter } from "next/font/google";
 import { SocketProvider } from "./context/SocketContext";
+import { CallProvider } from "./context/CallContext";
 import { NotificationProvider } from "./context/NotificationContext";
 import Script from "next/script";
 import { getServerSession } from "next-auth";
 import { dbConnect } from "./lib/mongodb";
 import User from "./models/User";
 import NotificationListener from "./components/NotificationListener";
+import CallModal from "./components/CallModal";
 import { isPremiumActive } from "./lib/premium";
 import { authOptions } from "./lib/authOptions";
 
@@ -73,17 +75,15 @@ export default async function RootLayout({
           } as React.CSSProperties
         }
       >
-        <Script
-          src="https://cdn.metered.ca/sdk/frame/1.4.3/sdk-frame.min.js"
-          strategy="beforeInteractive"
-        />
-
         <ClientLayout>
           <SocketProvider>
-            <NotificationProvider>
-              <NotificationListener />
-              {children}
-            </NotificationProvider>
+            <CallProvider>
+              <NotificationProvider>
+                <NotificationListener />
+                {children}
+                <CallModal />
+              </NotificationProvider>
+            </CallProvider>
           </SocketProvider>
         </ClientLayout>
       </body>

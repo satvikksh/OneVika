@@ -61,6 +61,17 @@ type SocketMessagePayload = {
   originalText?: string;
 };
 
+type CallSignalPayload = {
+  callId?: string;
+  roomId?: string;
+  roomName?: string;
+  fromUserId?: string;
+  userId?: string;
+  toUserIds?: string[];
+  participants?: { id?: string }[];
+  reason?: string;
+};
+
 type StoredMessageDoc = {
   _id: mongoose.Types.ObjectId;
   conversationId: mongoose.Types.ObjectId;
@@ -265,6 +276,7 @@ const io = new Server(httpServer, {
 });
 
 const activeUsers = new Map<string, Set<string>>();
+const activeCallParticipants = new Map<string, Set<string>>();
 
 const addSocketToActiveUser = (userId: string, socketId: string) => {
   const existingSockets = activeUsers.get(userId);
@@ -1720,6 +1732,111 @@ io.on("connection", (socket) => {
       io.emit("message_read", { messageId, userId });
     }
   );
+
+  const rememberCallParticipants = (payload: CallSignalPayload) => {
+    if (!payload.callId) return new Set<string>();
+
+    const participantIds = new Set<string>([
+      ...(activeCallParticipants.get(payload.callId) ?? []),
+      ...(payload.fromUserId ? [payload.fromUserId] : []),
+      ...(payload.userId ? [payload.userId] : []),
+      ...(Array.isArray(payload.toUserIds) ? payload.toUserIds : []),
+      ...(Array.isArray(payload.participants)
+        ? payload.participants
+            .map((participant) => participant.id)
+            .filter((id): id is string => Boolean(id))
+        : []),
+    ]);
+
+    if (participantIds.size > 0) {
+      activeCallParticipants.set(payload.callId, participantIds);
+    }
+
+    return participantIds;
+  };
+
+  const emitCallToUsers = (
+    eventName: string,
+    payload: CallSignalPayload,
+    userIds: Iterable<string>
+  ) => {
+    Array.from(new Set(Array.from(userIds).filter(Boolean))).forEach((targetUserId) => {
+      io.to(`user_${targetUserId}`).emit(eventName, payload);
+    });
+  };
+
+  socket.on("call:incoming", (payload: CallSignalPayload) => {
+    if (!payload?.callId || !payload.fromUserId) return;
+
+    if (handshakeUserId && payload.fromUserId !== handshakeUserId) {
+      console.warn("[Call] Ignored incoming call with mismatched caller.", {
+        socketId: socket.id,
+        handshakeUserId,
+        fromUserId: payload.fromUserId,
+      });
+      return;
+    }
+
+    const participants = rememberCallParticipants(payload);
+    emitCallToUsers("call:incoming", payload, payload.toUserIds ?? []);
+
+    const offlineTargets = (payload.toUserIds ?? []).filter(
+      (targetUserId) => !activeUsers.get(targetUserId)?.size
+    );
+
+    if (offlineTargets.length > 0) {
+      emitCallToUsers("call:missed", payload, participants);
+    }
+  });
+
+  socket.on("call:ringing", (payload: CallSignalPayload) => {
+    const participants = rememberCallParticipants(payload);
+    emitCallToUsers("call:ringing", payload, participants);
+  });
+
+  socket.on("call:accepted", (payload: CallSignalPayload) => {
+    const participants = rememberCallParticipants(payload);
+    emitCallToUsers("call:accepted", payload, participants);
+  });
+
+  socket.on("call:rejected", (payload: CallSignalPayload) => {
+    const participants = rememberCallParticipants(payload);
+    emitCallToUsers("call:rejected", payload, participants);
+    if (payload.callId) activeCallParticipants.delete(payload.callId);
+  });
+
+  socket.on("call:busy", (payload: CallSignalPayload) => {
+    const participants = rememberCallParticipants(payload);
+    emitCallToUsers("call:busy", payload, participants);
+  });
+
+  socket.on("call:cancelled", (payload: CallSignalPayload) => {
+    const participants = rememberCallParticipants(payload);
+    emitCallToUsers("call:cancelled", payload, participants);
+    if (payload.callId) activeCallParticipants.delete(payload.callId);
+  });
+
+  socket.on("call:missed", (payload: CallSignalPayload) => {
+    const participants = rememberCallParticipants(payload);
+    emitCallToUsers("call:missed", payload, participants);
+    if (payload.callId) activeCallParticipants.delete(payload.callId);
+  });
+
+  socket.on("call:ended", (payload: CallSignalPayload) => {
+    const participants = rememberCallParticipants(payload);
+    emitCallToUsers("call:ended", payload, participants);
+    if (payload.callId) activeCallParticipants.delete(payload.callId);
+  });
+
+  socket.on("call:participant-joined", (payload: CallSignalPayload) => {
+    const participants = rememberCallParticipants(payload);
+    emitCallToUsers("call:participant-joined", payload, participants);
+  });
+
+  socket.on("call:participant-left", (payload: CallSignalPayload) => {
+    const participants = rememberCallParticipants(payload);
+    emitCallToUsers("call:participant-left", payload, participants);
+  });
 
   socket.on("disconnect", () => {
     console.log("Socket disconnected:", socket.id);
