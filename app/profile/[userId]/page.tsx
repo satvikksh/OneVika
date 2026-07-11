@@ -386,7 +386,9 @@ export default function UserProfilePage() {
           ...prev,
           isFollowing: !wasFollowing,
           isMutualFollow: !wasFollowing ? Boolean(prev.followsYou) : false,
-          canMessage: !wasFollowing ? Boolean(prev.followsYou) : false,
+          canMessage: !wasFollowing
+            ? Boolean(!prev.isPrivate)
+            : Boolean(!prev.isPrivate && prev.followsYou),
           canViewPosts: !wasFollowing
             ? Boolean(prev.canViewPosts || prev.followsYou || !prev.isPrivate)
             : Boolean(!prev.isPrivate),
@@ -423,7 +425,11 @@ export default function UserProfilePage() {
             canMessage:
               data.canMessage !== undefined
                 ? Boolean(data.canMessage)
-                : prev.canMessage,
+                : Boolean(
+                    prev.isPrivate
+                      ? data.isFollowing
+                      : data.isFollowing || prev.followsYou
+                  ),
             canViewPosts:
               data.isMutualFollow !== undefined
                 ? Boolean(data.isMutualFollow || !prev.isPrivate)
@@ -443,7 +449,9 @@ export default function UserProfilePage() {
             ...prev,
             isFollowing: wasFollowing,
             isMutualFollow: wasFollowing ? Boolean(prev.followsYou) : false,
-            canMessage: wasFollowing ? Boolean(prev.followsYou) : false,
+            canMessage: wasFollowing
+              ? Boolean(prev.isPrivate || prev.followsYou)
+              : Boolean(!prev.isPrivate && prev.followsYou),
             canViewPosts: wasFollowing
               ? Boolean(prev.followsYou || !prev.isPrivate)
               : Boolean(!prev.isPrivate),
@@ -689,6 +697,8 @@ export default function UserProfilePage() {
   }
 
   const canShowMessageButton = !isCurrentUser && Boolean(user.canMessage);
+  const canShowVideoButton =
+    !isCurrentUser && Boolean(user.isMutualFollow);
   const isPrivatePostsLocked =
     !isCurrentUser && Boolean(user.isPrivate) && !Boolean(user.canViewPosts);
   const isPremiumProfile = Boolean(user.isPremium || premiumStatus?.isPremium);
@@ -963,26 +973,36 @@ export default function UserProfilePage() {
                           )}
                         </button>
 
-                        {canShowMessageButton && (
-                          <div className="grid grid-cols-2 gap-3">
-                            <button
-                              onClick={handleSendMessage}
-                              className={`py-3 rounded-xl transition-colors font-medium flex items-center justify-center gap-2 ${
-                                isPremiumProfile
-                                  ? "bg-gradient-to-r from-amber-400 via-yellow-300 to-slate-200 text-stone-950 hover:from-amber-300 hover:via-yellow-200 hover:to-slate-100"
-                                  : "bg-gradient-to-r from-blue-600 to-blue-600 text-white hover:from-blue-700 hover:to-blue-700"
-                              }`}
-                            >
-                              <MessageCircle size={18} />
-                              Message
-                            </button>
-                            <button
-                              onClick={handleStartVideoCall}
-                              className={`py-3 rounded-xl transition-colors font-medium flex items-center justify-center gap-2 ${subtleButtonClass}`}
-                            >
-                              <Video size={18} />
-                              Video
-                            </button>
+                        {(canShowMessageButton || canShowVideoButton) && (
+                          <div
+                            className={`grid gap-3 ${
+                              canShowMessageButton && canShowVideoButton
+                                ? "grid-cols-2"
+                                : "grid-cols-1"
+                            }`}
+                          >
+                            {canShowMessageButton && (
+                              <button
+                                onClick={handleSendMessage}
+                                className={`py-3 rounded-xl transition-colors font-medium flex items-center justify-center gap-2 ${
+                                  isPremiumProfile
+                                    ? "bg-gradient-to-r from-amber-400 via-yellow-300 to-slate-200 text-stone-950 hover:from-amber-300 hover:via-yellow-200 hover:to-slate-100"
+                                    : "bg-gradient-to-r from-blue-600 to-blue-600 text-white hover:from-blue-700 hover:to-blue-700"
+                                }`}
+                              >
+                                <MessageCircle size={18} />
+                                Message
+                              </button>
+                            )}
+                            {canShowVideoButton && (
+                              <button
+                                onClick={handleStartVideoCall}
+                                className={`py-3 rounded-xl transition-colors font-medium flex items-center justify-center gap-2 ${subtleButtonClass}`}
+                              >
+                                <Video size={18} />
+                                Video
+                              </button>
+                            )}
                           </div>
                         )}
                       </>

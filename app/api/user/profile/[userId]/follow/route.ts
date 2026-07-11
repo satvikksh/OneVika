@@ -118,7 +118,7 @@ export async function POST(
       isFollowing: true,
       followsYou: !!followsYou,
       isMutualFollow,
-      canMessage: isMutualFollow,
+      canMessage: !Boolean(targetUser.isPrivate),
       followersCount,
       followingCount,
       notification, // return notification for frontend emit
@@ -196,13 +196,19 @@ export async function DELETE(
       status: "active",
     });
 
+    const targetUser = await db.collection("users").findOne(
+      { _id: targetUserObjectId },
+      { projection: { isPrivate: 1 } }
+    );
+    const targetIsPrivate = Boolean(targetUser?.isPrivate);
+
     return NextResponse.json({
       success: true,
       message: "Unfollowed successfully",
       isFollowing: false,
       followsYou: !!followsYou,
       isMutualFollow: false,
-      canMessage: false,
+      canMessage: targetIsPrivate ? false : Boolean(followsYou),
       followersCount,
       followingCount
     });

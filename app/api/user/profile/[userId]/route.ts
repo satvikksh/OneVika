@@ -141,12 +141,14 @@ export async function GET(
 
     const isCurrentUser = profileId === currentUserId;
     const isPrivateProfile = Boolean(userProfile.isPrivate);
+    const hasActiveFollowRelationship = Boolean(isFollowing || followsYou);
     const canViewPosts =
       isCurrentUser ||
       !isPrivateProfile ||
       isMutualFollow ||
       (viewerPremiumActive && isPrivateProfile && !profilePremiumActive);
-    const canMessage = !isCurrentUser && isMutualFollow;
+    const canMessage =
+      !isCurrentUser && (isPrivateProfile ? Boolean(isFollowing) : hasActiveFollowRelationship);
 
     /* ---------------- FORMAT RESPONSE ---------------- */
     const formattedProfile = {

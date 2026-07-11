@@ -28,6 +28,7 @@ type ConversationDoc = {
 
 type ReceiverDoc = {
   isAI?: boolean;
+  isPrivate?: boolean;
 };
 
 type UserPremiumDoc = {
@@ -109,6 +110,48 @@ const normalizeVanishSeconds = (value: unknown) => {
   if (!Number.isFinite(parsed)) return 300;
   return Math.min(Math.max(Math.round(parsed), 10), 86_400);
 };
+
+async function canSendDirectMessage({
+  db,
+  senderObjectId,
+  receiverObjectId,
+  receiver,
+}: {
+  db: Awaited<ReturnType<typeof getNativeDb>>;
+  senderObjectId: mongoose.Types.ObjectId;
+  receiverObjectId: mongoose.Types.ObjectId;
+  receiver?: ReceiverDoc | null;
+}) {
+  const resolvedReceiver =
+    receiver ??
+    (await db.collection<ReceiverDoc>("users").findOne(
+      { _id: receiverObjectId },
+      { projection: { isAI: 1, isPrivate: 1 } }
+    ));
+
+  if (resolvedReceiver?.isAI) {
+    return true;
+  }
+
+  const [iFollowReceiver, receiverFollowsMe] = await Promise.all([
+    db.collection("follows").findOne({
+      followerId: senderObjectId,
+      followingId: receiverObjectId,
+      status: "active",
+    }),
+    db.collection("follows").findOne({
+      followerId: receiverObjectId,
+      followingId: senderObjectId,
+      status: "active",
+    }),
+  ]);
+
+  if (resolvedReceiver?.isPrivate) {
+    return Boolean(iFollowReceiver);
+  }
+
+  return Boolean(iFollowReceiver || receiverFollowsMe);
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -263,6 +306,18 @@ export async function POST(req: NextRequest) {
           ? new ObjectId(otherParticipant.toString())
           : null;
       }
+
+      if (
+        !isGroupConversation &&
+        !isAiConversation &&
+        receiverObjectId &&
+        !(await canSendDirectMessage({ db, senderObjectId, receiverObjectId }))
+      ) {
+        return NextResponse.json(
+          { error: "Message allowed only for approved followers" },
+          { status: 403 }
+        );
+      }
     } else {
       if (!receiverObjectId) {
         return NextResponse.json(
@@ -273,7 +328,7 @@ export async function POST(req: NextRequest) {
 
       const receiver = await db.collection<ReceiverDoc>("users").findOne(
         { _id: receiverObjectId },
-        { projection: { isAI: 1 } }
+        { projection: { isAI: 1, isPrivate: 1 } }
       );
       const isAiReceiver = Boolean(receiver?.isAI);
 
@@ -295,25 +350,16 @@ export async function POST(req: NextRequest) {
         participants: { $all: [senderObjectId, receiverObjectId] },
       });
 
-      const [iFollowReceiver, receiverFollowsMe] = await Promise.all([
-        db.collection("follows").findOne({
-          followerId: senderObjectId,
-          followingId: receiverObjectId,
-          status: "active",
-        }),
-        db.collection("follows").findOne({
-          followerId: receiverObjectId,
-          followingId: senderObjectId,
-          status: "active",
-        }),
-      ]);
+      const hasMessagePermission = await canSendDirectMessage({
+        db,
+        senderObjectId,
+        receiverObjectId,
+        receiver,
+      });
 
-      const hasMutualFollow = Boolean(iFollowReceiver && receiverFollowsMe);
-      const hasExistingConversation = Boolean(conversation);
-
-      if (!hasMutualFollow && !hasExistingConversation && !isAiReceiver) {
+      if (!hasMessagePermission) {
         return NextResponse.json(
-          { error: "Message allowed only for mutual followers" },
+          { error: "Message allowed only for approved followers" },
           { status: 403 }
         );
       }
