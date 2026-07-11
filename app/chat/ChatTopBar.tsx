@@ -411,7 +411,7 @@ function ChatTopBar({
                   <PremiumName
                     name={selectedUser.name}
                     isPremium={Boolean(selectedUser.isPremium)}
-                    badgeLabel="Premium"
+                    badgeLabel=""
                     badgeClassName="px-1.5 py-0.5 text-[9px]"
                     textClassName={`text-sm font-bold sm:text-base ${
                       selectedUser.isPremium

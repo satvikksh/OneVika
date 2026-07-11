@@ -1247,7 +1247,7 @@ function ChatSidebar({
                 {isLockedHidden ? (
                   <span className="block truncate font-semibold text-gray-900 dark:text-white">Locked chat</span>
                 ) : (
-                  <PremiumName name={getChatDisplayName(user)} isPremium={Boolean(user.isPremium)} badgeLabel="Premium" badgeClassName="px-1.5 py-0.5 text-[9px]" textClassName="font-semibold text-gray-900 dark:text-white" className="min-w-0" />
+                  <PremiumName name={getChatDisplayName(user)} isPremium={Boolean(user.isPremium)} badgeLabel="" badgeClassName="px-1.5 py-0.5 text-[9px]" textClassName="font-semibold text-gray-900 dark:text-white" className="min-w-0" />
                 )}
               </div>
               <div className="flex items-center gap-1.5">{user.isPinned ? <Pin size={13} className="text-amber-500" /> : null}{user.isArchived ? <Archive size={13} className="text-gray-400" /> : null}</div>
