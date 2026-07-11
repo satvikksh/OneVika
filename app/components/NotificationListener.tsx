@@ -133,5 +133,5 @@ export default function NotificationListener() {
     };
   }, []);
 
-  return <audio ref={audioRef} src="/sounds/notify.wav" preload="auto" />;
+  return <audio ref={audioRef} src="/sounds/notify5.mp3" preload="auto" />;
 }

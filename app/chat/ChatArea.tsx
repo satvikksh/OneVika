@@ -3,6 +3,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useLayoutEffect } from "react";
+import { useRouter } from "next/navigation";
 import { ChatAttachment, Message, User } from "../types/socket";
 import { Session } from "next-auth";
 import {
@@ -25,6 +26,7 @@ import {
   X,
 } from "lucide-react";
 import DateSeparator from "./DateSeparator";
+import PremiumUpgradePrompt from "../components/PremiumUpgradePrompt";
 
 interface ChatAreaProps {
   selectedUser: User | null;
@@ -103,10 +105,10 @@ interface ChatAreaProps {
     isGenerating: boolean;
     error: string | null;
   } | null;
-  onChangePolishedPreview: (text: string) => void;
   onRegeneratePolishedPreview: () => void;
   onCancelPolishedPreview: () => void;
   onApprovePolishedPreview: () => void;
+  onInsertPolishedPreview: () => void;
   onSendOriginalPolishedPreview: () => void;
 }
 
@@ -375,12 +377,13 @@ function ChatArea({
   canUsePolishedMode,
   isPremiumUser,
   polishedPreview,
-  onChangePolishedPreview,
   onRegeneratePolishedPreview,
   onCancelPolishedPreview,
   onApprovePolishedPreview,
+  onInsertPolishedPreview,
   onSendOriginalPolishedPreview,
 }: ChatAreaProps) {
+  const router = useRouter();
   const currentUserId = session?.user?.id;
   const selectedMessageIdSet = React.useMemo(
     () => new Set(selectedMessageIds),
@@ -403,7 +406,23 @@ function ChatArea({
   const [delayMs, setDelayMs] = React.useState(60_000);
   const [customDateTime, setCustomDateTime] = React.useState("");
   const [showPremiumPrompt, setShowPremiumPrompt] = React.useState(false);
-  const polishedTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const premiumMembershipUrl = currentUserId
+    ? `/profile/${currentUserId}#premium-membership`
+    : "/profile#premium-membership";
+  const handleUpgradeToPremium = React.useCallback(() => {
+    router.push(premiumMembershipUrl);
+  }, [premiumMembershipUrl, router]);
+
+  const handlePolishedFeatureClick = React.useCallback(() => {
+    if (!isPremiumUser) {
+      setShowPremiumPrompt(true);
+      return;
+    }
+
+    setShowPremiumPrompt(false);
+    setChatMode("polished");
+    inputRef.current?.focus();
+  }, [inputRef, isPremiumUser, setChatMode]);
 
   React.useEffect(() => {
     const interval = window.setInterval(() => setNow(Date.now()), 1000);
@@ -533,11 +552,11 @@ function ChatArea({
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <h3 className="flex items-center gap-2 text-base font-semibold text-gray-950 dark:text-white">
-                    <Sparkles className="h-4 w-4 text-rose-500" />
-                    Polished Chat preview
+                    <Sparkles className="h-4 w-4 text-green-700" />
+                    AI Polished Your Message
                   </h3>
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    Review, edit, regenerate, or send the original.
+                    Review the result before anything is sent.
                   </p>
                 </div>
                 <button
@@ -563,14 +582,24 @@ function ChatArea({
               </div>
               <div>
                 <p className="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">
-                  Enhanced
+                  Polished
                 </p>
-                <textarea
-                  ref={polishedTextareaRef}
-                  value={polishedPreview.enhancedText}
-                  onChange={(event) => onChangePolishedPreview(event.target.value)}
-                  className="min-h-36 w-full resize-y rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-950 outline-none focus:ring-2 focus:ring-rose-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
-                />
+                {polishedPreview.isGenerating ? (
+                  <div className="flex min-h-28 items-center gap-2 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+                    <Loader2 className="h-4 w-4 animate-spin text-green-500" />
+                    Polishing your message...
+                  </div>
+                ) : polishedPreview.enhancedText.trim() ? (
+                  <div className="max-h-40 overflow-y-auto rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-950 dark:border-gray-700 dark:bg-gray-900 dark:text-white">
+                    <p className="whitespace-pre-wrap break-words">
+                      {polishedPreview.enhancedText}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="min-h-20 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
+                    No polished text generated yet.
+                  </div>
+                )}
               </div>
               {polishedPreview.error ? (
                 <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-200">
@@ -589,12 +618,12 @@ function ChatArea({
               </button>
               <button
                 type="button"
-                onClick={() => polishedTextareaRef.current?.focus()}
-                disabled={polishedPreview.isGenerating}
+                onClick={onInsertPolishedPreview}
+                disabled={polishedPreview.isGenerating || !polishedPreview.enhancedText.trim()}
                 className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 disabled:opacity-60 dark:border-gray-700 dark:text-gray-200"
               >
                 <Edit3 size={16} />
-                Edit
+                Edit Polished Text
               </button>
               <button
                 type="button"
@@ -609,24 +638,22 @@ function ChatArea({
                 )}
                 Regenerate
               </button>
-              {polishedPreview.error ? (
-                <button
-                  type="button"
-                  onClick={onSendOriginalPolishedPreview}
-                  disabled={polishedPreview.isGenerating || sendingMessage}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 disabled:opacity-60 dark:border-gray-700 dark:text-gray-200"
-                >
-                  Send original
-                </button>
-              ) : null}
+              <button
+                type="button"
+                onClick={onSendOriginalPolishedPreview}
+                disabled={polishedPreview.isGenerating || sendingMessage}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 disabled:opacity-60 dark:border-gray-700 dark:text-gray-200"
+              >
+                Send Original
+              </button>
               <button
                 type="button"
                 onClick={onApprovePolishedPreview}
                 disabled={polishedPreview.isGenerating || !polishedPreview.enhancedText.trim()}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-green-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
               >
                 <Send size={16} />
-                Approve & Send
+                Send Polished
               </button>
             </div>
           </div>
@@ -1030,6 +1057,19 @@ function ChatArea({
               Messaging is disabled for this chat until the user is unblocked.
             </div>
           ) : null}
+          {showPremiumPrompt && !isPremiumUser && !isSelectionMode && !isChatBlocked ? (
+            <div className="border-b border-amber-100 bg-amber-50/70 p-3 dark:border-amber-500/20 dark:bg-amber-950/10 sm:p-4">
+              <PremiumUpgradePrompt
+                description={
+                  selectedUser?.chatType === "group"
+                    ? "Improve your group messages using AI."
+                    : undefined
+                }
+                onClose={() => setShowPremiumPrompt(false)}
+                onUpgrade={handleUpgradeToPremium}
+              />
+            </div>
+          ) : null}
           {/* Reply Preview */}
           {replyTo && !isSelectionMode && (
             <div className="px-4 pt-3 bg-gradient-to-r from-blue-50 to-pink-50 dark:from-blue-900/20 dark:to-pink-900/20 border-b border-blue-200 dark:border-blue-800">
@@ -1071,60 +1111,39 @@ function ChatArea({
                     <div className="relative">
                       <button
                         type="button"
-                        onClick={() => {
-                          if (!isPremiumUser) {
-                            setShowPremiumPrompt(true);
-                            return;
-                          }
-                          setChatMode("polished");
-                        }}
+                        onClick={handlePolishedFeatureClick}
+                        disabled={sendingMessage && chatMode === "polished"}
                         title={
                           isPremiumUser
-                            ? "Polished Chat"
+                            ? "Polish with AI"
                             : "Premium required for Polished Chat"
                         }
-                        className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-medium transition ${
+                        className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${
                           chatMode === "polished"
-                            ? "bg-white text-rose-700 shadow-sm dark:bg-gray-800 dark:text-rose-300"
+                            ? "bg-white text-green-700 shadow-sm dark:bg-gray-800 dark:text-green-500"
                             : isPremiumUser
                               ? "text-gray-600 dark:text-gray-300"
                               : "text-gray-500 dark:text-gray-400"
                         }`}
                       >
-                        {!isPremiumUser ? <Lock size={13} /> : <Sparkles size={13} />}
-                        Polished
+                        {sendingMessage && chatMode === "polished" ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : !isPremiumUser ? (
+                          <Lock size={13} />
+                        ) : (
+                          <Sparkles size={13} />
+                        )}
+                        {sendingMessage && chatMode === "polished"
+                          ? "Polishing..."
+                          : isPremiumUser
+                            ? "Polished"
+                            : "Polished"}
                         {!isPremiumUser ? (
                           <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-amber-700 dark:bg-amber-950 dark:text-amber-200">
                             Premium
                           </span>
                         ) : null}
                       </button>
-                      {showPremiumPrompt && !isPremiumUser ? (
-                        <div className="absolute bottom-full left-0 z-50 mb-2 w-72 rounded-2xl border border-amber-200 bg-white p-3 text-gray-800 shadow-xl dark:border-amber-900/60 dark:bg-gray-950 dark:text-gray-100">
-                          <div className="mb-1 flex items-center gap-2 text-sm font-semibold">
-                            <Lock size={15} className="text-amber-600" />
-                            Premium feature
-                          </div>
-                          <p className="text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-                            Polished Chat refines your message with AI before sending.
-                          </p>
-                          <div className="mt-3 flex justify-end gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setShowPremiumPrompt(false)}
-                              className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-900"
-                            >
-                              Not now
-                            </button>
-                            <a
-                              href="/profile#premium-membership"
-                              className="rounded-lg bg-amber-500 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-amber-600"
-                            >
-                              Upgrade
-                            </a>
-                          </div>
-                        </div>
-                      ) : null}
                     </div>
                   ) : null}
                 </div>
@@ -1313,7 +1332,7 @@ function ChatArea({
                     (scheduleMode === "later" && !customDateTime) ||
                     (isConnected !== undefined && !isConnected)
                   }
-                  className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg flex items-center justify-center"
+                  className="p-3 bg-green-700 text-white rounded-xl hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg flex items-center justify-center"
                   style={{ minHeight: '44px', minWidth: '44px' }}
                 >
                   {sendingMessage ? (

@@ -1,7 +1,7 @@
 "use client";
 
 const VOICE_INCOMING_SRC = "/sounds/voiceincoming.mp3";
-const VIDEO_INCOMING_SRC = "/sounds/videoincoming.mp3";
+const VIDEO_INCOMING_SRC = "/sounds/voice5.mp3";
 const OUTGOING_RING_SRC = "/sounds/outgoingring.mp3";
 
 let ringtone: HTMLAudioElement | null = null;

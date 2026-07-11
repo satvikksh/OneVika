@@ -347,6 +347,7 @@ export default function UserProfilePage() {
           }
 
           await fetchPremiumStatus();
+          window.dispatchEvent(new Event("orbitbyte:premium-status-changed"));
           setPremiumActionLoading(false);
         },
         modal: {

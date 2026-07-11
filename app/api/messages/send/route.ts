@@ -404,13 +404,6 @@ export async function POST(req: NextRequest) {
     const senderName =
       senderProfile?.name || senderProfile?.email || session.user.name || "Member";
 
-    if (isGroupConversation && chatMode === "polished") {
-      return NextResponse.json(
-        { error: "Polished Mode is only available in personal chats" },
-        { status: 400 }
-      );
-    }
-
     if (chatMode === "polished") {
       const sender = await db.collection<UserPremiumDoc>("users").findOne(
         { _id: senderObjectId },

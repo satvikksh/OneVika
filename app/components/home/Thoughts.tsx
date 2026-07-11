@@ -1,9 +1,12 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Loader2, Brain, MessageCircle, Heart, Send, Edit3, Trash2, Check, X } from 'lucide-react';
+import { Loader2, Brain, MessageCircle, Heart, Send, Edit3, Trash2, Check, X, Lock, Sparkles, RefreshCw } from 'lucide-react';
 import Image from 'next/image';
 import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
+import PremiumUpgradePrompt from '../PremiumUpgradePrompt';
+import { useUserAvatar } from '@/app/hooks/useUserAvatar';
 
 const THOUGHT_WINDOW_HOURS = 24;
 const THOUGHT_LIMIT = 8;
@@ -31,6 +34,8 @@ interface Thought {
 
 export default function Thoughts() {
   const { data: session } = useSession();
+  const router = useRouter();
+  const { isPremium } = useUserAvatar();
   const [thoughts, setThoughts] = useState<Thought[]>([]);
   const [draft, setDraft] = useState('');
   const [editingThoughtId, setEditingThoughtId] = useState<string | null>(null);
@@ -42,6 +47,81 @@ export default function Thoughts() {
   const [error, setError] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [showPremiumPrompt, setShowPremiumPrompt] = useState(false);
+  const [polishedPreview, setPolishedPreview] = useState<{
+    originalText: string;
+    enhancedText: string;
+    isGenerating: boolean;
+    error: string | null;
+  } | null>(null);
+  const premiumMembershipUrl = session?.user?.id
+    ? `/profile/${session.user.id}#premium-membership`
+    : '/profile#premium-membership';
+
+  function handlePremiumPolishedClick() {
+    if (!isPremium) {
+      setShowPremiumPrompt(true);
+      return;
+    }
+
+    void generatePolishedThought();
+  }
+
+  function handleUpgradeToPremium() {
+    router.push(premiumMembershipUrl);
+  }
+
+  async function generatePolishedThought(text = draft.trim()) {
+    if (!text) {
+      setCreateError('Write a thought before polishing it.');
+      return;
+    }
+
+    setCreateError(null);
+    setPolishedPreview({
+      originalText: text,
+      enhancedText: '',
+      isGenerating: true,
+      error: null,
+    });
+
+    try {
+      const response = await fetch('/api/messages/polished-preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, chatType: 'direct' }),
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || !data.enhancedText) {
+        throw new Error(data.error || 'Unable to generate polished text');
+      }
+
+      setPolishedPreview({
+        originalText: text,
+        enhancedText: data.enhancedText,
+        isGenerating: false,
+        error: null,
+      });
+      setDraft(data.enhancedText.slice(0, 280));
+    } catch (err) {
+      setPolishedPreview((current) => ({
+        originalText: text,
+        enhancedText: current?.enhancedText ?? '',
+        isGenerating: false,
+        error: err instanceof Error ? err.message : 'Unable to generate polished text',
+      }));
+    }
+  }
+
+  function insertPolishedThought() {
+    if (!polishedPreview?.enhancedText.trim()) {
+      return;
+    }
+
+    setDraft(polishedPreview.enhancedText.trim().slice(0, 280));
+    setPolishedPreview(null);
+  }
 
   useEffect(() => {
     const fetchThoughts = async () => {
@@ -210,8 +290,105 @@ export default function Thoughts() {
     }
   }
 
+  const polishedThoughtWorkflow = polishedPreview ? (
+    <div className="fixed inset-0 z-[95] flex items-end justify-center bg-black/55 p-3 sm:items-center sm:p-4">
+      <div className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-stone-200 bg-white shadow-2xl dark:border-stone-800 dark:bg-stone-950">
+        <div className="border-b border-stone-100 px-4 py-3 dark:border-stone-800">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="flex items-center gap-2 text-base font-semibold text-stone-950 dark:text-white">
+                <Sparkles className="h-4 w-4 text-green-700" />
+                Polished Text
+              </h3>
+              <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+                Review, edit, regenerate, or insert the polished thought.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setPolishedPreview(null)}
+              className="shrink-0 rounded-full p-2 text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-900"
+              aria-label="Close polished text"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+        <div className="space-y-3 px-4 py-4">
+          <div>
+            <p className="mb-1 text-xs font-medium text-stone-500 dark:text-stone-400">
+              Original
+            </p>
+            <div className="max-h-28 overflow-y-auto rounded-xl bg-stone-100 px-3 py-2 text-sm text-stone-700 dark:bg-stone-900 dark:text-stone-300">
+              <p className="whitespace-pre-wrap break-words">{polishedPreview.originalText}</p>
+            </div>
+          </div>
+          <div>
+            <p className="mb-1 text-xs font-medium text-stone-500 dark:text-stone-400">
+              Enhanced
+            </p>
+            <textarea
+              value={polishedPreview.enhancedText}
+              onChange={(event) =>
+                setPolishedPreview((current) =>
+                  current ? { ...current, enhancedText: event.target.value, error: null } : current
+                )
+              }
+              className="min-h-36 w-full resize-y rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm text-stone-950 outline-none focus:ring-2 focus:ring-green-500 dark:border-stone-700 dark:bg-stone-900 dark:text-white"
+            />
+          </div>
+          {polishedPreview.error ? (
+            <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-200">
+              {polishedPreview.error}
+            </p>
+          ) : null}
+        </div>
+        <div className="flex flex-col-reverse gap-2 border-t border-stone-100 px-4 py-3 dark:border-stone-800 sm:flex-row sm:flex-wrap sm:justify-end">
+          <button
+            type="button"
+            onClick={() => setPolishedPreview(null)}
+            disabled={polishedPreview.isGenerating}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 disabled:opacity-60 dark:border-stone-700 dark:text-stone-200"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => generatePolishedThought(polishedPreview.originalText)}
+            disabled={polishedPreview.isGenerating}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 disabled:opacity-60 dark:border-stone-700 dark:text-stone-200"
+          >
+            {polishedPreview.isGenerating ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw size={16} />
+            )}
+            Regenerate
+          </button>
+          <button
+            type="button"
+            onClick={insertPolishedThought}
+            disabled={polishedPreview.isGenerating || !polishedPreview.enhancedText.trim()}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-green-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+          >
+            <Sparkles size={16} />
+            Insert
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   const thoughtComposer = (
     <div className="mb-4 rounded-xl border border-stone-200 bg-white p-3 shadow-sm dark:border-stone-800 dark:bg-stone-950">
+      {polishedThoughtWorkflow}
+      {showPremiumPrompt && !isPremium ? (
+        <PremiumUpgradePrompt
+          onClose={() => setShowPremiumPrompt(false)}
+          onUpgrade={handleUpgradeToPremium}
+          className="mb-3"
+        />
+      ) : null}
       <textarea
         value={draft}
         onChange={(event) => setDraft(event.target.value)}
@@ -221,15 +398,46 @@ export default function Thoughts() {
       />
       <div className="flex items-center justify-between gap-3 border-t border-stone-100 pt-2 dark:border-stone-800">
         <span className="text-xs text-stone-400 dark:text-stone-600">{draft.length}/280</span>
-        <button
-          type="button"
-          onClick={createThought}
-          disabled={creating}
-          className="flex h-8 min-w-20 items-center justify-center gap-1.5 rounded-full bg-stone-900 px-3 text-xs font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-stone-950 dark:hover:bg-stone-200"
-        >
-          {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-          Share
-        </button>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={handlePremiumPolishedClick}
+            disabled={polishedPreview?.isGenerating}
+            className={`flex h-8 items-center justify-center gap-1.5  px-3 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+              isPremium
+                ? 'text-xs px-3 py-1.5 bg-linear-to-r from-black-600 to-green-600 hover:from-gray-800 hover:to-green-700 rounded-full text-white transition'
+                : 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200 dark:hover:bg-amber-500/15'
+            }`}
+            title={isPremium ? 'Polish with AI' : 'Premium required for Polished thoughts'}
+          >
+            {polishedPreview?.isGenerating ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : isPremium ? (
+              <Sparkles className="h-3.5 w-3.5" />
+            ) : (
+              <Lock className="h-3.5 w-3.5" />
+            )}
+            {polishedPreview?.isGenerating
+              ? 'Polishing...'
+              : isPremium
+                ? 'Polish with AI'
+                : 'Polished'}
+            {!isPremium ? (
+              <span className="rounded-full bg-white px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-amber-700 dark:bg-amber-950 dark:text-amber-200">
+                Premium
+              </span>
+            ) : null}
+          </button>
+          <button
+            type="button"
+            onClick={createThought}
+            disabled={creating}
+            className="flex h-8 min-w-20 items-center justify-center gap-1.5 rounded-full bg-stone-900 px-3 text-xs font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-stone-950 dark:hover:bg-stone-200"
+          >
+            {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+            Share
+          </button>
+        </div>
       </div>
       {createError && <p className="mt-2 text-xs text-red-500 dark:text-red-300">{createError}</p>}
     </div>

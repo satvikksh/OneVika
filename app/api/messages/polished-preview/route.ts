@@ -138,14 +138,6 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json().catch(() => ({}));
     const originalText = body?.text?.toString?.().trim() || "";
-    const chatType = body?.chatType === "group" ? "group" : "direct";
-
-    if (chatType === "group") {
-      return NextResponse.json(
-        { error: "Polished Chat is only available in personal chats." },
-        { status: 400 }
-      );
-    }
 
     if (!originalText) {
       return NextResponse.json(

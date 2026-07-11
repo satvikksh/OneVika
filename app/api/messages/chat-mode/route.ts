@@ -87,9 +87,7 @@ export async function GET(req: NextRequest) {
     });
 
     const chatType = conversation.isGroup ? "group" : "direct";
-    const mode = chatType === "group" && preference?.mode === "polished"
-      ? "normal"
-      : normalizeMode(preference?.mode);
+    const mode = normalizeMode(preference?.mode);
 
     return NextResponse.json({
       mode,
@@ -129,10 +127,7 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    const requestedMode = normalizeMode(body.mode);
-    const mode = conversation.isGroup && requestedMode === "polished"
-      ? "normal"
-      : requestedMode;
+    const mode = normalizeMode(body.mode);
 
     if (mode === "polished") {
       const user = await db.collection<UserPremiumDoc>("users").findOne(

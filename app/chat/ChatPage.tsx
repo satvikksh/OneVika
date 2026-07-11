@@ -393,7 +393,7 @@ export default function ChatPage() {
   const selectedConversationId =
     selectedUser?.conversationId ??
     (selectedUser?.chatType === "group" ? selectedUser.id : null);
-  const canUsePolishedMode = selectedUser?.chatType !== "group";
+  const canUsePolishedMode = Boolean(selectedUser);
 
   const clearUnreadForChat = useCallback((chatId: string) => {
     setUnreadByUser((prev) =>
@@ -828,6 +828,21 @@ export default function ChatPage() {
     })();
   }, [session?.user?.id, status]);
 
+  const refreshPremiumStatus = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const response = await fetch("/api/premium/status", {
+        cache: "no-store",
+        signal,
+      });
+      const data = await response.json().catch(() => ({}));
+      setIsPremiumUser(Boolean(response.ok && data.isPremium));
+    } catch (error) {
+      if ((error as DOMException).name !== "AbortError") {
+        setIsPremiumUser(false);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     if (status !== "authenticated") {
       setIsPremiumUser(false);
@@ -835,24 +850,34 @@ export default function ChatPage() {
     }
 
     const controller = new AbortController();
-
-    (async () => {
-      try {
-        const response = await fetch("/api/premium/status", {
-          cache: "no-store",
-          signal: controller.signal,
-        });
-        const data = await response.json().catch(() => ({}));
-        setIsPremiumUser(Boolean(response.ok && data.isPremium));
-      } catch (error) {
-        if ((error as DOMException).name !== "AbortError") {
-          setIsPremiumUser(false);
-        }
-      }
-    })();
+    void refreshPremiumStatus(controller.signal);
 
     return () => controller.abort();
-  }, [status]);
+  }, [refreshPremiumStatus, status]);
+
+  useEffect(() => {
+    if (status !== "authenticated") return;
+
+    const refresh = () => {
+      void refreshPremiumStatus();
+    };
+
+    const refreshOnFocus = () => {
+      if (document.visibilityState === "visible") {
+        refresh();
+      }
+    };
+
+    window.addEventListener("orbitbyte:premium-status-changed", refresh);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refreshOnFocus);
+
+    return () => {
+      window.removeEventListener("orbitbyte:premium-status-changed", refresh);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refreshOnFocus);
+    };
+  }, [refreshPremiumStatus, status]);
 
   useEffect(() => {
     if (!users.length) return;
@@ -1256,7 +1281,7 @@ export default function ChatPage() {
     }
 
     if (
-      (selectedUser.chatType === "group" || !isPremiumUser) &&
+      !isPremiumUser &&
       chatMode === "polished"
     ) {
       setChatModeState("normal");
@@ -1287,8 +1312,7 @@ export default function ChatPage() {
         if (!response.ok) return;
 
         const nextMode: ChatMode =
-          (selectedUser.chatType === "group" || !isPremiumUser) &&
-          data.mode === "polished"
+          !isPremiumUser && data.mode === "polished"
             ? "normal"
             : data.mode === "vanish" || data.mode === "polished"
               ? data.mode
@@ -1320,8 +1344,7 @@ export default function ChatPage() {
           receiverId: selectedUser.chatType === "group" ? undefined : selectedUser.id,
           conversationId: resource.conversationId,
           mode:
-            (selectedUser.chatType === "group" || !isPremiumUser) &&
-            chatMode === "polished"
+            !isPremiumUser && chatMode === "polished"
               ? "normal"
               : chatMode,
           vanishSeconds,
@@ -1770,6 +1793,27 @@ export default function ChatPage() {
   }, [pendingAttachment]);
 
   /* ------------------------------ SEND MESSAGE ------------------------------ */
+  const polishMessageText = useCallback(
+    async (originalText: string) => {
+      const response = await fetch("/api/messages/polished-preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: originalText,
+          chatType: selectedUser?.chatType === "group" ? "group" : "direct",
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || !data.enhancedText) {
+        throw new Error(data.error || "Unable to polish your message.");
+      }
+
+      return data.enhancedText.toString();
+    },
+    [selectedUser?.chatType]
+  );
+
   const generatePolishedPreview = useCallback(
     async (
       originalText: string,
@@ -1784,41 +1828,26 @@ export default function ChatPage() {
       });
 
       try {
-        const response = await fetch("/api/messages/polished-preview", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            text: originalText,
-            chatType: selectedUser?.chatType === "group" ? "group" : "direct",
-          }),
-        });
-        const data = await response.json().catch(() => ({}));
-
-        if (!response.ok || !data.enhancedText) {
-          throw new Error(data.error || "Unable to generate polished preview");
-        }
+        const enhancedText = await polishMessageText(originalText);
 
         setPolishedPreview({
           originalText,
-          enhancedText: data.enhancedText,
+          enhancedText,
           isGenerating: false,
           error: null,
           pendingSchedule,
         });
-      } catch (error) {
+      } catch {
         setPolishedPreview((prev) => ({
           originalText,
           enhancedText: prev?.enhancedText ?? "",
           isGenerating: false,
           pendingSchedule,
-          error:
-            error instanceof Error
-              ? error.message
-              : "Unable to generate polished preview",
+          error: "Unable to polish your message.",
         }));
       }
     },
-    [selectedUser?.chatType]
+    [polishMessageText]
   );
 
   const sendComposedMessage = useCallback(async (
@@ -1836,8 +1865,7 @@ export default function ChatPage() {
     const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
     const resource = getChatResource(selectedUser);
     const effectiveMode =
-      (selectedUser.chatType === "group" || !isPremiumUser) &&
-      modeOverride === "polished"
+      !isPremiumUser && modeOverride === "polished"
         ? "normal"
         : modeOverride ?? chatMode;
 
@@ -1892,6 +1920,7 @@ export default function ChatPage() {
       !selectedUser ||
       !currentUserId ||
       sendingMessage ||
+      polishedPreview ||
       selectedUser.canMessage === false
     ) {
       return;
@@ -1902,19 +1931,33 @@ export default function ChatPage() {
       return;
     }
 
-    if (
-      chatMode === "polished" &&
-      selectedUser.chatType !== "group" &&
-      isPremiumUser &&
-      messageText
-    ) {
-      await generatePolishedPreview(messageText, schedule);
-      return;
-    }
-
     try {
       setSendingMessage(true);
+      if (chatMode === "polished" && isPremiumUser && messageText) {
+        setMessageErrorsByUser((prev) => ({
+          ...prev,
+          [selectedUser.id]: null,
+        }));
+
+        await generatePolishedPreview(messageText, schedule);
+        return;
+      }
+
       await sendComposedMessage(messageText, schedule, chatMode);
+    } catch (error) {
+      if (chatMode === "polished" && messageText) {
+        setNewMessage(messageText);
+        setMessageErrorsByUser((prev) => ({
+          ...prev,
+          [selectedUser.id]: "Unable to polish your message.",
+        }));
+      } else {
+        setMessageErrorsByUser((prev) => ({
+          ...prev,
+          [selectedUser.id]:
+            error instanceof Error ? error.message : "Unable to send message.",
+        }));
+      }
     } finally {
       setSendingMessage(false);
     }
@@ -1928,7 +1971,7 @@ export default function ChatPage() {
     try {
       setSendingMessage(true);
       await sendComposedMessage(
-        polishedPreview.originalText.trim(),
+        polishedPreview.originalText,
         polishedPreview.pendingSchedule,
         "normal"
       );
@@ -1936,12 +1979,6 @@ export default function ChatPage() {
       setSendingMessage(false);
     }
   }, [polishedPreview, sendComposedMessage, sendingMessage]);
-
-  const handleChangePolishedPreview = useCallback((text: string) => {
-    setPolishedPreview((prev) =>
-      prev ? { ...prev, enhancedText: text, error: null } : prev
-    );
-  }, []);
 
   const handleRegeneratePolishedPreview = useCallback(() => {
     if (!polishedPreview?.originalText || polishedPreview.isGenerating) return;
@@ -1952,8 +1989,11 @@ export default function ChatPage() {
   }, [generatePolishedPreview, polishedPreview]);
 
   const handleCancelPolishedPreview = useCallback(() => {
+    if (polishedPreview?.originalText) {
+      setNewMessage(polishedPreview.originalText);
+    }
     setPolishedPreview(null);
-  }, []);
+  }, [polishedPreview?.originalText]);
 
   const handleApprovePolishedPreview = useCallback(async () => {
     if (
@@ -1977,6 +2017,21 @@ export default function ChatPage() {
       setSendingMessage(false);
     }
   }, [polishedPreview, sendComposedMessage, sendingMessage]);
+
+  const handleInsertPolishedPreview = useCallback(() => {
+    if (
+      !polishedPreview ||
+      polishedPreview.isGenerating ||
+      !polishedPreview.enhancedText.trim()
+    ) {
+      return;
+    }
+
+    setNewMessage(polishedPreview.enhancedText.trim());
+    setChatModeState("normal");
+    setPolishedPreview(null);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, [polishedPreview]);
 
   const patchScheduledMessage = useCallback(
     async (message: Message, body: Record<string, unknown>) => {
@@ -3756,10 +3811,10 @@ export default function ChatPage() {
               canUsePolishedMode={canUsePolishedMode}
               isPremiumUser={isPremiumUser}
               polishedPreview={polishedPreview}
-              onChangePolishedPreview={handleChangePolishedPreview}
               onRegeneratePolishedPreview={handleRegeneratePolishedPreview}
               onCancelPolishedPreview={handleCancelPolishedPreview}
               onApprovePolishedPreview={handleApprovePolishedPreview}
+              onInsertPolishedPreview={handleInsertPolishedPreview}
               onSendOriginalPolishedPreview={handleSendOriginalPolishedPreview}
             />
           </div>

@@ -64,7 +64,7 @@ export default function Home() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowRoomModal(true)}
-              className="text-xs px-3 py-1.5 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-800 hover:to-cyan-700 rounded-full text-white transition"
+              className="text-xs px-3 py-1.5 bg-gradient-to-r from-black-600 to-green-600 hover:from-gray-800 hover:to-green-700 rounded-full text-white transition"
             >
               🎥 Talk in
             </button>
