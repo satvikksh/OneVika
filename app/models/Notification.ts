@@ -28,12 +28,36 @@ const notificationSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    callId: {
+      type: String,
+      default: null,
+      index: true,
+    },
+    conversationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null,
+    },
+    callType: {
+      type: String,
+      enum: ["audio", "video", null],
+      default: null,
+    },
     isRead: {
       type: Boolean,
       default: false,
     },
   },
   { timestamps: true }
+);
+
+notificationSchema.index({ createdAt: 1 }, { expireAfterSeconds: 7 * 24 * 60 * 60 });
+notificationSchema.index(
+  { userId: 1, callId: 1, type: 1 },
+  {
+    unique: true,
+    sparse: true,
+    partialFilterExpression: { type: "call", callId: { $exists: true } },
+  }
 );
 
 const Notification =

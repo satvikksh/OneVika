@@ -23,6 +23,18 @@ export type CallRecord = {
   updatedAt: Date;
 };
 
+type CallUserDoc = {
+  _id: mongoose.Types.ObjectId;
+  name?: string;
+  email?: string;
+  image?: string;
+  avatar?: string;
+};
+
+type MongoWriteError = {
+  code?: number;
+};
+
 export const toObjectId = (id?: string | null) => {
   if (!id || !ObjectId.isValid(id)) return null;
   return new ObjectId(id);
@@ -148,4 +160,63 @@ export async function insertCallSystemMessage(call: CallRecord) {
     isStarred: false,
     isHidden: false,
   };
+}
+
+export async function createMissedCallNotifications(call: CallRecord) {
+  if (!["Missed", "Cancelled"].includes(call.status) || !call._id) return [];
+
+  const db = await getNativeDb();
+  const caller = await db.collection<CallUserDoc>("users").findOne(
+    { _id: call.callerId },
+    { projection: { name: 1, email: 1, image: 1, avatar: 1 } }
+  );
+  const callerName = caller?.name || caller?.email || "Someone";
+  const callLabel = call.callType === "video" ? "Video" : "Audio";
+  const now = call.endedAt ?? new Date();
+  const receiverIds = Array.from(
+    new Map(
+      (call.receiverIds || [])
+        .filter((receiverId) => receiverId?.toString?.() !== call.callerId.toString())
+        .map((receiverId) => [receiverId.toString(), receiverId])
+    ).values()
+  );
+
+  const notifications = [];
+
+  for (const receiverId of receiverIds) {
+    const notification = {
+      userId: receiverId,
+      senderId: call.callerId,
+      type: "call",
+      title: "Missed Call",
+      message: `Missed ${callLabel} Call from ${callerName}`,
+      url: call.conversationId
+        ? `/chat?conversationId=${call.conversationId.toString()}`
+        : "/chat",
+      callId: call._id.toString(),
+      conversationId: call.conversationId ?? null,
+      callType: call.callType,
+      callerName,
+      callerAvatar: caller?.image || caller?.avatar || null,
+      isRead: false,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    try {
+      await db.collection("notifications").insertOne(notification);
+      notifications.push({
+        ...notification,
+        userId: receiverId.toString(),
+        senderId: call.callerId.toString(),
+        conversationId: call.conversationId?.toString?.() ?? null,
+      });
+    } catch (error: unknown) {
+      if ((error as MongoWriteError)?.code !== 11000) {
+        throw error;
+      }
+    }
+  }
+
+  return notifications;
 }

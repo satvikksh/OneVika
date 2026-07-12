@@ -116,6 +116,70 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     [resetCallState]
   );
 
+  useEffect(() => {
+    if (!userId || typeof window === "undefined" || activeCallIdRef.current) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const callId = params.get("incomingCall");
+    const shouldAccept = params.get("acceptCall") === "1";
+    if (!callId || !shouldAccept) return;
+
+    let cancelled = false;
+
+    const acceptPwaCall = async () => {
+      try {
+        const res = await fetch("/api/calls/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ callId }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data?.token || data?.status !== "Ringing") {
+          throw new Error(data?.error || "Call is no longer active");
+        }
+        if (cancelled) return;
+
+        activeCallIdRef.current = data.callId;
+        setActiveCall({
+          callId: data.callId,
+          roomId: data.roomId,
+          roomName: data.roomName,
+          video: data.callType === "video",
+          callType: data.callType === "video" ? "video" : "audio",
+          isGroup: Array.isArray(data.receiverIds) && data.receiverIds.length > 1,
+          conversationId: data.conversationId,
+          status: "connecting",
+          participants: [],
+        });
+        setIncomingCall(null);
+        setToken(data.token);
+        setLivekitUrl(data.url);
+        emitEvent("call:accepted", { callId: data.callId, userId, roomId: data.roomId } as CallAcceptPayload);
+        emitEvent("call:participant-joined", {
+          callId: data.callId,
+          userId,
+          roomId: data.roomId,
+        } as CallParticipantPayload);
+      } catch (error) {
+        console.error("[Call] Failed to accept PWA call:", error);
+        resetCallState();
+      } finally {
+        params.delete("acceptCall");
+        window.history.replaceState(
+          null,
+          "",
+          `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ""}`
+        );
+      }
+    };
+
+    void acceptPwaCall();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, emitEvent, resetCallState]);
+
   const finishCallRecord = useCallback(
     async (
       call: Pick<ActiveCallState, "callId" | "roomId">,
@@ -165,7 +229,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         isGroup: targets.length > 1,
         video: options.video,
         callType: options.video ? "video" : "audio",
-        conversationId: options.conversationId,
+        conversationId: data.conversationId || options.conversationId,
         groupName: options.groupName,
         participants: targets,
       };
@@ -178,7 +242,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         video: options.video,
         callType: options.video ? "video" : "audio",
         isGroup: targets.length > 1,
-        conversationId: options.conversationId,
+        conversationId: data.conversationId || options.conversationId,
         status: "ringing-outgoing",
         participants: targets,
       });

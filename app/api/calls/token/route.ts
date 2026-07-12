@@ -7,6 +7,10 @@ import { getNativeDb } from "@/app/lib/mongodb";
 import { createLiveKitToken, getPublicLiveKitUrl } from "@/app/lib/livekit";
 import { toObjectId } from "@/app/lib/calls";
 
+type StringableId = {
+  toString: () => string;
+};
+
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -46,6 +50,13 @@ export async function POST(req: NextRequest) {
       roomName: call.roomName,
       roomId: call.roomId,
       callId: call.callId,
+      callType: call.callType === "video" ? "video" : "audio",
+      conversationId: call.conversationId?.toString?.(),
+      status: call.status,
+      callerId: call.callerId?.toString?.(),
+      receiverIds: Array.isArray(call.receiverIds)
+        ? call.receiverIds.map((id: StringableId) => id.toString())
+        : [],
     });
   } catch (error) {
     console.error("[Calls] Token failed:", error);

@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { ensureRetentionIndexes } from "./retention";
 
 interface MongooseCache {
   conn: typeof mongoose | null;
@@ -33,6 +34,12 @@ export async function dbConnect(): Promise<typeof mongoose> {
   cached.conn = await cached.promise;
 
   console.log("✅ MongoDB connected (mongoose)");
+
+  if (cached.conn.connection.db) {
+    void ensureRetentionIndexes(cached.conn.connection.db).catch((error) => {
+      console.error("❌ Failed to ensure retention indexes:", error);
+    });
+  }
 
   return cached.conn;
 }

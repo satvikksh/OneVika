@@ -30,6 +30,7 @@ import Image from "next/image";
 import { useSession, signOut } from "next-auth/react";
 import { useTheme } from "../theme-provider";
 import { PremiumAvatar, PremiumName } from "./premium-ui";
+import NotificationPanel from "./NotificationPanel";
 
 // Types
 interface UserSearchResult {
@@ -473,10 +474,6 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
     }
   };
 
-  const markAllAsRead = () => {
-    // Mark all notifications as read logic
-  };
-
   const handleChatClick = () => {
     clearMessages();
     navigateFromMobileMenu("/chat");
@@ -485,6 +482,8 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
   const handleNotificationClick = () => {
     navigateFromMobileMenu("/notifications");
   };
+
+  const formatBadgeCount = (count: number) => (count > 99 ? "99+" : String(count));
 
   // Handle post creation
   const handlePostCreate = () => {
@@ -766,75 +765,26 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
             {showNotifications && session?.user && (
               <div className="relative" ref={notificationsRef}>
                 <button
-                  onClick={handleNotificationClick}
+                  onClick={() => setIsNotificationsOpen((open) => !open)}
                   className="p-2.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 relative transition-all hover:scale-105 active:scale-95 text-gray-600 dark:text-gray-300"
                   aria-label="Notifications"
+                  aria-expanded={isNotificationsOpen}
+                  aria-haspopup="dialog"
                 >
                   <Bell size={20} />
                   {unreadNotifications > 0 && (
-                    <span className="absolute top-0 right-0 w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-sm border-2 border-white dark:border-gray-950">
-                      {unreadNotifications}
+                    <span className="absolute -right-1 -top-1 flex h-[19px] min-w-[19px] items-center justify-center rounded-full border-2 border-white bg-red-500 px-1 text-[10px] font-bold leading-none text-white shadow-sm dark:border-gray-950">
+                      {formatBadgeCount(unreadNotifications)}
                     </span>
                   )}
                 </button>
 
                 {isNotificationsOpen && (
-                  <div className="absolute right-0 mt-4 w-96 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-800 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
-                    <div className="p-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50">
-                      <div className="flex justify-between items-center">
-                        <h3 className="font-bold text-lg">Notifications</h3>
-                        <button
-                          onClick={markAllAsRead}
-                          className="text-xs font-medium text-blue-500 dark:text-blue-400 hover:text-blue-700 transition-colors"
-                        >
-                          Mark all as read
-                        </button>
-                      </div>
-                    </div>
-                    {/* <div className="max-h-[28rem] overflow-y-auto custom-scrollbar">
-                      {notifications.map((notification) => (
-                        <div
-                          key={notification.id}
-                          className={`p-4 border-b border-gray-50 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${
-                            !notification.read
-                              ? "bg-blue-50/40 dark:bg-blue-900/10"
-                              : ""
-                          }`}
-                        >
-                          <div className="flex gap-3">
-                            <div
-                              className={`p-2 h-fit rounded-xl ${
-                                !notification.read
-                                  ? "bg-blue-100 text-blue-500 dark:bg-blue-900/50 dark:text-blue-300"
-                                  : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
-                              }`}
-                            >
-                              {notification.icon}
-                            </div>
-                            <div className="flex-1">
-                              <div className="flex justify-between items-start mb-1">
-                                <h4 className="font-semibold text-sm">
-                                  {notification.title}
-                                </h4>
-                                <span className="text-[10px] text-gray-400 whitespace-nowrap ml-2">
-                                  {notification.time}
-                                </span>
-                              </div>
-                              <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
-                                {notification.description}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div> */}
-                    <Link
-                      href="/notifications"
-                      className="block p-3 text-center text-xs font-medium text-gray-500 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-t border-gray-100 dark:border-gray-800"
-                    >
-                      View all notifications
-                    </Link>
-                  </div>
+                  <NotificationPanel
+                    compact
+                    onNavigate={() => setIsNotificationsOpen(false)}
+                    className="absolute right-0 mt-4 w-[min(92vw,26rem)] animate-in fade-in slide-in-from-top-2"
+                  />
                 )}
               </div>
             )}
@@ -1190,7 +1140,9 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                           className="mb-3 text-gray-700 dark:text-gray-300"
                         />
                         {unreadNotifications > 0 && (
-                          <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-gray-50 dark:border-gray-900" />
+                          <span className="absolute -right-2 -top-2 flex h-[20px] min-w-[20px] items-center justify-center rounded-full border-2 border-gray-50 bg-red-500 px-1 text-[10px] font-bold leading-none text-white shadow-sm dark:border-gray-900">
+                            {formatBadgeCount(unreadNotifications)}
+                          </span>
                         )}
                       </div>
                       <span className="text-sm font-medium">Notifications</span>

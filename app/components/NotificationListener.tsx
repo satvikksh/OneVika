@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { getSocket } from "@/app/lib/socket";
 import { requestFCMToken } from "@/app/lib/firebase";
 
@@ -22,6 +23,7 @@ type MessageNotificationPayload = {
 
 export default function NotificationListener() {
   const { data: session } = useSession();
+  const router = useRouter();
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const playSound = () => {
@@ -96,6 +98,25 @@ export default function NotificationListener() {
       socket.off("receiveNotification");
     };
   }, [session?.user?.id]);
+
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
+      return;
+    }
+
+    const handleServiceWorkerMessage = (event: MessageEvent) => {
+      const data = event.data as { type?: string; url?: string } | undefined;
+      if (data?.type === "OPEN_URL" && data.url) {
+        router.push(data.url);
+      }
+    };
+
+    navigator.serviceWorker.addEventListener("message", handleServiceWorkerMessage);
+
+    return () => {
+      navigator.serviceWorker.removeEventListener("message", handleServiceWorkerMessage);
+    };
+  }, [router]);
 
   useEffect(() => {
     const handleNewMessage = (event: Event) => {

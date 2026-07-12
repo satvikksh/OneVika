@@ -7,6 +7,7 @@ import { getNativeDb } from "@/app/lib/mongodb";
 import {
   CallRecord,
   StoredCallStatus,
+  createMissedCallNotifications,
   insertCallSystemMessage,
   toObjectId,
 } from "@/app/lib/calls";
@@ -82,8 +83,12 @@ export async function POST(req: NextRequest) {
       status === "Completed" || status === "Missed"
         ? await insertCallSystemMessage(finalCall)
         : null;
+    const notifications =
+      status === "Missed" || status === "Cancelled"
+        ? await createMissedCallNotifications(finalCall)
+        : [];
 
-    return NextResponse.json({ success: true, call: finalCall, message });
+    return NextResponse.json({ success: true, call: finalCall, message, notifications });
   } catch (error) {
     console.error("[Calls] End failed:", error);
     return NextResponse.json({ error: "Failed to end call" }, { status: 500 });

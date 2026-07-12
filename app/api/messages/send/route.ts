@@ -13,6 +13,7 @@ const { ObjectId } = Types;
 
 type CloudinaryUploadResult = {
   secure_url: string;
+  public_id?: string;
   resource_type?: string;
 };
 
@@ -180,6 +181,8 @@ export async function POST(req: NextRequest) {
           fileName?: string;
           size?: number;
           targetUrl?: string;
+          publicId?: string;
+          resourceType?: string;
           source?: "feed" | "upload" | "link";
         }
       | undefined;
@@ -225,6 +228,8 @@ export async function POST(req: NextRequest) {
           mimeType: file.type || undefined,
           fileName: file.name || undefined,
           size: file.size || undefined,
+          publicId: uploadResult.public_id,
+          resourceType: uploadResult.resource_type,
           source: "upload",
         };
       }
@@ -250,6 +255,8 @@ export async function POST(req: NextRequest) {
           fileName: firstAttachment.fileName,
           size: firstAttachment.size,
           targetUrl: firstAttachment.targetUrl,
+          publicId: firstAttachment.publicId,
+          resourceType: firstAttachment.resourceType,
           source: firstAttachment.source || "link",
         };
       }

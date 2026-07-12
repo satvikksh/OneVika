@@ -7,6 +7,8 @@ import admin from "firebase-admin";
 import User from "./app/models/User.js";
 import Notification from "./app/models/Notification.js";
 import { decryptChatText, encryptChatText } from "./app/lib/chatCrypto.js";
+import cloudinary from "./app/lib/cloudinary.js";
+import { ensureRetentionIndexes } from "./app/lib/retention.js";
 
 type NotificationPayload = {
   _id?: string;
@@ -66,10 +68,36 @@ type CallSignalPayload = {
   roomId?: string;
   roomName?: string;
   fromUserId?: string;
+  fromUserName?: string;
+  fromAvatar?: string | null;
   userId?: string;
   toUserIds?: string[];
   participants?: { id?: string }[];
+  callType?: "audio" | "video";
+  video?: boolean;
+  conversationId?: string;
   reason?: string;
+};
+
+type StoredCallDoc = {
+  _id: mongoose.Types.ObjectId;
+  callId?: string;
+  callerId: mongoose.Types.ObjectId;
+  receiverIds?: mongoose.Types.ObjectId[];
+  conversationId?: mongoose.Types.ObjectId;
+  roomId?: string;
+  roomName?: string;
+  callType?: "audio" | "video";
+  status?: "Ringing" | "Missed" | "Rejected" | "Completed" | "Cancelled";
+  startedAt?: Date;
+  endedAt?: Date;
+  durationSeconds?: number;
+  createdAt?: Date;
+  updatedAt?: Date;
+};
+
+type MongoWriteError = {
+  code?: number;
 };
 
 type StoredMessageDoc = {
@@ -90,6 +118,11 @@ type StoredMessageDoc = {
   vanishSeconds?: number;
   vanishExpiresAt?: Date;
   originalText?: string;
+  attachments?: Array<{
+    publicId?: string;
+    resourceType?: string;
+    url?: string;
+  }>;
 };
 
 type ScheduledStoredMessageDoc = StoredMessageDoc & {
@@ -126,6 +159,11 @@ const MESSAGE_SCHEDULER_MAX_ATTEMPTS = Math.min(
   Math.max(Number(process.env.MESSAGE_SCHEDULER_MAX_ATTEMPTS || "3"), 1),
   10
 );
+const CALL_RING_TIMEOUT_MS = Math.max(
+  Number(process.env.CALL_RING_TIMEOUT_MS || "45000"),
+  10000
+);
+const MESSAGE_RETENTION_MS = 60 * 24 * 60 * 60 * 1000;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_BASE_URL = (
   process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1"
@@ -177,6 +215,7 @@ let backgroundJobsRunning = false;
 let messageSchedulerStarted = false;
 let messageSchedulerRunning = false;
 const aiReplyJobs = new Set<string>();
+const callExpiryTimers = new Map<string, NodeJS.Timeout>();
 
 // Initialize Firebase Admin
 if (!admin.apps.length) {
@@ -309,6 +348,16 @@ const removeSocketFromActiveUser = (userId: string, socketId: string) => {
   io.emit("online_users", Array.from(activeUsers.keys()));
 };
 
+const emitCallToUsersGlobal = (
+  eventName: string,
+  payload: CallSignalPayload,
+  userIds: Iterable<string>
+) => {
+  Array.from(new Set(Array.from(userIds).filter(Boolean))).forEach((targetUserId) => {
+    io.to(`user_${targetUserId}`).emit(eventName, payload);
+  });
+};
+
 const collectPushTokens = (user: PushTargetUser | null) =>
   Array.from(
     new Set(
@@ -392,12 +441,273 @@ async function pushNotificationToUser(
   }
 }
 
+async function pushIncomingCallToUser(
+  targetUserId: string,
+  payload: CallSignalPayload
+) {
+  const receiver = (await User.findById(targetUserId).select(
+    "fcmToken fcmTokens"
+  )) as PushTargetUser | null;
+  const tokens = collectPushTokens(receiver);
+  if (tokens.length === 0) return;
+
+  const callType = payload.callType || (payload.video ? "video" : "audio");
+  const callerName = payload.fromUserName || "Someone";
+  const title = `${callType === "video" ? "Video" : "Audio"} Call`;
+  const url = payload.conversationId
+    ? `/chat?conversationId=${payload.conversationId}&incomingCall=${payload.callId ?? ""}`
+    : `/chat?incomingCall=${payload.callId ?? ""}`;
+
+  const response = await admin.messaging().sendEachForMulticast({
+    tokens,
+    notification: {
+      title,
+      body: `${callerName} is calling`,
+    },
+    webpush: {
+      headers: {
+        Urgency: "high",
+        TTL: String(Math.ceil(CALL_RING_TIMEOUT_MS / 1000)),
+      },
+      notification: {
+        icon: payload.fromAvatar || `${APP_URL}/icons/icon-192.png`,
+        badge: `${APP_URL}/icons/icon-192.png`,
+        tag: `incoming_call_${payload.callId ?? payload.roomId ?? targetUserId}`,
+        renotify: true,
+        requireInteraction: true,
+        actions: [
+          { action: "accept_call", title: "Accept" },
+          { action: "decline_call", title: "Decline" },
+        ],
+      },
+      fcmOptions: {
+        link: `${APP_URL}${url}`,
+      },
+    },
+    data: {
+      type: "incoming_call",
+      callId: String(payload.callId ?? ""),
+      roomId: String(payload.roomId ?? ""),
+      roomName: String(payload.roomName ?? ""),
+      callerId: String(payload.fromUserId ?? ""),
+      callerName,
+      callerAvatar: String(payload.fromAvatar ?? ""),
+      callType,
+      conversationId: String(payload.conversationId ?? ""),
+      url,
+    },
+  });
+
+  const invalidTokens = response.responses
+    .map((result, index) => ({ result, token: tokens[index] }))
+    .filter(
+      ({ result }) =>
+        !result.success &&
+        (result.error?.code === "messaging/invalid-registration-token" ||
+          result.error?.code === "messaging/registration-token-not-registered")
+    )
+    .map(({ token }) => token);
+
+  if (invalidTokens.length > 0 && receiver?._id) {
+    await User.findByIdAndUpdate(receiver._id, {
+      $pull: { fcmTokens: { $in: invalidTokens } },
+      ...(receiver.fcmToken && invalidTokens.includes(receiver.fcmToken)
+        ? { $set: { fcmToken: null } }
+        : {}),
+    });
+  }
+}
+
 async function dispatchNotification(
   targetUserId: string,
   payload: NotificationPayload
 ) {
   io.to(`user_${targetUserId}`).emit("receiveNotification", payload);
   await pushNotificationToUser(targetUserId, payload);
+}
+
+function buildCallChatUrl(call: StoredCallDoc) {
+  return call.conversationId ? `/chat?conversationId=${call.conversationId.toString()}` : "/chat";
+}
+
+function buildCallSystemText(callType: "audio" | "video" = "audio", status = "Missed", durationSeconds = 0) {
+  const label = callType === "video" ? "Video Call" : "Audio Call";
+  if (status === "Completed") {
+    const minutes = Math.max(1, Math.round(durationSeconds / 60));
+    return `${label} (${minutes} min)`;
+  }
+  if (status === "Missed" || status === "Cancelled") {
+    return `Missed ${label}`;
+  }
+  return `${label} ${status}`;
+}
+
+async function insertServerCallSystemMessage(call: StoredCallDoc) {
+  if (!call.conversationId) return null;
+
+  const existing = await mongoose.connection.db?.collection("messages").findOne({
+    conversationId: call.conversationId,
+    systemType: "call",
+    callId: call._id,
+  });
+
+  if (existing?._id) return null;
+
+  const now = call.endedAt ?? new Date();
+  const text = buildCallSystemText(call.callType, call.status, call.durationSeconds);
+  const encrypted = encryptChatText(text);
+  const receiverId = call.receiverIds?.[0] ?? null;
+
+  const result = await mongoose.connection.db?.collection("messages").insertOne({
+    conversationId: call.conversationId,
+    ...encrypted,
+    text,
+    senderId: call.callerId,
+    receiverId,
+    createdAt: now,
+    read: false,
+    deliveredToUserIds: [call.callerId],
+    readByUserIds: [call.callerId],
+    starredByUserIds: [],
+    hiddenForUserIds: [],
+    deletedForUserIds: [],
+    type: "system",
+    systemType: "call",
+    callId: call._id,
+    callStatus: call.status,
+    callType: call.callType,
+    sentAt: now,
+  });
+
+  await mongoose.connection.db?.collection("conversations").updateOne(
+    { _id: call.conversationId },
+    { $set: { updatedAt: now } }
+  );
+
+  return result?.insertedId ?? null;
+}
+
+async function createAndDispatchMissedCallNotifications(call: StoredCallDoc) {
+  if (!call._id || !call.callerId || !Array.isArray(call.receiverIds)) return;
+
+  const caller = await User.findById(call.callerId)
+    .select("name email image avatar")
+    .lean() as { name?: string; email?: string; image?: string; avatar?: string } | null;
+  const callerName = caller?.name || caller?.email || "Someone";
+  const callType = call.callType === "video" ? "video" : "audio";
+  const callLabel = callType === "video" ? "Video" : "Audio";
+  const now = call.endedAt ?? new Date();
+  const url = buildCallChatUrl(call);
+
+  for (const receiverId of call.receiverIds) {
+    if (!receiverId || receiverId.toString() === call.callerId.toString()) continue;
+
+    const notification = {
+      userId: receiverId,
+      senderId: call.callerId,
+      type: "call",
+      title: "Missed Call",
+      message: `Missed ${callLabel} Call from ${callerName}`,
+      url,
+      callId: call._id.toString(),
+      conversationId: call.conversationId ?? null,
+      callType,
+      callerName,
+      callerAvatar: caller?.image || caller?.avatar || null,
+      isRead: false,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    try {
+      const result = await mongoose.connection.db
+        ?.collection("notifications")
+        .insertOne(notification);
+
+      await dispatchNotification(receiverId.toString(), {
+        _id: result?.insertedId?.toString(),
+        type: "call",
+        title: "Missed Call",
+        message: notification.message,
+        senderId: call.callerId.toString(),
+        url,
+        createdAt: now,
+        isRead: false,
+      });
+    } catch (error: unknown) {
+      if ((error as MongoWriteError)?.code !== 11000) {
+        console.error("[Call] Missed notification failed:", error);
+      }
+    }
+  }
+}
+
+async function finalizeRingingCall(
+  payload: CallSignalPayload,
+  status: "Missed" | "Rejected" | "Cancelled" | "Completed"
+) {
+  if (!payload.callId && !payload.roomId) return null;
+
+  const now = new Date();
+  const call = (await mongoose.connection.db?.collection<StoredCallDoc>("calls").findOneAndUpdate(
+    {
+      ...(payload.callId ? { callId: payload.callId } : { roomId: payload.roomId }),
+      status: "Ringing",
+    },
+    {
+      $set: {
+        status,
+        endedAt: now,
+        durationSeconds:
+          status === "Completed"
+            ? Math.max(0, Math.round((now.getTime() - new Date().getTime()) / 1000))
+            : 0,
+        updatedAt: now,
+      },
+    },
+    { returnDocument: "after" }
+  )) as StoredCallDoc | null;
+
+  if (!call?._id) return null;
+
+  if (status === "Missed" || status === "Cancelled") {
+    await insertServerCallSystemMessage({ ...call, status: "Missed" });
+    await createAndDispatchMissedCallNotifications(call);
+  }
+
+  return call;
+}
+
+function clearCallExpiryTimer(callId?: string) {
+  if (!callId) return;
+  const timer = callExpiryTimers.get(callId);
+  if (timer) {
+    clearTimeout(timer);
+    callExpiryTimers.delete(callId);
+  }
+}
+
+function scheduleCallExpiry(payload: CallSignalPayload) {
+  if (!payload.callId) return;
+  clearCallExpiryTimer(payload.callId);
+
+  const timer = setTimeout(() => {
+    void finalizeRingingCall(payload, "Missed")
+      .then((call) => {
+        if (!call) return;
+        const participants = activeCallParticipants.get(payload.callId!) ?? new Set<string>();
+        emitCallToUsersGlobal("call:missed", payload, participants);
+        activeCallParticipants.delete(payload.callId!);
+      })
+      .catch((error) => {
+        console.error("[Call] Expiry failed:", error);
+      })
+      .finally(() => {
+        callExpiryTimers.delete(payload.callId!);
+      });
+  }, CALL_RING_TIMEOUT_MS);
+
+  callExpiryTimers.set(payload.callId, timer);
 }
 
 async function markExpiredPremiumInactive() {
@@ -510,6 +820,51 @@ async function sendPremiumRenewalReminders() {
   }
 }
 
+async function cleanupExpiredMessageMedia() {
+  const messages = mongoose.connection.db?.collection<StoredMessageDoc>("messages");
+  if (!messages) return;
+
+  const cutoff = new Date(Date.now() - MESSAGE_RETENTION_MS);
+  const expiredMessages = await messages
+    .find(
+      {
+        createdAt: { $lte: cutoff },
+        "attachments.publicId": { $exists: true, $ne: "" },
+      },
+      { projection: { _id: 1, attachments: 1 } }
+    )
+    .limit(50)
+    .toArray();
+
+  for (const message of expiredMessages) {
+    for (const attachment of message.attachments || []) {
+      if (!attachment.publicId) continue;
+
+      const stillReferenced = await messages.findOne(
+        {
+          _id: { $ne: message._id },
+          "attachments.publicId": attachment.publicId,
+        },
+        { projection: { _id: 1 } }
+      );
+
+      if (stillReferenced) continue;
+
+      try {
+        await cloudinary.uploader.destroy(attachment.publicId, {
+          resource_type: attachment.resourceType || "image",
+        });
+      } catch (error) {
+        console.error("[Retention] Failed to clean expired message media:", {
+          messageId: message._id.toString(),
+          publicId: attachment.publicId,
+          error,
+        });
+      }
+    }
+  }
+}
+
 async function runBackgroundJobs() {
   if (backgroundJobsRunning) {
     return;
@@ -520,6 +875,7 @@ async function runBackgroundJobs() {
   try {
     await markExpiredPremiumInactive();
     await sendPremiumRenewalReminders();
+    await cleanupExpiredMessageMedia();
   } catch (error) {
     console.error("Background job error:", error);
   } finally {
@@ -1483,6 +1839,11 @@ async function handleAiConversationMessage(
 
 mongoose.connect(mongoUri).then(() => {
   console.log("MongoDB connected");
+  if (mongoose.connection.db) {
+    void ensureRetentionIndexes(mongoose.connection.db).catch((error) => {
+      console.error("Retention index setup failed:", error);
+    });
+  }
   startBackgroundJobs();
   startMessageScheduler();
 });
@@ -1755,16 +2116,6 @@ io.on("connection", (socket) => {
     return participantIds;
   };
 
-  const emitCallToUsers = (
-    eventName: string,
-    payload: CallSignalPayload,
-    userIds: Iterable<string>
-  ) => {
-    Array.from(new Set(Array.from(userIds).filter(Boolean))).forEach((targetUserId) => {
-      io.to(`user_${targetUserId}`).emit(eventName, payload);
-    });
-  };
-
   socket.on("call:incoming", (payload: CallSignalPayload) => {
     if (!payload?.callId || !payload.fromUserId) return;
 
@@ -1777,65 +2128,82 @@ io.on("connection", (socket) => {
       return;
     }
 
-    const participants = rememberCallParticipants(payload);
-    emitCallToUsers("call:incoming", payload, payload.toUserIds ?? []);
+    rememberCallParticipants(payload);
+    emitCallToUsersGlobal("call:incoming", payload, payload.toUserIds ?? []);
+    scheduleCallExpiry(payload);
 
-    const offlineTargets = (payload.toUserIds ?? []).filter(
-      (targetUserId) => !activeUsers.get(targetUserId)?.size
+    void Promise.all(
+      (payload.toUserIds ?? []).map((targetUserId) =>
+        pushIncomingCallToUser(targetUserId, payload).catch((error) => {
+          console.error("[Call] Incoming push failed:", {
+            targetUserId,
+            callId: payload.callId,
+            error,
+          });
+        })
+      )
     );
-
-    if (offlineTargets.length > 0) {
-      emitCallToUsers("call:missed", payload, participants);
-    }
   });
 
   socket.on("call:ringing", (payload: CallSignalPayload) => {
     const participants = rememberCallParticipants(payload);
-    emitCallToUsers("call:ringing", payload, participants);
+    emitCallToUsersGlobal("call:ringing", payload, participants);
   });
 
   socket.on("call:accepted", (payload: CallSignalPayload) => {
     const participants = rememberCallParticipants(payload);
-    emitCallToUsers("call:accepted", payload, participants);
+    clearCallExpiryTimer(payload.callId);
+    emitCallToUsersGlobal("call:accepted", payload, participants);
   });
 
   socket.on("call:rejected", (payload: CallSignalPayload) => {
     const participants = rememberCallParticipants(payload);
-    emitCallToUsers("call:rejected", payload, participants);
+    clearCallExpiryTimer(payload.callId);
+    emitCallToUsersGlobal("call:rejected", payload, participants);
     if (payload.callId) activeCallParticipants.delete(payload.callId);
   });
 
   socket.on("call:busy", (payload: CallSignalPayload) => {
     const participants = rememberCallParticipants(payload);
-    emitCallToUsers("call:busy", payload, participants);
+    clearCallExpiryTimer(payload.callId);
+    emitCallToUsersGlobal("call:busy", payload, participants);
   });
 
   socket.on("call:cancelled", (payload: CallSignalPayload) => {
     const participants = rememberCallParticipants(payload);
-    emitCallToUsers("call:cancelled", payload, participants);
+    clearCallExpiryTimer(payload.callId);
+    emitCallToUsersGlobal("call:cancelled", payload, participants);
+    void finalizeRingingCall(payload, "Cancelled").catch((error) => {
+      console.error("[Call] Cancel finalization failed:", error);
+    });
     if (payload.callId) activeCallParticipants.delete(payload.callId);
   });
 
   socket.on("call:missed", (payload: CallSignalPayload) => {
     const participants = rememberCallParticipants(payload);
-    emitCallToUsers("call:missed", payload, participants);
+    clearCallExpiryTimer(payload.callId);
+    emitCallToUsersGlobal("call:missed", payload, participants);
+    void finalizeRingingCall(payload, "Missed").catch((error) => {
+      console.error("[Call] Missed finalization failed:", error);
+    });
     if (payload.callId) activeCallParticipants.delete(payload.callId);
   });
 
   socket.on("call:ended", (payload: CallSignalPayload) => {
     const participants = rememberCallParticipants(payload);
-    emitCallToUsers("call:ended", payload, participants);
+    clearCallExpiryTimer(payload.callId);
+    emitCallToUsersGlobal("call:ended", payload, participants);
     if (payload.callId) activeCallParticipants.delete(payload.callId);
   });
 
   socket.on("call:participant-joined", (payload: CallSignalPayload) => {
     const participants = rememberCallParticipants(payload);
-    emitCallToUsers("call:participant-joined", payload, participants);
+    emitCallToUsersGlobal("call:participant-joined", payload, participants);
   });
 
   socket.on("call:participant-left", (payload: CallSignalPayload) => {
     const participants = rememberCallParticipants(payload);
-    emitCallToUsers("call:participant-left", payload, participants);
+    emitCallToUsersGlobal("call:participant-left", payload, participants);
   });
 
   socket.on("disconnect", () => {

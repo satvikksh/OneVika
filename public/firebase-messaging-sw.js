@@ -15,21 +15,51 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage(function (payload) {
   const notification = payload.notification || {};
   const data = payload.data || {};
+  const isIncomingCall = data.type === "incoming_call";
+  const callType = data.callType === "video" ? "Video" : "Audio";
+  const callerName = data.callerName || "Someone";
 
-  self.registration.showNotification(notification.title || "New Notification", {
-    body: notification.body || "",
-    icon: notification.icon || "/icons/icon-192.png",
+  self.registration.showNotification(
+    isIncomingCall ? `Incoming ${callType} Call` : notification.title || "New Notification",
+    {
+    body: isIncomingCall
+      ? `${callerName} is calling`
+      : notification.body || "",
+    icon: data.callerAvatar || notification.icon || "/icons/icon-192.png",
     badge: notification.badge || "/icons/icon-192.png",
+    tag: isIncomingCall
+      ? `incoming_call_${data.callId || data.roomId || "active"}`
+      : data.tag || undefined,
+    renotify: true,
+    requireInteraction: isIncomingCall,
+    actions: isIncomingCall
+      ? [
+          { action: "accept_call", title: "Accept" },
+          { action: "decline_call", title: "Decline" },
+        ]
+      : [],
     data: {
       url: data.url || "/chat",
+      callId: data.callId || "",
+      roomId: data.roomId || "",
+      type: data.type || "notification",
     },
-  });
+    }
+  );
 });
 
 self.addEventListener("notificationclick", function (event) {
   event.notification.close();
 
-  const targetUrl = event.notification?.data?.url || "/chat";
+  if (event.action === "decline_call") {
+    return;
+  }
+
+  const baseUrl = event.notification?.data?.url || "/chat";
+  const targetUrl =
+    event.action === "accept_call" && !baseUrl.includes("acceptCall=1")
+      ? `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}acceptCall=1`
+      : baseUrl;
 
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {

@@ -61,8 +61,8 @@ const OtpChallengeSchema = new Schema<IOtpChallenge>(
   { timestamps: true }
 );
 
-// MongoDB removes abandoned challenges automatically after expiry.
-OtpChallengeSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+// MongoDB removes old challenges automatically after the retention window.
+OtpChallengeSchema.index({ createdAt: 1 }, { expireAfterSeconds: 7 * 24 * 60 * 60 });
 OtpChallengeSchema.index({ email: 1, purpose: 1, usedAt: 1 });
 
 const OtpChallenge: Model<IOtpChallenge> =

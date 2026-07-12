@@ -1,15 +1,10 @@
 import "./globals.css";
 import ClientLayout from "./ClientLayout";
 import { Inter } from "next/font/google";
-import { SocketProvider } from "./context/SocketContext";
-import { CallProvider } from "./context/CallContext";
-import { NotificationProvider } from "./context/NotificationContext";
 import Script from "next/script";
 import { getServerSession } from "next-auth";
 import { dbConnect } from "./lib/mongodb";
 import User from "./models/User";
-import NotificationListener from "./components/NotificationListener";
-import CallModal from "./components/CallModal";
 import { isPremiumActive } from "./lib/premium";
 import { authOptions } from "./lib/authOptions";
 
@@ -62,8 +57,8 @@ export default async function RootLayout({
           `}
         </Script>
         <link rel="manifest" href="/manifest.json" />
-<meta name="theme-color" content="#000000" />
-<link rel="icon" href="/icons/icon-192.png" />
+        <meta name="theme-color" content="#000000" />
+        <link rel="icon" href="/icons/icon-192.png" />
       </head>
       <body
         className={`${inter.className} antialiased`}
@@ -75,17 +70,7 @@ export default async function RootLayout({
           } as React.CSSProperties
         }
       >
-        <ClientLayout>
-          <SocketProvider>
-            <CallProvider>
-              <NotificationProvider>
-                <NotificationListener />
-                {children}
-                <CallModal />
-              </NotificationProvider>
-            </CallProvider>
-          </SocketProvider>
-        </ClientLayout>
+        <ClientLayout>{children}</ClientLayout>
       </body>
     </html>
   );
