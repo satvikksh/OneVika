@@ -933,7 +933,7 @@ export default function UserProfilePage() {
 
                   {/* Action Buttons */}
                   <div className="flex flex-col gap-3 w-full">
-                    {isCurrentUser && (
+                    {/* {isCurrentUser && (
                       <button
                         onClick={startEditingProfile}
                         className={`w-full rounded-xl py-3 font-medium transition-colors flex items-center justify-center gap-2 ${
@@ -945,7 +945,7 @@ export default function UserProfilePage() {
                         <Edit size={18} />
                         Edit Profile
                       </button>
-                    )}
+                    )} */}
                     {!isCurrentUser && (
                       <>
                         <button
