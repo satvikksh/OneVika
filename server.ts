@@ -135,7 +135,7 @@ const OPENROUTER_BASE_URL = (
 const OPENROUTER_MODEL =
   process.env.OPENROUTER_MODEL || "deepseek/deepseek-v4-flash:free";
 const OPENROUTER_FALLBACK_MODELS = (
-  process.env.OPENROUTER_FALLBACK_MODELS || "openai/gpt-oss-20b:free"
+  process.env.OPENROUTER_FALLBACK_MODELS || "poolside/laguna-m.1:free"
 )
   .split(",")
   .map((model) => model.trim())
