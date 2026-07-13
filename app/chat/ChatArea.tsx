@@ -1637,7 +1637,7 @@ function ChatArea({
               <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
                 {isAiConversation ? (
                   <div className="flex w-full gap-2 overflow-x-auto pb-1">
-                    {[
+                    {/* {[
                       "Continue",
                       "Explain",
                       "Summarize",
@@ -1660,7 +1660,7 @@ function ChatArea({
                       >
                         {suggestion}
                       </button>
-                    ))}
+                    ))} */}
                   </div>
                 ) : null}
                 <div className="inline-flex rounded-xl border border-gray-300 bg-gray-100 p-1 dark:border-gray-700 dark:bg-gray-900">
@@ -1804,28 +1804,28 @@ function ChatArea({
                 </button>
                 {isAiConversation ? (
                   <>
-                    <button
+                    {/* <button
                       type="button"
                       disabled={isComposerDisabled}
                       className="rounded-xl p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-emerald-600 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-400 dark:hover:bg-black dark:hover:text-emerald-300"
                       aria-label="Voice input"
                     >
                       <Mic size={20} />
-                    </button>
-                    <button
+                    </button> */}
+                    {/* <button
                       type="button"
                       disabled={isComposerDisabled}
                       className="rounded-xl p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-emerald-600 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-400 dark:hover:bg-black dark:hover:text-emerald-300"
                       aria-label="Mention"
                     >
                       <AtSign size={20} />
-                    </button>
+                    </button> */}
                   </>
                 ) : null}
                 
                 {/* Emoji Picker */}
                 <div className="relative">
-                  <button
+                  {/* <button
                     type="button"
                     onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                     disabled={isComposerDisabled}
@@ -1834,7 +1834,7 @@ function ChatArea({
                   >
                     <Smile size={20} />
                   </button>
-                  
+                   */}
                   {showEmojiPicker && (
                     <div
                       ref={emojiPickerRef}
