@@ -1,4 +1,3 @@
-/* eslint-disable @next/next/no-html-link-for-pages */
 // ChatArea.tsx
 "use client";
 
@@ -6,23 +5,39 @@ import React, { useCallback, useEffect, useLayoutEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ChatAttachment, Message, User } from "../types/socket";
 import { Session } from "next-auth";
+import { AnimatePresence, motion } from "framer-motion";
 import {
+  AtSign,
   AudioLines,
   Check,
   CheckCheck,
   ChevronDown,
   Clock,
+  Code2,
+  Copy,
+  Download,
   Edit3,
+  Eye,
   FileText,
+  FolderTree,
+  ImagePlus,
   Loader2,
   Lock,
+  Mic,
+  Package,
   Paperclip,
+  PanelRightOpen,
   RefreshCw,
   Send,
+  Share2,
   Smile,
   Sparkles,
+  Terminal,
+  ThumbsDown,
+  ThumbsUp,
   Timer,
   Trash2,
+  Volume2,
   X,
 } from "lucide-react";
 import DateSeparator from "./DateSeparator";
@@ -318,6 +333,399 @@ const MessageStatusIndicator = ({
   );
 };
 
+type Artifact = {
+  language: string;
+  code: string;
+  title: string;
+  source: string;
+};
+
+const artifactLanguagePattern =
+  /\b(react|next\.?js|tsx|jsx|html|css|tailwind|javascript|typescript|json|sql|python|bash|shell|markdown|md|yaml|yml)\b/i;
+
+const extractCodeBlocks = (value: string): Artifact[] => {
+  const blocks: Artifact[] = [];
+  const pattern = /```(\w+)?\n?([\s\S]*?)```/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(value)) !== null) {
+    const language = (match[1] || "text").toLowerCase();
+    const code = match[2]?.trim() || "";
+    if (!code) continue;
+
+    blocks.push({
+      language,
+      code,
+      title: `${language.toUpperCase()} artifact`,
+      source: value,
+    });
+  }
+
+  return blocks;
+};
+
+const hasStructuredArtifact = (value = "") => {
+  if (!value.trim()) return false;
+  if (extractCodeBlocks(value).length > 0) return true;
+  return (
+    artifactLanguagePattern.test(value) ||
+    /^\s*[{[][\s\S]*[}\]]\s*$/.test(value) ||
+    /\|.+\|[\r\n]+\|[-:\s|]+\|/.test(value)
+  );
+};
+
+const getArtifactFromMessage = (message?: Message | null): Artifact | null => {
+  const text = message?.text || message?.content || "";
+  const [firstBlock] = extractCodeBlocks(text);
+  if (firstBlock) return firstBlock;
+
+  if (!hasStructuredArtifact(text)) return null;
+
+  const languageMatch = text.match(artifactLanguagePattern);
+  return {
+    language: languageMatch?.[1]?.toLowerCase().replace(".", "") || "markdown",
+    code: text.trim(),
+    title: "AI artifact",
+    source: text,
+  };
+};
+
+const markdownInline = (value: string) => {
+  const parts = value.split(/(`[^`]+`|\*\*[^*]+\*\*)/g);
+  return parts.map((part, index) => {
+    if (part.startsWith("`") && part.endsWith("`")) {
+      return (
+        <code
+          key={`${part}-${index}`}
+          className="rounded-md bg-gray-950/5 px-1.5 py-0.5 font-mono text-[0.92em] text-emerald-700 dark:bg-white/10 dark:text-emerald-300"
+        >
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return (
+        <strong key={`${part}-${index}`} className="font-semibold text-gray-950 dark:text-white">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+
+    return <React.Fragment key={`${part}-${index}`}>{renderMessageText(part)}</React.Fragment>;
+  });
+};
+
+const CodeBlock = ({ language, code }: { language: string; code: string }) => {
+  const [expanded, setExpanded] = React.useState(false);
+  const [wrapped, setWrapped] = React.useState(true);
+  const lines = code.split("\n");
+  const shouldClamp = lines.length > 18 && !expanded;
+  const normalizedLanguage = language || "text";
+
+  const copyCode = async () => {
+    await navigator.clipboard?.writeText(code).catch(() => {});
+  };
+
+  const downloadCode = () => {
+    const extensionMap: Record<string, string> = {
+      javascript: "js",
+      typescript: "ts",
+      jsx: "jsx",
+      tsx: "tsx",
+      python: "py",
+      html: "html",
+      css: "css",
+      json: "json",
+      sql: "sql",
+      markdown: "md",
+    };
+    const extension = extensionMap[normalizedLanguage] || "txt";
+    const blob = new Blob([code], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `orbitbyte-artifact.${extension}`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="my-4 overflow-hidden rounded-2xl border border-gray-800 bg-[#0d1117] shadow-xl shadow-black/10">
+      <div className="flex items-center justify-between gap-3 border-b border-white/10 bg-white/[0.03] px-3 py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-400/10 text-emerald-300">
+            <Code2 size={15} />
+          </span>
+          <span className="truncate text-xs font-bold uppercase tracking-[0.14em] text-gray-300">
+            {normalizedLanguage}
+          </span>
+        </div>
+        <div className="flex items-center gap-1">
+          <button type="button" onClick={() => setWrapped((prev) => !prev)} className="rounded-lg px-2 py-1 text-xs font-medium text-gray-300 transition hover:bg-white/10">
+            Wrap
+          </button>
+          <button type="button" onClick={copyCode} className="rounded-lg p-1.5 text-gray-300 transition hover:bg-white/10" aria-label="Copy code">
+            <Copy size={14} />
+          </button>
+          <button type="button" onClick={downloadCode} className="rounded-lg p-1.5 text-gray-300 transition hover:bg-white/10" aria-label="Download code">
+            <Download size={14} />
+          </button>
+          {lines.length > 18 ? (
+            <button type="button" onClick={() => setExpanded((prev) => !prev)} className="rounded-lg px-2 py-1 text-xs font-medium text-gray-300 transition hover:bg-white/10">
+              {expanded ? "Collapse" : "Expand"}
+            </button>
+          ) : null}
+        </div>
+      </div>
+      <pre className={`max-w-full overflow-auto p-0 text-[13px] leading-6 text-gray-100 ${shouldClamp ? "max-h-[27rem]" : "max-h-[42rem]"}`}>
+        <code>
+          {lines.map((line, index) => (
+            <span key={`${index}-${line}`} className="grid grid-cols-[3rem_1fr] border-b border-white/[0.03] last:border-b-0">
+              <span className="select-none bg-white/[0.02] px-3 text-right text-gray-500">
+                {index + 1}
+              </span>
+              <span className={`px-4 ${wrapped ? "whitespace-pre-wrap break-words" : "whitespace-pre"}`}>
+                {line || " "}
+              </span>
+            </span>
+          ))}
+        </code>
+      </pre>
+    </div>
+  );
+};
+
+const renderAiMarkdown = (value: string) => {
+  const segments: React.ReactNode[] = [];
+  const pattern = /```(\w+)?\n?([\s\S]*?)```/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  const renderText = (text: string, keyPrefix: string) => {
+    const lines = text.split("\n");
+    return lines.map((line, index) => {
+      const key = `${keyPrefix}-${index}`;
+      if (!line.trim()) return <div key={key} className="h-3" />;
+      if (/^#{1,3}\s+/.test(line)) {
+        return (
+          <h3 key={key} className="mt-4 text-base font-bold text-gray-950 first:mt-0 dark:text-white">
+            {markdownInline(line.replace(/^#{1,3}\s+/, ""))}
+          </h3>
+        );
+      }
+      if (/^[-*]\s+/.test(line)) {
+        return (
+          <div key={key} className="flex gap-2">
+            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+            <p>{markdownInline(line.replace(/^[-*]\s+/, ""))}</p>
+          </div>
+        );
+      }
+      if (/^\d+\.\s+/.test(line)) {
+        return (
+          <p key={key} className="pl-1">
+            {markdownInline(line)}
+          </p>
+        );
+      }
+      if (line.includes("|")) {
+        return (
+          <p key={key} className="overflow-x-auto rounded-xl bg-gray-950/5 px-3 py-2 font-mono text-xs dark:bg-white/10">
+            {line}
+          </p>
+        );
+      }
+      return <p key={key}>{markdownInline(line)}</p>;
+    });
+  };
+
+  while ((match = pattern.exec(value)) !== null) {
+    if (match.index > lastIndex) {
+      segments.push(renderText(value.slice(lastIndex, match.index), `text-${lastIndex}`));
+    }
+    segments.push(
+      <CodeBlock
+        key={`code-${match.index}`}
+        language={(match[1] || "text").toLowerCase()}
+        code={match[2]?.trim() || ""}
+      />
+    );
+    lastIndex = pattern.lastIndex;
+  }
+
+  if (lastIndex < value.length) {
+    segments.push(renderText(value.slice(lastIndex), `text-${lastIndex}`));
+  }
+
+  return segments;
+};
+
+const AiMessageActions = ({
+  text,
+  hasArtifact,
+  onOpenArtifact,
+}: {
+  text: string;
+  hasArtifact: boolean;
+  onOpenArtifact: () => void;
+}) => {
+  const copyMessage = async () => {
+    await navigator.clipboard?.writeText(text).catch(() => {});
+  };
+
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-gray-200/70 pt-2 dark:border-white/10">
+      {hasArtifact ? (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpenArtifact();
+          }}
+          className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-200"
+        >
+          <PanelRightOpen size={14} />
+          Preview
+        </button>
+      ) : null}
+      {[
+        { label: "Copy", icon: Copy, action: copyMessage },
+        { label: "Regenerate", icon: RefreshCw },
+        { label: "Like", icon: ThumbsUp },
+        { label: "Dislike", icon: ThumbsDown },
+        { label: "Speak", icon: Volume2 },
+        { label: "Share", icon: Share2 },
+      ].map((item) => (
+        <button
+          key={item.label}
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            item.action?.();
+          }}
+          className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-semibold text-gray-500 transition hover:bg-gray-100 hover:text-gray-950 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-white"
+        >
+          <item.icon size={14} />
+          {item.label}
+        </button>
+      ))}
+    </div>
+  );
+};
+
+const ArtifactWorkspace = ({
+  artifact,
+  onClose,
+}: {
+  artifact: Artifact | null;
+  onClose: () => void;
+}) => {
+  const [activeTab, setActiveTab] = React.useState<"code" | "preview" | "files" | "console" | "dependencies">("code");
+  const previewable = ["html", "css", "javascript", "typescript", "jsx", "tsx", "react", "nextjs", "tailwind"].includes(
+    artifact?.language || ""
+  );
+
+  return (
+    <AnimatePresence>
+      {artifact ? (
+        <motion.aside
+          initial={{ x: 420, y: 80, opacity: 0 }}
+          animate={{ x: 0, y: 0, opacity: 1 }}
+          exit={{ x: 420, y: 120, opacity: 0 }}
+          transition={{ type: "spring", stiffness: 260, damping: 30 }}
+          drag="y"
+          dragDirectionLock
+          dragConstraints={{ top: 0, bottom: 140 }}
+          dragElastic={0.12}
+          onDragEnd={(_, info) => {
+            if (info.offset.y > 90 || info.velocity.y > 650) {
+              onClose();
+            }
+          }}
+          className="fixed inset-x-0 bottom-0 z-[70] max-h-[72vh] overflow-hidden rounded-t-[28px] border border-gray-200 bg-white shadow-2xl dark:border-white/10 dark:bg-gray-950 md:inset-x-auto md:right-4 md:top-20 md:bottom-4 md:h-auto md:max-h-none md:w-[390px] md:rounded-[28px] xl:w-[420px]"
+          aria-label="AI artifact workspace"
+        >
+          <div className="flex justify-center pt-2 md:hidden">
+            <div className="h-1 w-12 rounded-full bg-gray-300 dark:bg-gray-700" />
+          </div>
+          <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 dark:border-white/10">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-bold text-gray-950 dark:text-white">{artifact.title}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{artifact.language.toUpperCase()} workspace</p>
+            </div>
+            <button type="button" onClick={onClose} className="rounded-full p-2 text-gray-500 transition hover:bg-gray-100 dark:hover:bg-white/10" aria-label="Close artifact workspace">
+              <X size={18} />
+            </button>
+          </div>
+
+          <div className="flex gap-1 overflow-x-auto border-b border-gray-100 px-3 py-2 dark:border-white/10">
+            {[
+              { id: "code", label: "Code", icon: Code2 },
+              { id: "preview", label: "Preview", icon: Eye },
+              { id: "files", label: "Files", icon: FolderTree },
+              { id: "console", label: "Console", icon: Terminal },
+              { id: "dependencies", label: "Deps", icon: Package },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id as typeof activeTab)}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                  activeTab === tab.id
+                    ? "bg-gray-950 text-white dark:bg-white dark:text-gray-950"
+                    : "text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-white/10"
+                }`}
+              >
+                <tab.icon size={14} />
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="h-[calc(72vh-7.5rem)] overflow-auto p-4 md:h-[calc(100%-7.5rem)]">
+            {activeTab === "code" ? <CodeBlock language={artifact.language} code={artifact.code} /> : null}
+            {activeTab === "preview" ? (
+              previewable && artifact.language === "html" ? (
+                <iframe
+                  title="Artifact preview"
+                  srcDoc={artifact.code}
+                  className="h-full min-h-[26rem] w-full rounded-2xl border border-gray-200 bg-white dark:border-white/10"
+                />
+              ) : (
+                <div className="flex min-h-[22rem] flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-6 text-center dark:border-white/10 dark:bg-white/5">
+                  <Eye className="mb-3 text-gray-400" />
+                  <p className="font-semibold text-gray-900 dark:text-white">Preview ready for HTML artifacts</p>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">React, Next.js, and Tailwind outputs stay visible in code until a runtime sandbox is connected.</p>
+                </div>
+              )
+            ) : null}
+            {activeTab === "files" ? (
+              <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-sm dark:border-white/10 dark:bg-white/5">
+                <div className="flex items-center gap-2 rounded-xl bg-white px-3 py-2 font-medium text-gray-800 dark:bg-gray-950 dark:text-gray-200">
+                  <FolderTree size={16} />
+                  artifact.{artifact.language === "python" ? "py" : artifact.language === "html" ? "html" : "txt"}
+                </div>
+              </div>
+            ) : null}
+            {activeTab === "console" ? (
+              <div className="rounded-2xl bg-gray-950 p-4 font-mono text-xs text-emerald-300">
+                <p>$ orbitbyte artifact inspect</p>
+                <p className="mt-2 text-gray-400">No runtime errors captured.</p>
+              </div>
+            ) : null}
+            {activeTab === "dependencies" ? (
+              <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600 dark:border-white/10 dark:bg-white/5 dark:text-gray-300">
+                No external dependencies detected from this response.
+              </div>
+            ) : null}
+          </div>
+        </motion.aside>
+      ) : null}
+    </AnimatePresence>
+  );
+};
+
 function ChatArea({
   selectedUser,
   loadingInitialMessages,
@@ -406,6 +814,44 @@ function ChatArea({
   const [delayMs, setDelayMs] = React.useState(60_000);
   const [customDateTime, setCustomDateTime] = React.useState("");
   const [showPremiumPrompt, setShowPremiumPrompt] = React.useState(false);
+  const [isArtifactWorkspaceOpen, setIsArtifactWorkspaceOpen] = React.useState(false);
+  const [dismissedArtifactMessageId, setDismissedArtifactMessageId] =
+    React.useState<string | null>(null);
+  const [stoppedStreamingMessages, setStoppedStreamingMessages] = React.useState<
+    Record<string, string>
+  >({});
+  const isAiConversation = Boolean(selectedUser?.isAI);
+  const latestStreamingAiMessage = React.useMemo(
+    () =>
+      [...messages]
+        .reverse()
+        .find(
+          (message) =>
+            isAiConversation &&
+            message.senderId !== currentUserId &&
+            message.isStreaming &&
+            stoppedStreamingMessages[message.id] === undefined
+        ) ?? null,
+    [currentUserId, isAiConversation, messages, stoppedStreamingMessages]
+  );
+  const latestArtifactMessage = React.useMemo(
+    () =>
+      [...messages]
+        .reverse()
+        .find((message) => {
+          const text = message.text || message.content || "";
+          return (
+            isAiConversation &&
+            message.senderId !== currentUserId &&
+            hasStructuredArtifact(text)
+          );
+        }) ?? null,
+    [currentUserId, isAiConversation, messages]
+  );
+  const activeArtifact = React.useMemo(
+    () => getArtifactFromMessage(latestArtifactMessage),
+    [latestArtifactMessage]
+  );
   const premiumMembershipUrl = currentUserId
     ? `/profile/${currentUserId}#premium-membership`
     : "/profile#premium-membership";
@@ -428,6 +874,49 @@ function ChatArea({
     const interval = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(interval);
   }, []);
+
+  React.useEffect(() => {
+    if (
+      activeArtifact &&
+      latestArtifactMessage?.id !== dismissedArtifactMessageId &&
+      isAiConversation
+    ) {
+      setIsArtifactWorkspaceOpen(true);
+    } else if (!activeArtifact || !isAiConversation) {
+      setIsArtifactWorkspaceOpen(false);
+    }
+  }, [
+    activeArtifact,
+    dismissedArtifactMessageId,
+    isAiConversation,
+    latestArtifactMessage?.id,
+  ]);
+
+  React.useEffect(() => {
+    setStoppedStreamingMessages({});
+    setDismissedArtifactMessageId(null);
+  }, [selectedUser?.id]);
+
+  const openArtifactWorkspace = React.useCallback(() => {
+    setDismissedArtifactMessageId(null);
+    setIsArtifactWorkspaceOpen(true);
+  }, []);
+
+  const closeArtifactWorkspace = React.useCallback(() => {
+    setDismissedArtifactMessageId(latestArtifactMessage?.id ?? null);
+    setIsArtifactWorkspaceOpen(false);
+  }, [latestArtifactMessage?.id]);
+
+  const handleStopGenerating = React.useCallback(() => {
+    if (!latestStreamingAiMessage) return;
+
+    const partialText =
+      latestStreamingAiMessage.text || latestStreamingAiMessage.content || "";
+    setStoppedStreamingMessages((prev) => ({
+      ...prev,
+      [latestStreamingAiMessage.id]: partialText,
+    }));
+  }, [latestStreamingAiMessage]);
 
   // Handle enter key for sending
   const handleKeyDownOverride = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -544,7 +1033,13 @@ function ChatArea({
   const isComposerDisabled = isChatBlocked || isSelectionMode;
 
   return (
-    <div className="flex h-full w-full min-w-0 flex-col overflow-x-hidden bg-white dark:bg-black">
+    <div
+      className={`flex h-full w-full min-w-0 flex-col overflow-x-hidden ${
+        isAiConversation
+          ? "bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.12),transparent_34%),linear-gradient(180deg,#f8fafc,white)] dark:bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_32%),linear-gradient(180deg,#020617,#030712)]"
+          : "bg-white dark:bg-black"
+      }`}
+    >
       {polishedPreview && (
         <div className="fixed inset-0 z-[95] flex items-end justify-center bg-black/55 p-3 sm:items-center sm:p-4">
           <div className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-gray-800 dark:bg-gray-950">
@@ -670,10 +1165,20 @@ function ChatArea({
       <div
         ref={scrollContainerRef}
         onScroll={captureScrollMetrics}
-        className={`min-w-0 flex-1 overflow-y-auto overflow-x-hidden ${selectedUser ? 'pb-40 sm:pb-36' : ''} lg:ml-80`}
+        className={`min-w-0 flex-1 overflow-y-auto overflow-x-hidden transition-[margin] duration-300 ${
+          selectedUser ? "pb-48 sm:pb-44" : ""
+        } lg:ml-80 ${
+          isAiConversation && activeArtifact && isArtifactWorkspaceOpen
+            ? "xl:mr-[440px]"
+            : ""
+        }`}
       >
         {selectedUser ? (
-            <div className="w-full min-w-0 space-y-3 p-3 sm:p-4">
+            <div
+              className={`w-full min-w-0 space-y-4 p-3 sm:p-5 ${
+                isAiConversation ? "mx-auto max-w-5xl" : ""
+              }`}
+            >
               {showHiddenMessages ? (
                 <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-100">
                   Hidden message view is on. Hidden messages stay highlighted until you unhide them.
@@ -746,17 +1251,25 @@ function ChatArea({
                     ? formatDateSeparatorLabel(messageTimestamp)
                     : "";
                   const isCurrentUser = msg.senderId === currentUserId;
+                  const isAiAssistantMessage = isAiConversation && !isCurrentUser;
+                  const isAiUserMessage = isAiConversation && isCurrentUser;
+                  const visibleMessageText =
+                    stoppedStreamingMessages[msg.id] ?? msg.text ?? msg.content ?? "";
+                  const isMessageStreaming =
+                    Boolean(msg.isStreaming) && stoppedStreamingMessages[msg.id] === undefined;
                   const isHiddenMessage = Boolean(msg.isHidden);
                   const isSelected = selectedMessageIdSet.has(msg.id);
                   const hasAttachment = Boolean(msg.attachments?.[0]?.url);
-                  const hasText = Boolean(msg.text || msg.content);
+                  const hasText = Boolean(visibleMessageText);
                   const isScheduledMessage =
                     msg.status === "scheduled" ||
                     ["pending", "processing", "cancelled"].includes(
                       msg.scheduledStatus ?? ""
                     );
                   const bubbleBaseClasses = isCurrentUser
-                    ? "bg-gray-900 text-white rounded-br-md dark:bg-gray-500 dark:text-black dark:ring-gray-700"
+                    ? isAiUserMessage
+                      ? "bg-gradient-to-br from-gray-950 via-emerald-950 to-cyan-950 text-white rounded-br-md ring-1 ring-white/10 shadow-xl shadow-emerald-950/20"
+                      : "bg-gray-900 text-white rounded-br-md dark:bg-gray-500 dark:text-black dark:ring-gray-700"
                     : "bg-gray-100 text-gray-950 rounded-bl-md ring-1 ring-gray-200 dark:bg-gray-900 dark:text-gray-200 dark:ring-gray-800";
                   const hiddenBubbleClasses =
                     showHiddenMessages && isHiddenMessage
@@ -795,9 +1308,9 @@ function ChatArea({
                         onMouseLeave={() => setHoveredMessageId(null)}
                       >
                       <div
-                        className={`group flex items-start gap-2 ${
+                        className={`group flex min-w-0 items-start gap-2 ${
                           isCurrentUser ? "flex-row-reverse" : ""
-                        }`}
+                        } ${isAiAssistantMessage ? "w-full" : ""}`}
                       >
                         {isSelectionMode ? (
                           <button
@@ -817,10 +1330,16 @@ function ChatArea({
                           </button>
                         ) : null}
 
-                        <div className="relative min-w-0 max-w-[min(86vw,44rem)] sm:max-w-[min(74vw,46rem)] lg:max-w-[min(68%,48rem)]">
+                        <div
+                          className={`relative min-w-0 ${
+                            isAiAssistantMessage
+                              ? "max-w-[min(86vw,44rem)] sm:max-w-[min(74vw,46rem)] lg:max-w-[min(72%,52rem)]"
+                              : "max-w-[min(86vw,44rem)] sm:max-w-[min(74vw,46rem)] lg:max-w-[min(68%,48rem)]"
+                          }`}
+                        >
                           {/* Message Bubble */}
                           <div
-                            className={`w-fit max-w-full rounded-2xl shadow-sm ${
+                            className={`w-fit max-w-full rounded-[22px] shadow-sm transition-all duration-200 hover:-translate-y-0.5 ${
                               hasAttachment && !hasText ? "px-2 py-2" : "px-4 py-3"
                             } ${hiddenBubbleClasses} ${msg.status === 'sending' ? 'opacity-80' : ''} ${
                               isScheduledMessage ? "border border-violet-300/70 bg-violet-600 text-white" : ""
@@ -909,20 +1428,34 @@ function ChatArea({
                             )}
 
                             {renderAttachment(msg.attachments?.[0])}
-                            {(msg.text || msg.content) && (
-                              <div className="whitespace-pre-wrap break-words text-[15px] leading-relaxed [overflow-wrap:break-word]">
-                                {renderMessageText(msg.text || msg.content || "")}
-                                {msg.isStreaming ? (
+                            {hasText && (
+                              <div className={`break-words text-[15px] leading-relaxed [overflow-wrap:break-word] ${
+                                isAiAssistantMessage
+                                  ? "space-y-2 whitespace-normal"
+                                  : "whitespace-pre-wrap"
+                              }`}>
+                                {isAiAssistantMessage
+                                  ? renderAiMarkdown(visibleMessageText)
+                                  : renderMessageText(visibleMessageText)}
+                                {isMessageStreaming ? (
                                   <span className="ml-1 inline-block h-4 w-1 animate-pulse rounded-full bg-current align-[-2px] opacity-70" />
                                 ) : null}
                               </div>
                             )}
 
-                            {msg.isStreaming && !(msg.text || msg.content) ? (
+                            {isMessageStreaming && !hasText ? (
                               <div className="flex items-center gap-2 text-sm opacity-80">
                                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
                                 Thinking...
                               </div>
+                            ) : null}
+
+                            {isAiAssistantMessage && hasText ? (
+                              <AiMessageActions
+                                text={visibleMessageText}
+                                hasArtifact={hasStructuredArtifact(visibleMessageText)}
+                                onOpenArtifact={openArtifactWorkspace}
+                              />
                             ) : null}
 
                             {/* Message timestamp and status */}
@@ -941,7 +1474,7 @@ function ChatArea({
 
                               {/* Read/unread indicators */}
                               {isCurrentUser && (
-                                <MessageStatusIndicator
+                              <MessageStatusIndicator
                                   isCurrentUser={isCurrentUser}
                                   status={msg.status}
                                 />
@@ -1047,7 +1580,17 @@ function ChatArea({
 
       {/* Input Area - Fixed at bottom within chat area */}
       {selectedUser && (
-        <div className="fixed bottom-0 left-0 right-0 max-w-full overflow-x-hidden border-t border-gray-200 bg-white dark:border-gray-800 dark:bg-black lg:left-80">
+        <div
+          className={`fixed bottom-0 left-0 right-0 max-w-full overflow-x-hidden border-t transition-[right] duration-300 lg:left-80 ${
+            isAiConversation
+              ? "border-white/50 bg-white/70 shadow-2xl shadow-gray-950/10 backdrop-blur-2xl dark:border-white/10 dark:bg-gray-950/70"
+              : "border-gray-200 bg-white dark:border-gray-800 dark:bg-black"
+          } ${
+            isAiConversation && activeArtifact && isArtifactWorkspaceOpen
+              ? "xl:right-[440px]"
+              : ""
+          }`}
+        >
           {isSelectionMode ? (
             <div className="border-b border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200">
               Selection mode is active. Use the top bar actions or clear the selection to resume chatting.
@@ -1089,9 +1632,37 @@ function ChatArea({
           )}
           
           {/* Input Form */}
-          <div className="p-3 sm:p-4">
+          <div className={`${isAiConversation ? "mx-auto max-w-5xl p-3 sm:p-4" : "p-3 sm:p-4"}`}>
             {!isSelectionMode && !isChatBlocked ? (
               <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
+                {isAiConversation ? (
+                  <div className="flex w-full gap-2 overflow-x-auto pb-1">
+                    {[
+                      "Continue",
+                      "Explain",
+                      "Summarize",
+                      "Optimize",
+                      "Translate",
+                      "Generate UI",
+                      "Create API",
+                      "Fix Errors",
+                      "Improve Performance",
+                      "Generate Tests",
+                    ].map((suggestion) => (
+                      <button
+                        key={suggestion}
+                        type="button"
+                        onClick={() => {
+                          setNewMessage(newMessage.trim() ? `${newMessage} ${suggestion.toLowerCase()}` : suggestion);
+                          inputRef.current?.focus();
+                        }}
+                        className="shrink-0 rounded-full border border-gray-200 bg-white/80 px-3 py-1.5 text-xs font-semibold text-gray-600 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:text-emerald-700 dark:border-white/10 dark:bg-white/10 dark:text-gray-300 dark:hover:text-emerald-200"
+                      >
+                        {suggestion}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
                 <div className="inline-flex rounded-xl border border-gray-300 bg-gray-100 p-1 dark:border-gray-700 dark:bg-gray-900">
                   {(["normal", "vanish"] as const).map((mode) => (
                     <button
@@ -1199,7 +1770,13 @@ function ChatArea({
                 ) : null}
               </div>
             ) : null}
-            <div className="flex min-w-0 items-end gap-2 sm:gap-3">
+            <div
+              className={`flex min-w-0 items-end gap-2 sm:gap-3 ${
+                isAiConversation
+                  ? "rounded-[24px] border border-gray-200 bg-white/80 p-2 shadow-xl shadow-gray-950/[0.06] backdrop-blur-xl dark:border-white/10 dark:bg-white/10"
+                  : ""
+              }`}
+            >
               {/* Left Sidebar for additional actions */}
               <div className="flex shrink-0 items-center gap-1 sm:gap-2">
                 {/* File Upload */}
@@ -1220,11 +1797,31 @@ function ChatArea({
                   type="button"
                   onClick={handleFileSelect}
                   disabled={isComposerDisabled}
-                  className="p-2 text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-black rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-xl p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-400 dark:hover:bg-black dark:hover:text-blue-400"
                   aria-label="Attach file"
                 >
-                  <Paperclip size={20} />
+                  {isAiConversation ? <ImagePlus size={20} /> : <Paperclip size={20} />}
                 </button>
+                {isAiConversation ? (
+                  <>
+                    <button
+                      type="button"
+                      disabled={isComposerDisabled}
+                      className="rounded-xl p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-emerald-600 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-400 dark:hover:bg-black dark:hover:text-emerald-300"
+                      aria-label="Voice input"
+                    >
+                      <Mic size={20} />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isComposerDisabled}
+                      className="rounded-xl p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-emerald-600 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-400 dark:hover:bg-black dark:hover:text-emerald-300"
+                      aria-label="Mention"
+                    >
+                      <AtSign size={20} />
+                    </button>
+                  </>
+                ) : null}
                 
                 {/* Emoji Picker */}
                 <div className="relative">
@@ -1314,28 +1911,54 @@ function ChatArea({
                     onKeyDown={handleKeyDownOverride}
                     onFocus={handleInputFocus}
                     onBlur={handleInputBlur}
-                    placeholder={isSelectionMode ? "Selection mode active" : isChatBlocked ? "Unblock this user to send messages" : "Type a message..."}
+                    placeholder={
+                      isSelectionMode
+                        ? "Selection mode active"
+                        : isChatBlocked
+                          ? "Unblock this user to send messages"
+                          : isAiConversation
+                            ? "Ask Orbito to reason, write, code, debug, or design..."
+                            : "Type a message..."
+                    }
                     disabled={isComposerDisabled}
-                    className="w-full resize-none rounded-xl border border-gray-300 bg-gray-50 px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:bg-gray-800 sm:px-4 sm:text-base"
-                    style={{ minHeight: '44px', maxHeight: '104px' }}
+                    className={`w-full resize-none border px-3 py-3 text-sm focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 sm:px-4 sm:text-base ${
+                      isAiConversation
+                        ? "rounded-[18px] border-transparent bg-transparent text-gray-950 placeholder:text-gray-400 focus:ring-0 dark:text-white"
+                        : "rounded-xl border-gray-300 bg-gray-50 focus:ring-2 focus:ring-gray-500 dark:border-gray-700 dark:bg-gray-800"
+                    }`}
+                    style={{ minHeight: isAiConversation ? "56px" : "44px", maxHeight: "140px" }}
                   />
                 </div>
                 
                 {/* Send Button on Side */}
                 <button
                   type="button"
-                  onClick={handleSendClick}
+                  onClick={latestStreamingAiMessage ? handleStopGenerating : handleSendClick}
                   disabled={
-                    isComposerDisabled ||
-                    sendingMessage ||
-                    (!newMessage.trim() && !pendingAttachment) ||
-                    (scheduleMode === "later" && !customDateTime) ||
-                    (isConnected !== undefined && !isConnected)
+                    latestStreamingAiMessage
+                      ? false
+                      : isComposerDisabled ||
+                        sendingMessage ||
+                        (!newMessage.trim() && !pendingAttachment) ||
+                        (scheduleMode === "later" && !customDateTime) ||
+                        (isConnected !== undefined && !isConnected)
                   }
-                  className="p-3 bg-green-700 text-white rounded-xl hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg flex items-center justify-center"
-                  style={{ minHeight: '44px', minWidth: '44px' }}
+                  className={`flex items-center justify-center rounded-2xl p-3 text-white shadow-md transition-all hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50 ${
+                    latestStreamingAiMessage
+                      ? "bg-gray-950 hover:scale-105 dark:bg-white dark:text-gray-950"
+                      : isAiConversation
+                      ? "bg-gradient-to-br from-emerald-500 to-cyan-500 hover:scale-105"
+                      : "bg-green-700 hover:bg-green-800"
+                  }`}
+                  style={{ minHeight: isAiConversation ? "52px" : "44px", minWidth: isAiConversation ? "52px" : "44px" }}
+                  aria-label={latestStreamingAiMessage ? "Stop generating" : "Send message"}
                 >
-                  {sendingMessage ? (
+                  {latestStreamingAiMessage ? (
+                    <>
+                      <X size={20} />
+                      <span className="hidden text-sm font-semibold sm:inline">Stop</span>
+                    </>
+                  ) : sendingMessage ? (
                     <Loader2 className="h-5 w-5 animate-spin" />
                   ) : scheduleMode === "now" ? (
                     <Send size={20} />
@@ -1353,6 +1976,12 @@ function ChatArea({
           </div>
         </div>
       )}
+      {isAiConversation ? (
+        <ArtifactWorkspace
+          artifact={isArtifactWorkspaceOpen ? activeArtifact : null}
+          onClose={closeArtifactWorkspace}
+        />
+      ) : null}
     </div>
   );
 }
