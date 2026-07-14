@@ -8,7 +8,6 @@ import { Message, User } from "../types/socket";
 import ChatSidebar from "./ChatSidebar";
 import ChatTopBar from "./ChatTopBar";
 import ChatArea from "./ChatArea";
-import ContextMenu from "./ContextMenu";
 import GroupInfoPanel, {
   GroupInfoData,
   GroupInfoMember,
@@ -39,10 +38,6 @@ type UnlockChatResult = {
 };
 
 type DeleteMessageScope = "self" | "everyone";
-type ContextMenuTrigger =
-  | React.MouseEvent
-  | React.TouchEvent
-  | { x: number; y: number };
 
 type ConfirmDialogState = {
   title: string;
@@ -353,12 +348,11 @@ export default function ChatPage() {
   
   // Chat UI state
   const [replyTo, setReplyTo] = useState<Message | null>(null);
-  const [contextMenu, setContextMenu] = useState<{
+  const [, setContextMenu] = useState<{
     message: Message;
     position: { x: number; y: number };
   } | null>(null);
   const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
-  const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null);
   const [unreadByUser, setUnreadByUser] = useState<Record<string, number>>({});
   const [deletingChatUserId, setDeletingChatUserId] = useState<string | null>(null);
   const [updatingChatUserId, setUpdatingChatUserId] = useState<string | null>(null);
@@ -374,7 +368,6 @@ export default function ChatPage() {
   const lastScrollTopRef = useRef(0);
   const isInputFocusedRef = useRef(false);
   const chatAreaRef = useRef<HTMLDivElement | null>(null);
-  const dropdownRef = useRef<HTMLDivElement | null>(null);
   const chatIdRef = useRef<string | null>(null);
   const textAreaObserverRef = useRef<MutationObserver | null>(null);
   const focusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -388,6 +381,7 @@ export default function ChatPage() {
   const hasHydratedCachedSelectionRef = useRef(false);
   const hasInitializedMobileHistoryRef = useRef(false);
   const mobileHistoryChatIdRef = useRef<string | null>(null);
+  const selectionHistoryRef = useRef(false);
   const currentUserId = session?.user?.id;
   const selectedUserId = selectedUser?.id ?? null;
   const selectedConversationId =
@@ -621,23 +615,6 @@ export default function ChatPage() {
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, [selectedUser]);
-
-  /* ---------------------------- CLOSE DROPDOWN ON CLICK OUTSIDE ---------------------------- */
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setActiveDropdownId(null);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('touchstart', handleClickOutside);
-    
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('touchstart', handleClickOutside);
-    };
-  }, []);
 
   /* ---------------------------- UPDATE SIDEBAR VISIBILITY ---------------------------- */
   useEffect(() => {
@@ -1500,6 +1477,8 @@ export default function ChatPage() {
       ),
     [selectedMessageIdSet, sortedConversationMessages]
   );
+  const singleSelectedMessage =
+    selectedMessages.length === 1 ? selectedMessages[0] : null;
   const hiddenSelectedMessages = useMemo(
     () => selectedMessages.filter((message) => Boolean(message.isHidden)),
     [selectedMessages]
@@ -1513,6 +1492,16 @@ export default function ChatPage() {
   );
   const canUnhideSelectedMessages = hiddenSelectedMessages.some((message) =>
     isValidObjectId(message.id)
+  );
+  const canCopySelectedLink = Boolean(singleSelectedMessage);
+  const canStarSelectedMessage = Boolean(
+    singleSelectedMessage && isValidObjectId(singleSelectedMessage.id)
+  );
+  const canReplySelectedMessage = Boolean(singleSelectedMessage);
+  const canDeleteSelectedForEveryone = Boolean(
+    singleSelectedMessage &&
+      singleSelectedMessage.senderId === currentUserId &&
+      isValidObjectId(singleSelectedMessage.id)
   );
 
   useEffect(() => {
@@ -1539,7 +1528,6 @@ export default function ChatPage() {
     setContextMenu(null);
     setReplyTo(null);
     setShowEmojiPicker(false);
-    setActiveDropdownId(null);
   }, [selectedMessageIds.length]);
 
   const handleLoadOlderMessages = useCallback(() => {
@@ -2142,6 +2130,41 @@ export default function ChatPage() {
     setSelectedMessageIds([]);
   }, []);
 
+  useEffect(() => {
+    if (selectedMessageIds.length === 0) {
+      selectionHistoryRef.current = false;
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        clearSelectedMessages();
+      }
+    };
+
+    const handlePopState = () => {
+      clearSelectedMessages();
+      selectionHistoryRef.current = false;
+    };
+
+    if (!selectionHistoryRef.current && typeof window !== "undefined") {
+      window.history.pushState(
+        { ...window.history.state, __orbitbyteMessageSelection: true },
+        "",
+        window.location.href
+      );
+      selectionHistoryRef.current = true;
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [clearSelectedMessages, selectedMessageIds.length]);
+
   const startMessageSelection = useCallback((message: Message) => {
     setSelectedMessageIds((prev) =>
       prev.includes(message.id)
@@ -2421,64 +2444,6 @@ export default function ChatPage() {
     selectedMessages,
   ]);
 
-  /* ---------------------------- CONTEXT MENU HANDLERS --------------------------- */
-  const handleMessageContextMenu = (
-    trigger: ContextMenuTrigger,
-    message: Message
-  ) => {
-    if (selectedMessageIds.length > 0) {
-      return;
-    }
-
-    let clientX: number;
-    let clientY: number;
-
-    if ("preventDefault" in trigger) {
-      trigger.preventDefault();
-    }
-
-    if ("stopPropagation" in trigger) {
-      trigger.stopPropagation();
-    }
-
-    if ("x" in trigger && "y" in trigger) {
-      clientX = trigger.x;
-      clientY = trigger.y;
-    } else if ("touches" in trigger) {
-      const touch = trigger.touches[0] ?? trigger.changedTouches[0];
-      if (!touch) return;
-      clientX = touch.clientX;
-      clientY = touch.clientY;
-    } else {
-      clientX = trigger.clientX;
-      clientY = trigger.clientY;
-    }
-
-    setContextMenu({
-      message,
-      position: { x: clientX, y: clientY },
-    });
-  };
-
-  const handleDropdownClick = (e: React.MouseEvent, message: Message) => {
-    if (selectedMessageIds.length > 0) {
-      return;
-    }
-
-    e.stopPropagation();
-    const rect = e.currentTarget.getBoundingClientRect();
-    
-    // Calculate position to show context menu at the top
-    const x = rect.left + rect.width / 2;
-    const y = rect.top - 10;
-    
-    setContextMenu({
-      message,
-      position: { x, y },
-    });
-    setActiveDropdownId(null);
-  };
-
   const handleMenuAction = async (action: string, message: Message) => {
     try {
       switch (action) {
@@ -2600,6 +2565,34 @@ export default function ChatPage() {
     } finally {
       setContextMenu(null);
     }
+  };
+
+  const runSingleSelectedMessageAction = (action: string) => {
+    if (!singleSelectedMessage) return;
+
+    void handleMenuAction(action, singleSelectedMessage).finally(() => {
+      clearSelectedMessages();
+    });
+  };
+
+  const handleReplySelectedMessage = () => {
+    if (!singleSelectedMessage) return;
+
+    setReplyTo(singleSelectedMessage);
+    clearSelectedMessages();
+    inputRef.current?.focus();
+  };
+
+  const handleCopySelectedLink = () => {
+    runSingleSelectedMessageAction("copyLink");
+  };
+
+  const handleStarSelectedMessage = () => {
+    runSingleSelectedMessageAction("toggleStar");
+  };
+
+  const handleDeleteSelectedForEveryone = () => {
+    runSingleSelectedMessageAction("deleteEveryone");
   };
 
   const handleCreateGroup = useCallback(
@@ -3672,18 +3665,26 @@ export default function ChatPage() {
           onToggleShowHiddenMessages={handleToggleHiddenMessages}
           selectedMessageCount={selectedMessages.length}
           onExitSelectionMode={clearSelectedMessages}
+          onReplySelectedMessage={handleReplySelectedMessage}
           onCopySelectedMessages={() => {
             void handleCopySelectedMessages();
           }}
+          onCopySelectedLink={handleCopySelectedLink}
+          onStarSelectedMessage={handleStarSelectedMessage}
           onForwardSelectedMessages={handleForwardSelectedMessages}
           onHideSelectedMessages={handleHideSelectedMessages}
           onUnhideSelectedMessages={handleUnhideSelectedMessages}
           onDeleteSelectedMessages={handleDeleteSelectedMessages}
+          onDeleteSelectedForEveryone={handleDeleteSelectedForEveryone}
+          canReplySelectedMessage={canReplySelectedMessage}
           canCopySelectedMessages={selectedMessages.length > 0}
+          canCopySelectedLink={canCopySelectedLink}
+          canStarSelectedMessage={canStarSelectedMessage}
           canForwardSelectedMessages={selectedMessages.length > 0}
           canHideSelectedMessages={canHideSelectedMessages}
           canUnhideSelectedMessages={canUnhideSelectedMessages}
           canDeleteSelectedMessages={selectedMessages.length > 0}
+          canDeleteSelectedForEveryone={canDeleteSelectedForEveryone}
           isSelectionActionBusy={isSelectionActionBusy}
         />
       ) : null}
@@ -3787,19 +3788,15 @@ export default function ChatPage() {
               emojiPickerRef={emojiPickerRef}
               handleEmojiClick={handleEmojiClick}
               commonEmojis={commonEmojis}
-              handleMessageContextMenu={handleMessageContextMenu}
-              handleDropdownClick={handleDropdownClick}
               replyTo={replyTo}
               setReplyTo={setReplyTo}
               messagesEndRef={messagesEndRef}
               hoveredMessageId={hoveredMessageId}
               setHoveredMessageId={setHoveredMessageId}
-              activeDropdownId={activeDropdownId}
-              setActiveDropdownId={setActiveDropdownId}
-              dropdownRef={dropdownRef}
               session={session}
               isMobile={isMobile}
               handleKeyDown={handleKeyDown}
+              onExitSelectionMode={clearSelectedMessages}
               isChatBlocked={Boolean(selectedUser?.isBlocked)}
               isPeerTyping={Boolean(
                 selectedUser && typingUsers.has(selectedUser.id)
@@ -3820,18 +3817,6 @@ export default function ChatPage() {
           </div>
         ) : null}
       </div>
-
-      {/* Context Menu */}
-      {contextMenu && (
-        <ContextMenu
-          message={contextMenu.message}
-          position={contextMenu.position}
-          onClose={() => setContextMenu(null)}
-          onAction={handleMenuAction}
-          isCurrentUser={contextMenu.message.senderId === session?.user?.id}
-          isMobile={isMobile}
-        />
-      )}
 
       <ConfirmDialog
         dialog={confirmDialog}

@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/refs */
 // ChatArea.tsx
 "use client";
 
@@ -9,11 +10,13 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   AtSign,
   AudioLines,
+  BarChart3,
+  Camera,
   Check,
   CheckCheck,
-  ChevronDown,
   Clock,
   Code2,
+  Contact,
   Copy,
   Download,
   Edit3,
@@ -23,10 +26,12 @@ import {
   ImagePlus,
   Loader2,
   Lock,
+  MapPin,
   Mic,
   Package,
   Paperclip,
   PanelRightOpen,
+  Plus,
   RefreshCw,
   Send,
   Share2,
@@ -80,19 +85,11 @@ interface ChatAreaProps {
   emojiPickerRef: React.RefObject<HTMLDivElement | null>;
   handleEmojiClick: (emoji: string) => void;
   commonEmojis: string[];
-  handleMessageContextMenu: (
-    e: React.MouseEvent | React.TouchEvent | { x: number; y: number },
-    message: Message
-  ) => void;
-  handleDropdownClick: (e: React.MouseEvent, message: Message) => void;
   replyTo: Message | null;
   setReplyTo: (message: Message | null) => void;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
   hoveredMessageId: string | null;
   setHoveredMessageId: (id: string | null) => void;
-  activeDropdownId: string | null;
-  setActiveDropdownId: (id: string | null) => void;
-  dropdownRef: React.RefObject<HTMLDivElement | null>;
   session: Session | null;
   isMobile: boolean;
   handleKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
@@ -105,6 +102,7 @@ interface ChatAreaProps {
   onRescheduleMessage: (message: Message) => void;
   onCancelScheduledMessage: (message: Message) => void;
   onDeleteScheduledMessage: (message: Message) => void;
+  onExitSelectionMode?: () => void;
   isConnected?: boolean; // Optional for connection status
   isChatBlocked?: boolean;
   isPeerTyping?: boolean;
@@ -757,16 +755,11 @@ function ChatArea({
   emojiPickerRef,
   handleEmojiClick,
   commonEmojis,
-  handleMessageContextMenu,
-  handleDropdownClick,
   replyTo,
   setReplyTo,
   messagesEndRef,
   hoveredMessageId,
   setHoveredMessageId,
-  activeDropdownId,
-  setActiveDropdownId,
-  dropdownRef,
   session,
   isMobile,
   handleKeyDown,
@@ -775,6 +768,7 @@ function ChatArea({
   onRescheduleMessage,
   onCancelScheduledMessage,
   onDeleteScheduledMessage,
+  onExitSelectionMode,
   isConnected = true, // Default to true for backward compatibility
   isChatBlocked = false,
   isPeerTyping = false,
@@ -814,6 +808,7 @@ function ChatArea({
   const [delayMs, setDelayMs] = React.useState(60_000);
   const [customDateTime, setCustomDateTime] = React.useState("");
   const [showPremiumPrompt, setShowPremiumPrompt] = React.useState(false);
+  const [showAttachmentSheet, setShowAttachmentSheet] = React.useState(false);
   const [isArtifactWorkspaceOpen, setIsArtifactWorkspaceOpen] = React.useState(false);
   const [dismissedArtifactMessageId, setDismissedArtifactMessageId] =
     React.useState<string | null>(null);
@@ -896,6 +891,13 @@ function ChatArea({
     setStoppedStreamingMessages({});
     setDismissedArtifactMessageId(null);
   }, [selectedUser?.id]);
+
+  React.useEffect(() => {
+    if (isSelectionMode || isChatBlocked) {
+      setShowAttachmentSheet(false);
+      setShowEmojiPicker(false);
+    }
+  }, [isChatBlocked, isSelectionMode, setShowEmojiPicker]);
 
   const openArtifactWorkspace = React.useCallback(() => {
     setDismissedArtifactMessageId(null);
@@ -1279,7 +1281,7 @@ function ChatArea({
                       : bubbleBaseClasses;
 
                   const startMessageLongPress = (touch: React.Touch) => {
-                    if (!isMobile || isSelectionMode) return;
+                    if (isSelectionMode) return;
 
                     touchOriginRef.current = {
                       x: touch.clientX,
@@ -1291,7 +1293,7 @@ function ChatArea({
                       onStartMessageSelection(msg);
                       setPressedMessageId(null);
                       if ("vibrate" in navigator) {
-                        navigator.vibrate(16);
+                        navigator.vibrate(28);
                       }
                     }, 600);
                   };
@@ -1306,6 +1308,11 @@ function ChatArea({
                         className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
                         onMouseEnter={() => setHoveredMessageId(msg.id)}
                         onMouseLeave={() => setHoveredMessageId(null)}
+                        onClick={(event) => {
+                          if (event.currentTarget === event.target && isSelectionMode) {
+                            onExitSelectionMode?.();
+                          }
+                        }}
                       >
                       <div
                         className={`group flex min-w-0 items-start gap-2 ${
@@ -1352,7 +1359,7 @@ function ChatArea({
                                   : "bg-emerald-50 ring-2 ring-emerald-500 shadow-lg dark:bg-emerald-950/30"
                                 : ""
                             } ${
-                              isSelectionMode || !isMobile ? "cursor-pointer" : ""
+                              isSelectionMode ? "cursor-pointer" : ""
                             }`}
                             onClick={(event) => {
                               if (isSelectionMode) {
@@ -1360,19 +1367,11 @@ function ChatArea({
                                 onToggleMessageSelection(msg);
                                 return;
                               }
-
-                              if (!isMobile) {
-                                event.preventDefault();
-                                onStartMessageSelection(msg);
-                              }
                             }}
                             onContextMenu={(e) => {
-                              if (isSelectionMode) {
-                                e.preventDefault();
-                                return;
-                              }
-
-                              handleMessageContextMenu(e, msg);
+                              e.preventDefault();
+                              if (isSelectionMode) return;
+                              onStartMessageSelection(msg);
                             }}
                             onTouchStart={(event) => {
                               if (isSelectionMode) return;
@@ -1522,25 +1521,6 @@ function ChatArea({
                               </button>
                             </div>
                           ) : null}
-
-                          {/* Dropdown Arrow (only shows on hover) */}
-                          {!isMobile && !isSelectionMode && (hoveredMessageId === msg.id || activeDropdownId === msg.id) && (
-                            <div
-                              ref={dropdownRef}
-                              className={`absolute ${isCurrentUser ? 'left-0 -translate-x-8' : 'right-0 translate-x-8'} top-1/2 -translate-y-1/2`}
-                            >
-                              <button
-                                onClick={(e) => {
-                                  setActiveDropdownId(msg.id);
-                                  handleDropdownClick(e, msg);
-                                }}
-                                className="rounded-full bg-white p-1 shadow-md transition-shadow hover:shadow-lg dark:bg-gray-800"
-                                aria-label="Message options"
-                              >
-                                <ChevronDown size={16} />
-                              </button>
-                            </div>
-                          )}
                         </div>
                       </div>
                       </div>
@@ -1778,7 +1758,7 @@ function ChatArea({
               }`}
             >
               {/* Left Sidebar for additional actions */}
-              <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+              <div className="flex shrink-0 items-center">
                 {/* File Upload */}
                 <input
                   type="file"
@@ -1795,66 +1775,13 @@ function ChatArea({
                 />
                 <button
                   type="button"
-                  onClick={handleFileSelect}
+                  onClick={() => setShowAttachmentSheet(true)}
                   disabled={isComposerDisabled}
-                  className="rounded-xl p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-400 dark:hover:bg-black dark:hover:text-blue-400"
-                  aria-label="Attach file"
+                  className="flex h-11 w-11 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 shadow-sm transition hover:border-blue-200 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:text-blue-300"
+                  aria-label="Open attachment menu"
                 >
-                  {isAiConversation ? <ImagePlus size={20} /> : <Paperclip size={20} />}
+                  <Plus size={22} />
                 </button>
-                {isAiConversation ? (
-                  <>
-                    {/* <button
-                      type="button"
-                      disabled={isComposerDisabled}
-                      className="rounded-xl p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-emerald-600 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-400 dark:hover:bg-black dark:hover:text-emerald-300"
-                      aria-label="Voice input"
-                    >
-                      <Mic size={20} />
-                    </button> */}
-                    {/* <button
-                      type="button"
-                      disabled={isComposerDisabled}
-                      className="rounded-xl p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-emerald-600 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-400 dark:hover:bg-black dark:hover:text-emerald-300"
-                      aria-label="Mention"
-                    >
-                      <AtSign size={20} />
-                    </button> */}
-                  </>
-                ) : null}
-                
-                {/* Emoji Picker */}
-                <div className="relative">
-                  {/* <button
-                    type="button"
-                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                    disabled={isComposerDisabled}
-                    className="p-2 text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-black rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-                    aria-label="Emoji"
-                  >
-                    <Smile size={20} />
-                  </button>
-                   */}
-                  {showEmojiPicker && (
-                    <div
-                      ref={emojiPickerRef}
-                      className="absolute bottom-full left-0 z-50 mb-6 w-[min(19rem,calc(100vw-1.5rem))] rounded-xl border border-gray-200 bg-white p-3 shadow-xl animate-fadeIn dark:border-gray-700 dark:bg-black sm:p-5"
-                    >
-                      <div className="grid grid-cols-5 gap-2 sm:gap-3">
-                        {commonEmojis.map((emoji, idx) => (
-                          <button
-                            key={idx}
-                            type="button"
-                            onClick={() => handleEmojiClick(emoji)}
-                            className="h-10 w-10 rounded-lg p-1 text-xl hover:bg-gray-100 dark:hover:bg-gray-700 sm:h-12 sm:w-12 sm:p-2 sm:text-2xl"
-                          >
-                            {emoji}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
               </div>
               
               {/* Text Area with Send Button on Side */}
@@ -1924,9 +1851,10 @@ function ChatArea({
                     className={`w-full resize-none border px-3 py-3 text-sm focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 sm:px-4 sm:text-base ${
                       isAiConversation
                         ? "rounded-[18px] border-transparent bg-transparent text-gray-950 placeholder:text-gray-400 focus:ring-0 dark:text-white"
-                        : "rounded-xl border-gray-300 bg-gray-50 focus:ring-2 focus:ring-gray-500 dark:border-gray-700 dark:bg-gray-800"
+                        : "rounded-2xl border-gray-300 bg-gray-50 focus:ring-2 focus:ring-gray-500 dark:border-gray-700 dark:bg-gray-800"
                     }`}
-                    style={{ minHeight: isAiConversation ? "56px" : "44px", maxHeight: "140px" }}
+                    rows={1}
+                    style={{ minHeight: isAiConversation ? "56px" : "48px", maxHeight: "192px" }}
                   />
                 </div>
                 
@@ -1974,6 +1902,170 @@ function ChatArea({
               </p>
             )}
           </div>
+          <AnimatePresence>
+            {showAttachmentSheet && !isSelectionMode ? (
+              <>
+                <motion.button
+                  type="button"
+                  className="fixed inset-0 z-[86] bg-black/35 lg:hidden"
+                  aria-label="Close attachment menu"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setShowAttachmentSheet(false)}
+                />
+                <motion.div
+                  className="fixed inset-x-0 bottom-0 z-[87] rounded-t-[28px] border border-white/10 bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-2xl dark:bg-gray-950 lg:absolute lg:bottom-full lg:left-3 lg:right-auto lg:mb-3 lg:w-80 lg:rounded-3xl lg:border-gray-200 lg:pb-4 dark:lg:border-gray-800"
+                  initial={{ y: "100%", opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: "100%", opacity: 0 }}
+                  transition={{ type: "spring", stiffness: 280, damping: 28 }}
+                >
+                  <div className="mx-auto mb-3 h-1 w-12 rounded-full bg-gray-300 dark:bg-gray-700 lg:hidden" />
+                  <div className="mb-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-bold text-gray-950 dark:text-white">
+                        Add to message
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Choose an attachment or tool
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowAttachmentSheet(false)}
+                      className="rounded-full p-2 text-gray-500 transition hover:bg-gray-100 dark:hover:bg-gray-900"
+                      aria-label="Close attachment menu"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-4 gap-3">
+                    {[
+                      {
+                        label: "Camera",
+                        icon: Camera,
+                        onClick: handleFileSelect,
+                        color: "text-rose-600 bg-rose-50 dark:bg-rose-500/10 dark:text-rose-300",
+                      },
+                      {
+                        label: "Gallery",
+                        icon: ImagePlus,
+                        onClick: handleFileSelect,
+                        color: "text-blue-600 bg-blue-50 dark:bg-blue-500/10 dark:text-blue-300",
+                      },
+                      {
+                        label: "Document",
+                        icon: FileText,
+                        onClick: handleFileSelect,
+                        color: "text-amber-600 bg-amber-50 dark:bg-amber-500/10 dark:text-amber-300",
+                      },
+                      {
+                        label: "Voice",
+                        icon: Mic,
+                        onClick: () => inputRef.current?.focus(),
+                        color: "text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 dark:text-emerald-300",
+                      },
+                      {
+                        label: "Emoji",
+                        icon: Smile,
+                        onClick: () => setShowEmojiPicker(true),
+                        color: "text-violet-600 bg-violet-50 dark:bg-violet-500/10 dark:text-violet-300",
+                      },
+                      {
+                        label: "Mention",
+                        icon: AtSign,
+                        onClick: () => {
+                          setNewMessage(newMessage.endsWith(" ") || !newMessage ? `${newMessage}@` : `${newMessage} @`);
+                          inputRef.current?.focus();
+                        },
+                        color: "text-cyan-600 bg-cyan-50 dark:bg-cyan-500/10 dark:text-cyan-300",
+                      },
+                      {
+                        label: "Location",
+                        icon: MapPin,
+                        onClick: () => inputRef.current?.focus(),
+                        color: "text-red-600 bg-red-50 dark:bg-red-500/10 dark:text-red-300",
+                      },
+                      {
+                        label: "Contact",
+                        icon: Contact,
+                        onClick: () => inputRef.current?.focus(),
+                        color: "text-slate-600 bg-slate-100 dark:bg-slate-500/10 dark:text-slate-300",
+                      },
+                      {
+                        label: "GIF",
+                        icon: Sparkles,
+                        onClick: () => inputRef.current?.focus(),
+                        color: "text-fuchsia-600 bg-fuchsia-50 dark:bg-fuchsia-500/10 dark:text-fuchsia-300",
+                      },
+                      {
+                        label: "Poll",
+                        icon: BarChart3,
+                        onClick: () => inputRef.current?.focus(),
+                        color: "text-indigo-600 bg-indigo-50 dark:bg-indigo-500/10 dark:text-indigo-300",
+                      },
+                    ].map((item) => (
+                      <button
+                        key={item.label}
+                        type="button"
+                        onClick={() => {
+                          item.onClick();
+                          setShowAttachmentSheet(false);
+                        }}
+                        className="flex flex-col items-center gap-2 rounded-2xl p-2 text-center transition hover:bg-gray-50 active:scale-95 dark:hover:bg-gray-900"
+                      >
+                        <span className={`flex h-12 w-12 items-center justify-center rounded-2xl ${item.color}`}>
+                          <item.icon size={22} />
+                        </span>
+                        <span className="text-[11px] font-semibold text-gray-600 dark:text-gray-300">
+                          {item.label}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
+              </>
+            ) : null}
+          </AnimatePresence>
+          <AnimatePresence>
+            {showEmojiPicker && !isSelectionMode ? (
+              <>
+                <motion.button
+                  type="button"
+                  className="fixed inset-0 z-[88] bg-black/25"
+                  aria-label="Close emoji picker"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setShowEmojiPicker(false)}
+                />
+                <motion.div
+                  ref={emojiPickerRef}
+                  className="fixed inset-x-3 bottom-24 z-[89] rounded-3xl border border-gray-200 bg-white p-4 shadow-2xl dark:border-gray-800 dark:bg-gray-950 sm:left-auto sm:w-80"
+                  initial={{ y: 24, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: 24, opacity: 0 }}
+                >
+                  <div className="grid grid-cols-5 gap-2">
+                    {commonEmojis.map((emoji, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          handleEmojiClick(emoji);
+                          setShowEmojiPicker(false);
+                        }}
+                        className="h-11 w-11 rounded-xl text-2xl transition hover:bg-gray-100 active:scale-95 dark:hover:bg-gray-800"
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
+              </>
+            ) : null}
+          </AnimatePresence>
         </div>
       )}
       {isAiConversation ? (

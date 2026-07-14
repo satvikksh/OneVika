@@ -11,10 +11,13 @@ import {
   EyeOff,
   Forward,
   Info,
+  Link2,
   Menu,
   MoreVertical,
   Phone,
+  Reply,
   ShieldOff,
+  Star,
   Trash2,
   Users,
   Video,
@@ -50,14 +53,22 @@ interface ChatTopBarProps {
   onExitSelectionMode?: () => void;
   onCopySelectedMessages?: () => void;
   onForwardSelectedMessages?: () => void;
+  onReplySelectedMessage?: () => void;
+  onStarSelectedMessage?: () => void;
+  onCopySelectedLink?: () => void;
   onHideSelectedMessages?: () => void;
   onUnhideSelectedMessages?: () => void;
   onDeleteSelectedMessages?: () => void;
+  onDeleteSelectedForEveryone?: () => void;
+  canReplySelectedMessage?: boolean;
   canCopySelectedMessages?: boolean;
+  canStarSelectedMessage?: boolean;
+  canCopySelectedLink?: boolean;
   canForwardSelectedMessages?: boolean;
   canHideSelectedMessages?: boolean;
   canUnhideSelectedMessages?: boolean;
   canDeleteSelectedMessages?: boolean;
+  canDeleteSelectedForEveryone?: boolean;
   isSelectionActionBusy?: boolean;
 }
 
@@ -82,14 +93,22 @@ function ChatTopBar({
   onExitSelectionMode,
   onCopySelectedMessages,
   onForwardSelectedMessages,
+  onReplySelectedMessage,
+  onStarSelectedMessage,
+  onCopySelectedLink,
   onHideSelectedMessages,
   onUnhideSelectedMessages,
   onDeleteSelectedMessages,
+  onDeleteSelectedForEveryone,
+  canReplySelectedMessage = false,
   canCopySelectedMessages = false,
+  canStarSelectedMessage = false,
+  canCopySelectedLink = false,
   canForwardSelectedMessages = false,
   canHideSelectedMessages = false,
   canUnhideSelectedMessages = false,
   canDeleteSelectedMessages = false,
+  canDeleteSelectedForEveryone = false,
   isSelectionActionBusy = false,
 }: ChatTopBarProps) {
   const { data: session } = useSession();
@@ -97,7 +116,9 @@ function ChatTopBar({
   const { onlineUsers } = useSocket();
   const { activeCall, startCall } = useCall();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isSelectionMoreOpen, setIsSelectionMoreOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const selectionMoreRef = useRef<HTMLDivElement>(null);
 
   const desktopLeft = "lg:left-80";
   const mobileClasses = isMobile ? "left-0 right-0" : "";
@@ -116,17 +137,24 @@ function ChatTopBar({
     : false;
 
   useEffect(() => {
-    if (!isMenuOpen) return;
+    if (!isMenuOpen && !isSelectionMoreOpen) return;
 
     const handleClickOutside = (event: MouseEvent | TouchEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setIsMenuOpen(false);
+      }
+      if (
+        selectionMoreRef.current &&
+        !selectionMoreRef.current.contains(event.target as Node)
+      ) {
+        setIsSelectionMoreOpen(false);
       }
     };
 
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setIsMenuOpen(false);
+        setIsSelectionMoreOpen(false);
       }
     };
 
@@ -138,7 +166,7 @@ function ChatTopBar({
       document.removeEventListener("touchstart", handleClickOutside);
       document.removeEventListener("keydown", handleEscape);
     };
-  }, [isMenuOpen]);
+  }, [isMenuOpen, isSelectionMoreOpen]);
 
   const handleUserProfileClick = () => {
     if (selectedUser && !isGroupChat) {
@@ -213,11 +241,41 @@ function ChatTopBar({
   if (isSelectionMode) {
     const selectionActions = [
       {
+        id: "reply",
+        label: "Reply",
+        icon: Reply,
+        onClick: onReplySelectedMessage,
+        disabled: !canReplySelectedMessage,
+      },
+      {
         id: "copy",
-        label: "Copy",
+        label: "Copy Text",
         icon: Copy,
         onClick: onCopySelectedMessages,
         disabled: !canCopySelectedMessages,
+      },
+      {
+        id: "star",
+        label: "Star",
+        icon: Star,
+        onClick: onStarSelectedMessage,
+        disabled: !canStarSelectedMessage,
+      },
+      {
+        id: "delete",
+        label: "Delete",
+        icon: Trash2,
+        onClick: onDeleteSelectedMessages,
+        disabled: !canDeleteSelectedMessages,
+      },
+    ];
+    const moreActions = [
+      {
+        id: "copyLink",
+        label: "Copy Link",
+        icon: Link2,
+        onClick: onCopySelectedLink,
+        disabled: !canCopySelectedLink,
       },
       {
         id: "forward",
@@ -228,7 +286,7 @@ function ChatTopBar({
       },
       {
         id: "toggleHidden",
-        label: canUnhideSelectedMessages ? "Unhide" : "Hide",
+        label: canUnhideSelectedMessages ? "Unhide Message" : "Hide Message",
         icon: canUnhideSelectedMessages ? Eye : EyeOff,
         onClick: canUnhideSelectedMessages
           ? onUnhideSelectedMessages
@@ -238,11 +296,20 @@ function ChatTopBar({
           : !canHideSelectedMessages,
       },
       {
-        id: "delete",
-        label: "Delete",
+        id: "deleteSelf",
+        label: "Delete for Me",
         icon: Trash2,
         onClick: onDeleteSelectedMessages,
         disabled: !canDeleteSelectedMessages,
+        danger: true,
+      },
+      {
+        id: "deleteEveryone",
+        label: "Delete for Everyone",
+        icon: Trash2,
+        onClick: onDeleteSelectedForEveryone,
+        disabled: !canDeleteSelectedForEveryone,
+        danger: true,
       },
     ];
 
@@ -284,6 +351,39 @@ function ChatTopBar({
                   <action.icon size={18} />
                 </button>
               ))}
+              <div className="relative" ref={selectionMoreRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsSelectionMoreOpen((open) => !open)}
+                  disabled={isSelectionActionBusy}
+                  className="rounded-xl p-2 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                  aria-label="More selected message actions"
+                  title="More"
+                >
+                  <MoreVertical size={18} />
+                </button>
+                {isSelectionMoreOpen ? (
+                  <div className="absolute right-0 top-full mt-2 w-56 overflow-hidden rounded-2xl border border-gray-200 bg-white py-2 text-gray-900 shadow-2xl dark:border-gray-800 dark:bg-gray-950 dark:text-white">
+                    {moreActions.map((action) => (
+                      <button
+                        key={action.id}
+                        type="button"
+                        onClick={() => {
+                          setIsSelectionMoreOpen(false);
+                          action.onClick?.();
+                        }}
+                        disabled={action.disabled || isSelectionActionBusy}
+                        className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-medium transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-gray-900 ${
+                          action.danger ? "text-red-600 dark:text-red-300" : ""
+                        }`}
+                      >
+                        <action.icon size={16} />
+                        {action.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             </div>
           </div>
         </header>
