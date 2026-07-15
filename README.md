@@ -10,7 +10,7 @@
 [![MongoDB](https://img.shields.io/badge/MongoDB-Mongoose-47A248?style=for-the-badge&logo=mongodb&logoColor=fff)](https://www.mongodb.com/)
 [![Socket.IO](https://img.shields.io/badge/Socket.IO-Realtime-010101?style=for-the-badge&logo=socketdotio)](https://socket.io/)
 
-**Live Demo:** [https://orbitbyte.vercel.app/](https://orbitbyte.vercel.app/) · **Repository:** [https://github.com/satvikksh/OneVika](https://github.com/satvikksh/OneVika)
+**Live Demo:** [https://orbitbyte.in/](https://orbitbyte.in/) · **Repository:** [https://github.com/satvikksh/OneVika](https://github.com/satvikksh/OneVika)
 
 </div>
 
@@ -478,7 +478,7 @@ copies of the Software, subject to the conditions of the MIT License.
 
 **OrbitByte Team**
 
-- Website: [https://orbitbyte.vercel.app/](https://orbitbyte.vercel.app/)
+- Website: [https://orbitbyte.in/](https://orbitbyte.in/)
 - GitHub: [https://github.com/satvikksh/OneVika](https://github.com/satvikksh/OneVika)
 - LinkedIn: [https://www.linkedin.com/in/satvik-kushwaha-343452237/](https://www.linkedin.com/in/satvik-kushwaha-343452237/)
 - Email: [satvikksh@gmail.com](satvikksh@gmail.com)

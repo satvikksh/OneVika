@@ -22,7 +22,7 @@ const OPENROUTER_BASE_URL = (process.env.OPENROUTER_BASE_URL || "https://openrou
     .replace(/\/chat\/completions\/?$/, "")
     .replace(/\/+$/, "");
 const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || "deepseek/deepseek-v4-flash:free";
-const OPENROUTER_FALLBACK_MODELS = (process.env.OPENROUTER_FALLBACK_MODELS || "openai/gpt-oss-120b:free")
+const OPENROUTER_FALLBACK_MODELS = (process.env.OPENROUTER_FALLBACK_MODELS || "openai/gpt-oss-20b:free")
     .split(",")
     .map((model) => model.trim())
     .filter(Boolean);
@@ -43,6 +43,7 @@ const AI_SYSTEM_PROMPT = process.env.AI_SYSTEM_PROMPT ||
     ].join(" ");
 const AI_PROVIDER_FAILURE_MESSAGE = "I’m connected, but I couldn’t get a response from the AI provider right now. Please try again in a moment.";
 const AI_PROVIDER_RATE_LIMIT_MESSAGE = "The free AI providers are temporarily rate-limited right now. Please try again in a moment.";
+const AI_PROVIDER_TIMEOUT_MS = Math.max(Number(process.env.OPENROUTER_TIMEOUT_MS || "45000"), 10000);
 const INTERNAL_SOCKET_SECRET = process.env.SOCKET_INTERNAL_SECRET || process.env.NEXTAUTH_SECRET || "";
 let backgroundJobsStarted = false;
 let backgroundJobsRunning = false;
@@ -627,9 +628,16 @@ function getOpenRouterRetryDelayMs(response, providerErrorText, attempt) {
 }
 function getAiProviderFailureMessage(error) {
     const message = error instanceof Error ? error.message : "";
+    if (message.includes("OPENROUTER_API_KEY")) {
+        return "AI chat is not configured yet. Please add the AI provider API key on the server.";
+    }
     if (message.includes("OpenRouter API error 429") ||
         message.toLowerCase().includes("rate-limited")) {
         return AI_PROVIDER_RATE_LIMIT_MESSAGE;
+    }
+    if (message.toLowerCase().includes("timeout") ||
+        message.toLowerCase().includes("aborted")) {
+        return "The AI provider took too long to respond. Please try again.";
     }
     return AI_PROVIDER_FAILURE_MESSAGE;
 }
@@ -960,10 +968,14 @@ function startMessageScheduler() {
 function emitAiErrorToHuman({ humanUserId, conversationId, error, }) {
     io.to(`user_${humanUserId.toString()}`).emit("ai_response_error", {
         conversationId: conversationId.toString(),
-        message: error instanceof Error
-            ? error.message
-            : "The AI response failed for an unknown reason.",
+        message: getAiProviderFailureMessage(error),
         retryable: true,
+    });
+}
+async function emitAiMessageToHumanAndYield(humanUserId, payload) {
+    emitAiMessageToHuman(humanUserId, payload);
+    await new Promise((resolve) => {
+        setImmediate(resolve);
     });
 }
 async function streamOpenRouterReply(messages, onDelta) {
@@ -975,8 +987,16 @@ async function streamOpenRouterReply(messages, onDelta) {
         for (let attempt = 1; attempt <= AI_RESPONSE_MAX_RETRIES; attempt += 1) {
             let fullText = "";
             let emittedAnyChunk = false;
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), AI_PROVIDER_TIMEOUT_MS);
             try {
-                console.info(`[AI Chat] Calling OpenRouter (${model}), attempt ${attempt}/${AI_RESPONSE_MAX_RETRIES}`);
+                console.info(`[AI Chat] Calling OpenRouter (${model}), attempt ${attempt}/${AI_RESPONSE_MAX_RETRIES}`, {
+                    messageCount: messages.length,
+                    baseUrl: OPENROUTER_BASE_URL,
+                    timeoutMs: AI_PROVIDER_TIMEOUT_MS,
+                    maxTokens: Number(process.env.OPENROUTER_MAX_TOKENS || "1200"),
+                    stream: true,
+                });
                 const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
                     method: "POST",
                     headers: {
@@ -992,7 +1012,9 @@ async function streamOpenRouterReply(messages, onDelta) {
                         temperature: Number(process.env.OPENROUTER_TEMPERATURE || "0.7"),
                         stream: true,
                     }),
+                    signal: controller.signal,
                 });
+                clearTimeout(timeout);
                 if (!response.ok) {
                     const providerErrorText = await response.text().catch(() => "");
                     const error = new Error(`OpenRouter API error ${response.status} from ${model}: ${providerErrorText || response.statusText}`);
@@ -1043,6 +1065,11 @@ async function streamOpenRouterReply(messages, onDelta) {
                             if (typeof delta === "string" && delta.length > 0) {
                                 emittedAnyChunk = true;
                                 fullText += delta;
+                                console.info("[AI Chat] Streaming delta received.", {
+                                    model,
+                                    deltaLength: delta.length,
+                                    fullTextLength: fullText.length,
+                                });
                                 await onDelta(delta, fullText);
                             }
                         }
@@ -1058,11 +1085,16 @@ async function streamOpenRouterReply(messages, onDelta) {
                     console.warn("[AI Chat] OpenRouter stream ended with unprocessed data.");
                 }
                 if (fullText.trim()) {
+                    console.info("[AI Chat] OpenRouter stream completed.", {
+                        model,
+                        fullTextLength: fullText.length,
+                    });
                     return fullText;
                 }
                 throw new Error("OpenRouter returned an empty assistant response.");
             }
             catch (error) {
+                clearTimeout(timeout);
                 lastError = error;
                 if (emittedAnyChunk) {
                     console.error("[AI Chat] Stream interrupted after partial output:", error);
@@ -1167,6 +1199,7 @@ async function handleAiConversationMessage(conversation, humanMessage) {
     const replyMessageId = new mongoose.Types.ObjectId();
     const replyCreatedAt = new Date();
     let finalText = "";
+    let providerFailed = false;
     try {
         console.info("[AI Chat] Starting AI reply job.", {
             conversationId: conversationId.toString(),
@@ -1194,10 +1227,25 @@ async function handleAiConversationMessage(conversation, humanMessage) {
             conversationId,
             isTyping: true,
         });
+        await emitAiMessageToHumanAndYield(humanUserId, buildAiSocketMessagePayload({
+            messageId: replyMessageId,
+            conversationId,
+            assistantUserId: assistantObjectId,
+            humanUserId,
+            text: "",
+            createdAt: replyCreatedAt,
+            isStreaming: true,
+        }));
         const contextMessages = await buildAiContextMessages(conversationId, assistantObjectId);
+        console.info("[AI Chat] Built AI context payload.", {
+            conversationId: conversationId.toString(),
+            humanMessageId: humanMessage.id,
+            messages: contextMessages.length,
+            hasSystemPrompt: contextMessages[0]?.role === "system",
+        });
         finalText = await streamOpenRouterReply(contextMessages, async (_delta, fullText) => {
             finalText = fullText;
-            emitAiMessageToHuman(humanUserId, buildAiSocketMessagePayload({
+            await emitAiMessageToHumanAndYield(humanUserId, buildAiSocketMessagePayload({
                 messageId: replyMessageId,
                 conversationId,
                 assistantUserId: assistantObjectId,
@@ -1210,6 +1258,7 @@ async function handleAiConversationMessage(conversation, humanMessage) {
         finalText = finalText.trim() || AI_PROVIDER_FAILURE_MESSAGE;
     }
     catch (error) {
+        providerFailed = true;
         console.error("[AI Chat] AI reply failed:", error);
         emitAiErrorToHuman({ humanUserId, conversationId, error });
         finalText = finalText.trim() || getAiProviderFailureMessage(error);
@@ -1233,10 +1282,12 @@ async function handleAiConversationMessage(conversation, humanMessage) {
         });
         await mongoose.connection.db?.collection("messages").updateOne({ _id: humanMessageObjectId }, {
             $set: {
-                aiReplyStatus: "completed",
+                aiReplyStatus: providerFailed ? "failed" : "completed",
                 aiReplyCompletedAt: new Date(),
                 aiReplyMessageId: replyMessageId,
+                ...(providerFailed ? { aiReplyError: finalText } : {}),
             },
+            ...(providerFailed ? {} : { $unset: { aiReplyError: "" } }),
         });
         emitAiMessageToHuman(humanUserId, buildAiSocketMessagePayload({
             messageId: replyMessageId,
