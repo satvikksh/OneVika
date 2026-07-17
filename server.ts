@@ -173,7 +173,7 @@ const OPENROUTER_BASE_URL = (
 const OPENROUTER_MODEL =
   process.env.OPENROUTER_MODEL || "deepseek/deepseek-v4-flash:free";
 const OPENROUTER_FALLBACK_MODELS = (
-  process.env.OPENROUTER_FALLBACK_MODELS || "openai/gpt-oss-20b:free"
+  process.env.OPENROUTER_FALLBACK_MODELS || "cohere/north-mini-code:free"
 )
   .split(",")
   .map((model) => model.trim())
@@ -1471,7 +1471,7 @@ async function streamOpenRouterReply(
             messageCount: messages.length,
             baseUrl: OPENROUTER_BASE_URL,
             timeoutMs: AI_PROVIDER_TIMEOUT_MS,
-            maxTokens: Number(process.env.OPENROUTER_MAX_TOKENS || "1200"),
+            maxTokens: Number(process.env.OPENROUTER_MAX_TOKENS || "16384"),
             stream: true,
           }
         );
@@ -1487,7 +1487,7 @@ async function streamOpenRouterReply(
           body: JSON.stringify({
             model,
             messages,
-            max_tokens: Number(process.env.OPENROUTER_MAX_TOKENS || "1200"),
+            max_tokens: Number(process.env.OPENROUTER_MAX_TOKENS || "16384"),
             temperature: Number(process.env.OPENROUTER_TEMPERATURE || "0.7"),
             stream: true,
           }),
