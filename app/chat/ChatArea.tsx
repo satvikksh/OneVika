@@ -338,8 +338,112 @@ type Artifact = {
   source: string;
 };
 
+type ArtifactFile = {
+  path: string;
+  language: string;
+  code: string;
+};
+
+type FileTreeNode = {
+  name: string;
+  path: string;
+  type: "folder" | "file";
+  children: FileTreeNode[];
+  file?: ArtifactFile;
+};
+
 const artifactLanguagePattern =
   /\b(react|next\.?js|tsx|jsx|html|css|tailwind|javascript|typescript|json|sql|python|bash|shell|markdown|md|yaml|yml)\b/i;
+
+const previewWidthStorageKey = "orbitbyte-ai-preview-width";
+const previewMinWidth = 320;
+const previewMaxWidth = 760;
+
+const extensionByLanguage: Record<string, string> = {
+  bash: "sh",
+  css: "css",
+  html: "html",
+  javascript: "js",
+  json: "json",
+  jsx: "jsx",
+  markdown: "md",
+  md: "md",
+  nextjs: "tsx",
+  python: "py",
+  react: "tsx",
+  shell: "sh",
+  sql: "sql",
+  tailwind: "css",
+  tsx: "tsx",
+  typescript: "ts",
+  yaml: "yaml",
+  yml: "yml",
+};
+
+const languageByExtension: Record<string, string> = {
+  css: "css",
+  html: "html",
+  js: "javascript",
+  json: "json",
+  jsx: "jsx",
+  md: "markdown",
+  py: "python",
+  sh: "bash",
+  sql: "sql",
+  ts: "typescript",
+  tsx: "tsx",
+  yaml: "yaml",
+  yml: "yaml",
+};
+
+const clampPreviewWidth = (value: number) =>
+  Math.min(previewMaxWidth, Math.max(previewMinWidth, value));
+
+const normalizeArtifactPath = (value: string) =>
+  value.replace(/^\.?\//, "").replace(/\\/g, "/").replace(/^`|`$/g, "");
+
+const inferLanguageFromPath = (path: string, fallback: string) => {
+  const extension = path.split(".").pop()?.toLowerCase() || "";
+  return languageByExtension[extension] || fallback || "text";
+};
+
+const inferFileName = (language: string, index: number) => {
+  const normalized = language.toLowerCase().replace(".", "");
+  if (normalized === "html") return "index.html";
+  if (normalized === "css" || normalized === "tailwind") return "styles.css";
+  if (normalized === "javascript") return index === 0 ? "main.js" : `script-${index + 1}.js`;
+  if (normalized === "typescript") return `file-${index + 1}.ts`;
+  if (["tsx", "jsx", "react", "nextjs"].includes(normalized)) {
+    return index === 0 ? "src/App.tsx" : `src/component-${index + 1}.tsx`;
+  }
+  if (normalized === "json") return "package.json";
+  if (normalized === "markdown" || normalized === "md") return "README.md";
+  return `artifact-${index + 1}.${extensionByLanguage[normalized] || "txt"}`;
+};
+
+const getFilePathFromContext = (source: string, blockStart: number, code: string, language: string, index: number) => {
+  const before = source.slice(Math.max(0, blockStart - 260), blockStart);
+  const contextLines = before
+    .split("\n")
+    .slice(-5)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const filePattern =
+    /(?:file|path|filename|name)?\s*[:\-]?\s*`?((?:[\w.-]+\/)*[\w.-]+\.(?:tsx|jsx|ts|js|css|html|json|md|py|sql|yaml|yml|sh))`?/i;
+
+  for (let i = contextLines.length - 1; i >= 0; i -= 1) {
+    const match = contextLines[i].match(filePattern);
+    if (match?.[1]) return normalizeArtifactPath(match[1]);
+  }
+
+  const firstLine = code.split("\n", 1)[0]?.trim() || "";
+  const commentMatch = firstLine.match(
+    /(?:\/\/|#|\/\*|<!--)\s*(?:file|path|filename)?\s*[:\-]?\s*((?:[\w.-]+\/)*[\w.-]+\.(?:tsx|jsx|ts|js|css|html|json|md|py|sql|yaml|yml|sh))/i
+  );
+  if (commentMatch?.[1]) return normalizeArtifactPath(commentMatch[1]);
+
+  return inferFileName(language, index);
+};
 
 const extractCodeBlocks = (value: string): Artifact[] => {
   const blocks: Artifact[] = [];
@@ -360,6 +464,175 @@ const extractCodeBlocks = (value: string): Artifact[] => {
   }
 
   return blocks;
+};
+
+const extractArtifactFiles = (artifact: Artifact): ArtifactFile[] => {
+  const files: ArtifactFile[] = [];
+  const seen = new Set<string>();
+  const pattern = /```([\w.-]+)?\n?([\s\S]*?)```/g;
+  let match: RegExpExecArray | null;
+  let index = 0;
+
+  while ((match = pattern.exec(artifact.source)) !== null) {
+    const rawLanguage = (match[1] || artifact.language || "text").toLowerCase().replace(".", "");
+    const code = match[2]?.trim() || "";
+    if (!code) continue;
+
+    const path = getFilePathFromContext(artifact.source, match.index, code, rawLanguage, index);
+    const uniquePath = seen.has(path)
+      ? path.replace(/(\.[^.]+)?$/, `-${index + 1}$1`)
+      : path;
+    seen.add(uniquePath);
+    files.push({
+      path: uniquePath,
+      language: inferLanguageFromPath(uniquePath, rawLanguage),
+      code,
+    });
+    index += 1;
+  }
+
+  if (files.length === 0) {
+    const path = inferFileName(artifact.language, 0);
+    files.push({
+      path,
+      language: inferLanguageFromPath(path, artifact.language),
+      code: artifact.code,
+    });
+  }
+
+  return files;
+};
+
+const buildFileTree = (files: ArtifactFile[]) => {
+  const root: FileTreeNode = { name: "root", path: "", type: "folder", children: [] };
+
+  files.forEach((file) => {
+    const parts = file.path.split("/").filter(Boolean);
+    let current = root;
+
+    parts.forEach((part, index) => {
+      const path = parts.slice(0, index + 1).join("/");
+      const isFile = index === parts.length - 1;
+      let node = current.children.find((child) => child.name === part && child.type === (isFile ? "file" : "folder"));
+
+      if (!node) {
+        node = {
+          name: part,
+          path,
+          type: isFile ? "file" : "folder",
+          children: [],
+          file: isFile ? file : undefined,
+        };
+        current.children.push(node);
+      }
+
+      if (isFile) {
+        node.file = file;
+      } else {
+        current = node;
+      }
+    });
+  });
+
+  const sortTree = (node: FileTreeNode) => {
+    node.children.sort((a, b) => {
+      if (a.type !== b.type) return a.type === "folder" ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+    node.children.forEach(sortTree);
+  };
+  sortTree(root);
+
+  return root.children;
+};
+
+const getFileIcon = (file: ArtifactFile) => {
+  const extension = file.path.split(".").pop()?.toLowerCase();
+  if (extension === "css") return "CSS";
+  if (extension === "html") return "HTML";
+  if (extension === "json") return "JSON";
+  if (extension === "md") return "MD";
+  if (extension === "tsx" || extension === "jsx") return "RX";
+  if (extension === "ts" || extension === "js") return "JS";
+  return "FILE";
+};
+
+const escapeHtml = (value: string) =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+const buildPreviewDocument = (files: ArtifactFile[]) => {
+  const htmlFile =
+    files.find((file) => file.path.toLowerCase().endsWith("index.html")) ||
+    files.find((file) => file.language === "html");
+  const cssFiles = files.filter((file) => file.language === "css" || file.path.endsWith(".css"));
+  const scriptFiles = files.filter((file) =>
+    ["javascript", "typescript"].includes(file.language) || /\.(js|ts)$/.test(file.path)
+  );
+  const reactFiles = files.filter((file) => ["tsx", "jsx", "react", "nextjs"].includes(file.language));
+
+  if (htmlFile) {
+    const styleTags = cssFiles.map((file) => `<style data-file="${escapeHtml(file.path)}">\n${file.code}\n</style>`).join("\n");
+    const scriptTags = scriptFiles
+      .map((file) => `<script type="module" data-file="${escapeHtml(file.path)}">\n${file.code}\n</script>`)
+      .join("\n");
+    const withStyles = htmlFile.code.includes("</head>")
+      ? htmlFile.code.replace("</head>", `${styleTags}\n</head>`)
+      : `${styleTags}\n${htmlFile.code}`;
+    return withStyles.includes("</body>")
+      ? withStyles.replace("</body>", `${scriptTags}\n</body>`)
+      : `${withStyles}\n${scriptTags}`;
+  }
+
+  if (reactFiles.length > 0) {
+    const appFile =
+      reactFiles.find((file) => /(?:^|\/)App\.(tsx|jsx)$/.test(file.path)) ||
+      reactFiles.find((file) => /(?:^|\/)(main|index)\.(tsx|jsx)$/.test(file.path)) ||
+      reactFiles[0];
+
+    return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f8fafc; color: #111827; }
+      .notice { min-height: 100vh; display: grid; place-items: center; padding: 32px; }
+      .panel { max-width: 760px; border: 1px solid #d1d5db; border-radius: 18px; background: white; box-shadow: 0 20px 50px rgba(15, 23, 42, .12); padding: 24px; }
+      pre { max-height: 50vh; overflow: auto; background: #0f172a; color: #d1fae5; border-radius: 14px; padding: 16px; white-space: pre-wrap; }
+      ${cssFiles.map((file) => file.code).join("\n")}
+    </style>
+  </head>
+  <body>
+    <main class="notice">
+      <section class="panel">
+        <h1>React project workspace</h1>
+        <p>All generated files are connected in the editor and file explorer. Browser preview needs a JSX/TSX compiler dependency to execute React modules safely.</p>
+        <p><strong>Entry file:</strong> ${escapeHtml(appFile.path)}</p>
+        <pre>${escapeHtml(appFile.code)}</pre>
+      </section>
+    </main>
+  </body>
+</html>`;
+  }
+
+  const css = cssFiles.map((file) => file.code).join("\n");
+  const scripts = scriptFiles.map((file) => `<script type="module">\n${file.code}\n</script>`).join("\n");
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>${css}</style>
+  </head>
+  <body>
+    <div id="app"></div>
+    ${scripts}
+  </body>
+</html>`;
 };
 
 const hasStructuredArtifact = (value = "") => {
@@ -615,110 +888,366 @@ const AiMessageActions = ({
 const ArtifactWorkspace = ({
   artifact,
   onClose,
+  isMobile,
+  previewWidth,
+  onPreviewWidthChange,
 }: {
   artifact: Artifact | null;
   onClose: () => void;
+  isMobile: boolean;
+  previewWidth: number;
+  onPreviewWidthChange: (width: number) => void;
 }) => {
-  const [activeTab, setActiveTab] = React.useState<"code" | "preview" | "files" | "console" | "dependencies">("code");
-  const previewable = ["html", "css", "javascript", "typescript", "jsx", "tsx", "react", "nextjs", "tailwind"].includes(
-    artifact?.language || ""
+  const [activeTab, setActiveTab] = React.useState<"code" | "preview" | "console" | "dependencies">("preview");
+  const [files, setFiles] = React.useState<ArtifactFile[]>([]);
+  const [activePath, setActivePath] = React.useState("");
+  const [openFolders, setOpenFolders] = React.useState<Set<string>>(() => new Set(["src", "components"]));
+  const [searchTerm, setSearchTerm] = React.useState("");
+  const [isResizing, setIsResizing] = React.useState(false);
+  const previewFrameRef = React.useRef<HTMLIFrameElement | null>(null);
+
+  React.useEffect(() => {
+    if (!artifact) return;
+    const nextFiles = extractArtifactFiles(artifact);
+    setFiles(nextFiles);
+    setActivePath((current) => (nextFiles.some((file) => file.path === current) ? current : nextFiles[0]?.path || ""));
+    setActiveTab("preview");
+    setSearchTerm("");
+  }, [artifact]);
+
+  React.useEffect(() => {
+    if (!isResizing) return;
+
+    const handlePointerMove = (event: PointerEvent) => {
+      onPreviewWidthChange(clampPreviewWidth(window.innerWidth - event.clientX - 16));
+    };
+    const handlePointerUp = () => setIsResizing(false);
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp, { once: true });
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+  }, [isResizing, onPreviewWidthChange]);
+
+  const activeFile = files.find((file) => file.path === activePath) || files[0];
+  const visibleFiles = React.useMemo(
+    () =>
+      searchTerm.trim()
+        ? files.filter((file) => file.path.toLowerCase().includes(searchTerm.toLowerCase()))
+        : files,
+    [files, searchTerm]
+  );
+  const fileTree = React.useMemo(() => buildFileTree(visibleFiles), [visibleFiles]);
+  const previewDocument = React.useMemo(() => buildPreviewDocument(files), [files]);
+  const dependencies = React.useMemo(() => {
+    const packageFile = files.find((file) => file.path.endsWith("package.json"));
+    if (!packageFile) return [];
+    try {
+      const parsed = JSON.parse(packageFile.code) as {
+        dependencies?: Record<string, string>;
+        devDependencies?: Record<string, string>;
+      };
+      return Object.entries({
+        ...(parsed.dependencies || {}),
+        ...(parsed.devDependencies || {}),
+      });
+    } catch {
+      return [];
+    }
+  }, [files]);
+
+  const updateActiveFile = (code: string) => {
+    if (!activeFile) return;
+    setFiles((current) =>
+      current.map((file) => (file.path === activeFile.path ? { ...file, code } : file))
+    );
+  };
+
+  const formatActiveFile = () => {
+    if (!activeFile) return;
+    let nextCode = activeFile.code.replace(/\t/g, "  ").replace(/[ \t]+$/gm, "").trim();
+    if (activeFile.language === "json") {
+      try {
+        nextCode = JSON.stringify(JSON.parse(activeFile.code), null, 2);
+      } catch {
+        nextCode = activeFile.code;
+      }
+    }
+    updateActiveFile(`${nextCode}\n`);
+  };
+
+  const downloadBlob = (content: string, fileName: string, type: string) => {
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = fileName;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadPdf = () => {
+    const frame = previewFrameRef.current;
+    const frameDocument = frame?.contentDocument;
+    if (frameDocument) {
+      frame.contentWindow?.focus();
+      frame.contentWindow?.print();
+      return;
+    }
+    downloadBlob(previewDocument, "orbitbyte-preview.html", "text/html;charset=utf-8");
+  };
+
+  const downloadWord = () => {
+    const wordHtml = `<!doctype html><html><head><meta charset="utf-8"><title>OrbitByte Preview</title></head><body>${previewDocument}</body></html>`;
+    downloadBlob(
+      wordHtml,
+      "orbitbyte-preview.docx",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    );
+  };
+
+  const renderTree = (nodes: FileTreeNode[], level = 0): React.ReactNode =>
+    nodes.map((node) => {
+      if (node.type === "folder") {
+        const isOpen = openFolders.has(node.path);
+        return (
+          <div key={node.path}>
+            <button
+              type="button"
+              onClick={() =>
+                setOpenFolders((current) => {
+                  const next = new Set(current);
+                  if (next.has(node.path)) next.delete(node.path);
+                  else next.add(node.path);
+                  return next;
+                })
+              }
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/10"
+              style={{ paddingLeft: `${8 + level * 14}px` }}
+            >
+              <span className="w-3 text-gray-400">{isOpen ? "▾" : "▸"}</span>
+              <FolderTree size={14} />
+              <span className="truncate">{node.name}</span>
+            </button>
+            {isOpen ? renderTree(node.children, level + 1) : null}
+          </div>
+        );
+      }
+
+      if (!node.file) return null;
+      const isActive = node.file.path === activeFile?.path;
+      return (
+        <button
+          key={node.path}
+          type="button"
+          onClick={() => setActivePath(node.file?.path || "")}
+          className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition ${
+            isActive
+              ? "bg-emerald-100 font-semibold text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-200"
+              : "text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-white/10"
+          }`}
+          style={{ paddingLeft: `${22 + level * 14}px` }}
+          title={node.file.path}
+        >
+          <span className="w-8 shrink-0 rounded bg-gray-200 px-1 py-0.5 text-center text-[9px] font-bold text-gray-600 dark:bg-white/10 dark:text-gray-300">
+            {getFileIcon(node.file)}
+          </span>
+          <span className="truncate">{node.name}</span>
+        </button>
+      );
+    });
+
+  const workspace = (
+    <>
+      {!isMobile ? (
+        <button
+          type="button"
+          onPointerDown={(event) => {
+            event.preventDefault();
+            setIsResizing(true);
+          }}
+          className="absolute inset-y-0 left-0 z-10 flex w-3 cursor-col-resize items-center justify-center border-r border-gray-200 bg-gray-50 text-gray-400 transition hover:bg-emerald-50 hover:text-emerald-600 dark:border-white/10 dark:bg-gray-900 dark:hover:bg-emerald-950/40"
+          aria-label="Resize preview"
+        >
+          <span className="h-12 w-1 rounded-full bg-current/40" />
+        </button>
+      ) : null}
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 dark:border-white/10">
+          <div className="flex min-w-0 items-center gap-2">
+            {isMobile ? (
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-full p-2 text-gray-500 transition hover:bg-gray-100 dark:hover:bg-white/10"
+                aria-label="Back to AI chat"
+              >
+                ←
+              </button>
+            ) : null}
+            <div className="min-w-0">
+              <p className="truncate text-sm font-bold text-gray-950 dark:text-white">{artifact?.title || "AI preview"}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{files.length} file{files.length === 1 ? "" : "s"} connected</p>
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            <button type="button" onClick={downloadPdf} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/10">
+              <FileText size={14} />
+              PDF
+            </button>
+            <button type="button" onClick={downloadWord} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/10">
+              <Download size={14} />
+              Word
+            </button>
+            {!isMobile ? (
+              <button type="button" onClick={onClose} className="rounded-full p-2 text-gray-500 transition hover:bg-gray-100 dark:hover:bg-white/10" aria-label="Collapse preview">
+                <PanelRightOpen size={18} />
+              </button>
+            ) : null}
+            <button type="button" onClick={onClose} className="rounded-full p-2 text-gray-500 transition hover:bg-gray-100 dark:hover:bg-white/10" aria-label="Close preview">
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        <div className="flex min-h-0 flex-1">
+          <aside className="hidden w-44 shrink-0 border-r border-gray-100 bg-gray-50/80 p-2 dark:border-white/10 dark:bg-white/[0.03] sm:block">
+            <input
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Search files"
+              className="mb-2 w-full rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-emerald-400 dark:border-white/10 dark:bg-gray-950"
+            />
+            <div className="max-h-full overflow-auto pr-1">{renderTree(fileTree)}</div>
+          </aside>
+
+          <div className="flex min-w-0 flex-1 flex-col">
+            <div className="flex min-h-[2.9rem] items-center gap-1 overflow-x-auto border-b border-gray-100 px-2 py-2 dark:border-white/10">
+              {[
+                { id: "preview", label: "Preview", icon: Eye },
+                { id: "code", label: "Code", icon: Code2 },
+                { id: "console", label: "Console", icon: Terminal },
+                { id: "dependencies", label: "Deps", icon: Package },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id as typeof activeTab)}
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                    activeTab === tab.id
+                      ? "bg-gray-950 text-white dark:bg-white dark:text-gray-950"
+                      : "text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-white/10"
+                  }`}
+                >
+                  <tab.icon size={14} />
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {activeTab === "code" ? (
+              <div className="flex min-h-0 flex-1 flex-col">
+                <div className="flex gap-1 overflow-x-auto border-b border-gray-100 bg-gray-50 px-2 py-1 dark:border-white/10 dark:bg-white/[0.03]">
+                  {files.map((file) => (
+                    <button
+                      key={file.path}
+                      type="button"
+                      onClick={() => setActivePath(file.path)}
+                      className={`shrink-0 rounded-md px-2.5 py-1.5 text-xs ${
+                        file.path === activeFile?.path
+                          ? "bg-white font-semibold text-gray-950 shadow-sm dark:bg-gray-900 dark:text-white"
+                          : "text-gray-500 hover:bg-white/70 dark:hover:bg-white/10"
+                      }`}
+                    >
+                      {file.path.split("/").pop()}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between gap-2 border-b border-gray-100 px-3 py-2 text-xs dark:border-white/10">
+                  <span className="truncate font-mono text-gray-500">{activeFile?.path}</span>
+                  <button type="button" onClick={formatActiveFile} className="rounded-lg px-2 py-1 font-semibold text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/10">
+                    Format
+                  </button>
+                </div>
+                <textarea
+                  value={activeFile?.code || ""}
+                  onChange={(event) => updateActiveFile(event.target.value)}
+                  spellCheck={false}
+                  className="min-h-0 flex-1 resize-none bg-[#0d1117] p-4 font-mono text-[13px] leading-6 text-gray-100 outline-none selection:bg-emerald-500/30"
+                />
+              </div>
+            ) : null}
+
+            {activeTab === "preview" ? (
+              <iframe
+                ref={previewFrameRef}
+                title="Artifact preview"
+                srcDoc={previewDocument}
+                className="min-h-0 flex-1 border-0 bg-white"
+                sandbox="allow-forms allow-modals allow-popups allow-scripts"
+              />
+            ) : null}
+
+            {activeTab === "console" ? (
+              <div className="min-h-0 flex-1 overflow-auto bg-gray-950 p-4 font-mono text-xs text-emerald-300">
+                <p>$ orbitbyte preview build</p>
+                <p className="mt-2 text-gray-400">Connected {files.length} generated file{files.length === 1 ? "" : "s"} into the live preview sandbox.</p>
+                <p className="mt-2 text-gray-400">Edits rebuild automatically as you type.</p>
+              </div>
+            ) : null}
+
+            {activeTab === "dependencies" ? (
+              <div className="min-h-0 flex-1 overflow-auto p-4 text-sm text-gray-600 dark:text-gray-300">
+                {dependencies.length > 0 ? (
+                  <div className="space-y-2">
+                    {dependencies.map(([name, version]) => (
+                      <div key={name} className="flex items-center justify-between rounded-xl border border-gray-200 px-3 py-2 dark:border-white/10">
+                        <span className="font-medium text-gray-900 dark:text-white">{name}</span>
+                        <span className="font-mono text-xs">{version}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 dark:border-white/10 dark:bg-white/5">
+                    No external dependencies detected from this response.
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </>
   );
 
   return (
     <AnimatePresence>
       {artifact ? (
-        <motion.aside
-          initial={{ x: 420, y: 80, opacity: 0 }}
-          animate={{ x: 0, y: 0, opacity: 1 }}
-          exit={{ x: 420, y: 120, opacity: 0 }}
-          transition={{ type: "spring", stiffness: 260, damping: 30 }}
-          drag="y"
-          dragDirectionLock
-          dragConstraints={{ top: 0, bottom: 140 }}
-          dragElastic={0.12}
-          onDragEnd={(_, info) => {
-            if (info.offset.y > 90 || info.velocity.y > 650) {
-              onClose();
-            }
-          }}
-          className="fixed inset-x-0 bottom-0 z-[70] max-h-[72vh] overflow-hidden rounded-t-[28px] border border-gray-200 bg-white shadow-2xl dark:border-white/10 dark:bg-gray-950 md:inset-x-auto md:right-4 md:top-20 md:bottom-4 md:h-auto md:max-h-none md:w-[390px] md:rounded-[28px] xl:w-[420px]"
-          aria-label="AI artifact workspace"
-        >
-          <div className="flex justify-center pt-2 md:hidden">
-            <div className="h-1 w-12 rounded-full bg-gray-300 dark:bg-gray-700" />
-          </div>
-          <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 dark:border-white/10">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-bold text-gray-950 dark:text-white">{artifact.title}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">{artifact.language.toUpperCase()} workspace</p>
-            </div>
-            <button type="button" onClick={onClose} className="rounded-full p-2 text-gray-500 transition hover:bg-gray-100 dark:hover:bg-white/10" aria-label="Close artifact workspace">
-              <X size={18} />
-            </button>
-          </div>
-
-          <div className="flex gap-1 overflow-x-auto border-b border-gray-100 px-3 py-2 dark:border-white/10">
-            {[
-              { id: "code", label: "Code", icon: Code2 },
-              { id: "preview", label: "Preview", icon: Eye },
-              { id: "files", label: "Files", icon: FolderTree },
-              { id: "console", label: "Console", icon: Terminal },
-              { id: "dependencies", label: "Deps", icon: Package },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id as typeof activeTab)}
-                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
-                  activeTab === tab.id
-                    ? "bg-gray-950 text-white dark:bg-white dark:text-gray-950"
-                    : "text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-white/10"
-                }`}
-              >
-                <tab.icon size={14} />
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="h-[calc(72vh-7.5rem)] overflow-auto p-4 md:h-[calc(100%-7.5rem)]">
-            {activeTab === "code" ? <CodeBlock language={artifact.language} code={artifact.code} /> : null}
-            {activeTab === "preview" ? (
-              previewable && artifact.language === "html" ? (
-                <iframe
-                  title="Artifact preview"
-                  srcDoc={artifact.code}
-                  className="h-full min-h-[26rem] w-full rounded-2xl border border-gray-200 bg-white dark:border-white/10"
-                />
-              ) : (
-                <div className="flex min-h-[22rem] flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-6 text-center dark:border-white/10 dark:bg-white/5">
-                  <Eye className="mb-3 text-gray-400" />
-                  <p className="font-semibold text-gray-900 dark:text-white">Preview ready for HTML artifacts</p>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">React, Next.js, and Tailwind outputs stay visible in code until a runtime sandbox is connected.</p>
-                </div>
-              )
-            ) : null}
-            {activeTab === "files" ? (
-              <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-sm dark:border-white/10 dark:bg-white/5">
-                <div className="flex items-center gap-2 rounded-xl bg-white px-3 py-2 font-medium text-gray-800 dark:bg-gray-950 dark:text-gray-200">
-                  <FolderTree size={16} />
-                  artifact.{artifact.language === "python" ? "py" : artifact.language === "html" ? "html" : "txt"}
-                </div>
-              </div>
-            ) : null}
-            {activeTab === "console" ? (
-              <div className="rounded-2xl bg-gray-950 p-4 font-mono text-xs text-emerald-300">
-                <p>$ orbitbyte artifact inspect</p>
-                <p className="mt-2 text-gray-400">No runtime errors captured.</p>
-              </div>
-            ) : null}
-            {activeTab === "dependencies" ? (
-              <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600 dark:border-white/10 dark:bg-white/5 dark:text-gray-300">
-                No external dependencies detected from this response.
-              </div>
-            ) : null}
-          </div>
-        </motion.aside>
+        isMobile ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[90] bg-white dark:bg-gray-950"
+            aria-label="AI preview"
+          >
+            {workspace}
+          </motion.div>
+        ) : (
+          <motion.aside
+            initial={{ x: previewWidth, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: previewWidth, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 260, damping: 30 }}
+            className="fixed bottom-4 right-4 top-20 z-[70] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-white/10 dark:bg-gray-950"
+            style={{ width: previewWidth }}
+            aria-label="AI artifact workspace"
+          >
+            {workspace}
+          </motion.aside>
+        )
       ) : null}
     </AnimatePresence>
   );
@@ -810,6 +1339,7 @@ function ChatArea({
   const [showPremiumPrompt, setShowPremiumPrompt] = React.useState(false);
   const [showAttachmentSheet, setShowAttachmentSheet] = React.useState(false);
   const [isArtifactWorkspaceOpen, setIsArtifactWorkspaceOpen] = React.useState(false);
+  const [previewWidth, setPreviewWidth] = React.useState(420);
   const [dismissedArtifactMessageId, setDismissedArtifactMessageId] =
     React.useState<string | null>(null);
   const [stoppedStreamingMessages, setStoppedStreamingMessages] = React.useState<
@@ -871,10 +1401,26 @@ function ChatArea({
   }, []);
 
   React.useEffect(() => {
+    const storedWidth = window.localStorage.getItem(previewWidthStorageKey);
+    if (!storedWidth) return;
+    const parsedWidth = Number(storedWidth);
+    if (Number.isFinite(parsedWidth)) {
+      setPreviewWidth(clampPreviewWidth(parsedWidth));
+    }
+  }, []);
+
+  const handlePreviewWidthChange = React.useCallback((width: number) => {
+    const nextWidth = clampPreviewWidth(width);
+    setPreviewWidth(nextWidth);
+    window.localStorage.setItem(previewWidthStorageKey, String(nextWidth));
+  }, []);
+
+  React.useEffect(() => {
     if (
       activeArtifact &&
       latestArtifactMessage?.id !== dismissedArtifactMessageId &&
-      isAiConversation
+      isAiConversation &&
+      !isMobile
     ) {
       setIsArtifactWorkspaceOpen(true);
     } else if (!activeArtifact || !isAiConversation) {
@@ -884,6 +1430,7 @@ function ChatArea({
     activeArtifact,
     dismissedArtifactMessageId,
     isAiConversation,
+    isMobile,
     latestArtifactMessage?.id,
   ]);
 
@@ -1169,11 +1716,13 @@ function ChatArea({
         onScroll={captureScrollMetrics}
         className={`min-w-0 flex-1 overflow-y-auto overflow-x-hidden transition-[margin] duration-300 ${
           selectedUser ? "pb-48 sm:pb-44" : ""
-        } lg:ml-80 ${
-          isAiConversation && activeArtifact && isArtifactWorkspaceOpen
-            ? "xl:mr-[440px]"
-            : ""
-        }`}
+        } lg:ml-80`}
+        style={{
+          marginRight:
+            !isMobile && isAiConversation && activeArtifact && isArtifactWorkspaceOpen
+              ? `${previewWidth + 24}px`
+              : undefined,
+        }}
       >
         {selectedUser ? (
             <div
@@ -1565,11 +2114,13 @@ function ChatArea({
             isAiConversation
               ? "border-white/50 bg-white/70 shadow-2xl shadow-gray-950/10 backdrop-blur-2xl dark:border-white/10 dark:bg-gray-950/70"
               : "border-gray-200 bg-white dark:border-gray-800 dark:bg-black"
-          } ${
-            isAiConversation && activeArtifact && isArtifactWorkspaceOpen
-              ? "xl:right-[440px]"
-              : ""
           }`}
+          style={{
+            right:
+              !isMobile && isAiConversation && activeArtifact && isArtifactWorkspaceOpen
+                ? `${previewWidth + 24}px`
+                : undefined,
+          }}
         >
           {isSelectionMode ? (
             <div className="border-b border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200">
@@ -1617,6 +2168,16 @@ function ChatArea({
               <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
                 {isAiConversation ? (
                   <div className="flex w-full gap-2 overflow-x-auto pb-1">
+                    {isMobile && activeArtifact ? (
+                      <button
+                        type="button"
+                        onClick={openArtifactWorkspace}
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-100 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-200"
+                      >
+                        <Eye size={14} />
+                        Preview
+                      </button>
+                    ) : null}
                     {/* {[
                       "Continue",
                       "Explain",
@@ -2072,6 +2633,9 @@ function ChatArea({
         <ArtifactWorkspace
           artifact={isArtifactWorkspaceOpen ? activeArtifact : null}
           onClose={closeArtifactWorkspace}
+          isMobile={isMobile}
+          previewWidth={previewWidth}
+          onPreviewWidthChange={handlePreviewWidthChange}
         />
       ) : null}
     </div>
