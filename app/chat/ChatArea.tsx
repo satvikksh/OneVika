@@ -352,6 +352,20 @@ type FileTreeNode = {
   file?: ArtifactFile;
 };
 
+type PreviewRoute = {
+  path: string;
+  filePath: string;
+  title: string;
+  kind: "html" | "next-app" | "next-pages" | "react-component";
+  html?: string;
+  code?: string;
+};
+
+type RouteDiagnostic = {
+  filePath: string;
+  message: string;
+};
+
 const artifactLanguagePattern =
   /\b(react|next\.?js|tsx|jsx|html|css|tailwind|javascript|typescript|json|sql|python|bash|shell|markdown|md|yaml|yml)\b/i;
 
@@ -564,7 +578,299 @@ const escapeHtml = (value: string) =>
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 
+const escapeScriptContent = (value: string) => value.replace(/<\/script/gi, "<\\/script");
+
+const routeTitleFromPath = (path: string) => {
+  if (path === "/") return "Home";
+  return path
+    .split("/")
+    .filter(Boolean)
+    .map((part) => part.replace(/[-_]/g, " "))
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" / ");
+};
+
+const routeFromFilePath = (path: string) => {
+  const normalized = normalizeArtifactPath(path).replace(/\.(tsx|jsx|ts|js|html)$/i, "");
+  if (/^app\/page$/i.test(normalized)) return "/";
+  const appRouteMatch = normalized.match(/^app\/(.+)\/page$/i);
+  if (appRouteMatch?.[1]) return `/${appRouteMatch[1].replace(/\([^)]*\)\//g, "").replace(/\/index$/i, "")}`;
+  if (/^pages\/index$/i.test(normalized) || /^src\/pages\/index$/i.test(normalized)) return "/";
+  const pagesRouteMatch = normalized.match(/^(?:src\/)?pages\/(.+)$/i);
+  if (pagesRouteMatch?.[1]) return `/${pagesRouteMatch[1].replace(/\/index$/i, "")}`;
+  const htmlRoute = normalized.match(/^(?:public\/)?(.+)$/i);
+  if (htmlRoute?.[1] && path.endsWith(".html")) {
+    const route = htmlRoute[1].replace(/^index$/i, "").replace(/\/index$/i, "");
+    return route ? `/${route}` : "/";
+  }
+  const componentRoute = normalized.match(/(?:^|\/)(home|about|contact|dashboard|profile|settings|login|register|pricing|blog)$/i);
+  if (componentRoute?.[1]) {
+    const route = componentRoute[1].toLowerCase();
+    return route === "home" ? "/" : `/${route}`;
+  }
+  return null;
+};
+
+const extractInternalLinks = (value: string) => {
+  const routes = new Set<string>();
+  const patterns = [
+    /\bhref\s*=\s*["'](\/[^"'#?]*)/gi,
+    /\bto\s*=\s*["'](\/[^"'#?]*)/gi,
+    /\bnavigate\(\s*["'](\/[^"'#?]*)/gi,
+    /\brouter\.push\(\s*["'](\/[^"'#?]*)/gi,
+  ];
+
+  patterns.forEach((pattern) => {
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(value)) !== null) {
+      routes.add(match[1].replace(/\/$/, "") || "/");
+    }
+  });
+
+  return routes;
+};
+
+const buildPreviewRoutes = (files: ArtifactFile[]) => {
+  const routeMap = new Map<string, PreviewRoute>();
+
+  files.forEach((file) => {
+    const path = routeFromFilePath(file.path);
+    if (!path) return;
+    const routeKind: PreviewRoute["kind"] = file.path.startsWith("app/")
+      ? "next-app"
+      : file.path.includes("pages/")
+        ? "next-pages"
+        : file.path.endsWith(".html")
+          ? "html"
+          : "react-component";
+
+    routeMap.set(path, {
+      path,
+      filePath: file.path,
+      title: routeTitleFromPath(path),
+      kind: routeKind,
+      html: file.path.endsWith(".html") ? file.code : undefined,
+      code: file.code,
+    });
+  });
+
+  ["/", "/about", "/contact", "/dashboard"].forEach((path) => {
+    if (routeMap.has(path)) return;
+    const matchingFile = files.find((file) =>
+      new RegExp(`(?:^|/)${path === "/" ? "home|index|page" : path.slice(1)}\\.(tsx|jsx|ts|js|html)$`, "i").test(file.path)
+    );
+    if (!matchingFile) return;
+    routeMap.set(path, {
+      path,
+      filePath: matchingFile.path,
+      title: routeTitleFromPath(path),
+      kind: matchingFile.path.endsWith(".html") ? "html" : "react-component",
+      html: matchingFile.path.endsWith(".html") ? matchingFile.code : undefined,
+      code: matchingFile.code,
+    });
+  });
+
+  if (!routeMap.has("/") && routeMap.size > 0) {
+    const firstRoute = Array.from(routeMap.values())[0];
+    routeMap.set("/", { ...firstRoute, path: "/", title: "Home" });
+  }
+
+  return Array.from(routeMap.values()).sort((a, b) => a.path.localeCompare(b.path));
+};
+
+const validatePreviewRoutes = (files: ArtifactFile[], routes: PreviewRoute[]) => {
+  const diagnostics: RouteDiagnostic[] = [];
+  const routePaths = new Set(routes.map((route) => route.path));
+  const filePaths = new Set(files.map((file) => file.path));
+
+  files.forEach((file) => {
+    extractInternalLinks(file.code).forEach((route) => {
+      if (!routePaths.has(route)) {
+        diagnostics.push({
+          filePath: file.path,
+          message: `Route "${route}" is referenced but no generated page file was registered for it.`,
+        });
+      }
+    });
+
+    const importPattern = /import\s+(?:[\s\S]*?\s+from\s+)?["'](\.{1,2}\/[^"']+)["']/g;
+    let match: RegExpExecArray | null;
+    while ((match = importPattern.exec(file.code)) !== null) {
+      const importerParts = file.path.split("/");
+      importerParts.pop();
+      const resolvedParts = [...importerParts, ...match[1].split("/")].filter(Boolean);
+      const normalizedParts: string[] = [];
+      resolvedParts.forEach((part) => {
+        if (part === ".") return;
+        if (part === "..") normalizedParts.pop();
+        else normalizedParts.push(part);
+      });
+      const basePath = normalizedParts.join("/");
+      const hasMatch = ["", ".tsx", ".jsx", ".ts", ".js", ".css", ".json", "/index.tsx", "/index.jsx", "/index.ts", "/index.js"].some((suffix) =>
+        filePaths.has(`${basePath}${suffix}`)
+      );
+      if (!hasMatch) {
+        diagnostics.push({
+          filePath: file.path,
+          message: `Import "${match[1]}" could not be resolved against the generated files.`,
+        });
+      }
+    }
+  });
+
+  return diagnostics;
+};
+
+const buildRouteFallbackMarkup = (route: PreviewRoute) => `
+  <section class="ob-route-fallback">
+    <div>
+      <p class="ob-kicker">${escapeHtml(route.kind === "next-app" ? "Next.js App Router" : route.kind === "next-pages" ? "Next.js Pages Router" : "React route")}</p>
+      <h1>${escapeHtml(route.title)}</h1>
+      <p class="ob-muted">Preview route registered from <strong>${escapeHtml(route.filePath)}</strong>. Edit files on the Code tab; navigation stays inside this preview.</p>
+      <pre>${escapeHtml(route.code || "")}</pre>
+    </div>
+  </section>
+`;
+
+const getHtmlBody = (html: string) => {
+  const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+  return bodyMatch?.[1] || html;
+};
+
+const buildPreviewRuntimeScript = (routes: PreviewRoute[], diagnostics: RouteDiagnostic[]) => {
+  const runtimeRoutes = routes.map((route) => ({
+    ...route,
+    html: route.html ? getHtmlBody(route.html) : buildRouteFallbackMarkup(route),
+    code: undefined,
+  }));
+
+  return `<script>
+(() => {
+  const routes = ${escapeScriptContent(JSON.stringify(runtimeRoutes))};
+  const diagnostics = ${escapeScriptContent(JSON.stringify(diagnostics))};
+  const routeByPath = new Map(routes.map((route) => [route.path, route]));
+  const appRoot = document.querySelector("[data-ob-preview-root]") || document.getElementById("root") || document.getElementById("app") || document.body;
+
+  const normalizePath = (value) => {
+    try {
+      const url = new URL(value, window.location.href);
+      return url.pathname.replace(/\\/$/, "") || "/";
+    } catch {
+      return "/";
+    }
+  };
+
+  const showOverlay = (title, detail, filePath, lineNumber) => {
+    let overlay = document.getElementById("ob-preview-error-overlay");
+    if (!overlay) {
+      overlay = document.createElement("div");
+      overlay.id = "ob-preview-error-overlay";
+      document.body.appendChild(overlay);
+    }
+    overlay.innerHTML = '<div class="ob-error-card"><div class="ob-error-title"></div><div class="ob-error-location"></div><pre class="ob-error-detail"></pre></div>';
+    overlay.querySelector(".ob-error-title").textContent = title || "Preview routing error";
+    overlay.querySelector(".ob-error-location").textContent = [filePath, lineNumber ? "line " + lineNumber : ""].filter(Boolean).join(": ");
+    overlay.querySelector(".ob-error-detail").textContent = detail || "";
+  };
+
+  const hideOverlay = () => {
+    document.getElementById("ob-preview-error-overlay")?.remove();
+  };
+
+  const renderRoute = (path, options = {}) => {
+    const normalized = normalizePath(path);
+    const route = routeByPath.get(normalized);
+    hideOverlay();
+
+    if (!route) {
+      showOverlay(
+        "Route is not registered",
+        "No generated page file exists for " + normalized + ". Registered routes: " + routes.map((item) => item.path).join(", "),
+        "preview-router",
+        1
+      );
+      return;
+    }
+
+    if (!options.skipHistory && window.location.pathname !== normalized) {
+      window.history.pushState({ obPreviewRoute: normalized }, "", normalized);
+    }
+
+    if (route.html && appRoot) {
+      appRoot.innerHTML = route.html;
+    }
+
+    document.querySelectorAll("a[href]").forEach((link) => {
+      const linkPath = normalizePath(link.getAttribute("href") || "/");
+      link.toggleAttribute("aria-current", linkPath === normalized);
+    });
+    document.title = route.title || "OrbitByte Preview";
+  };
+
+  window.addEventListener("click", (event) => {
+    const link = event.target?.closest?.("a[href]");
+    if (!link) return;
+    const href = link.getAttribute("href") || "";
+    if (/^(https?:|mailto:|tel:|#)/i.test(href)) return;
+    const path = normalizePath(href);
+    if (!path.startsWith("/")) return;
+    event.preventDefault();
+    renderRoute(path);
+  });
+
+  window.addEventListener("popstate", () => renderRoute(window.location.pathname, { skipHistory: true }));
+
+  window.addEventListener("error", (event) => {
+    const stack = event.error?.stack || "";
+    const locationMatch = stack.match(/([^\\s()]+):(\\d+):(\\d+)/);
+    showOverlay(
+      "Runtime error",
+      event.message || stack,
+      locationMatch?.[1] || event.filename || "preview",
+      locationMatch?.[2] || event.lineno
+    );
+  });
+
+  window.addEventListener("unhandledrejection", (event) => {
+    const reason = event.reason;
+    const stack = reason?.stack || String(reason || "Unhandled promise rejection");
+    const locationMatch = stack.match(/([^\\s()]+):(\\d+):(\\d+)/);
+    showOverlay("Unhandled preview error", stack, locationMatch?.[1] || "preview", locationMatch?.[2]);
+  });
+
+  renderRoute(window.location.pathname || "/", { skipHistory: true });
+  if (diagnostics.length > 0) {
+    showOverlay(
+      "Preview verified with warnings",
+      diagnostics.map((item) => item.filePath + ": " + item.message).join("\\n"),
+      diagnostics[0].filePath,
+      1
+    );
+  }
+  window.__orbitbytePreviewRouter = { routes, diagnostics, navigate: renderRoute };
+})();
+</script>`;
+};
+
 const buildPreviewDocument = (files: ArtifactFile[]) => {
+  const routes = buildPreviewRoutes(files);
+  const diagnostics = validatePreviewRoutes(files, routes);
+  const runtimeScript = buildPreviewRuntimeScript(routes, diagnostics);
+  const routerStyles = `
+    <style>
+      [aria-current="true"] { font-weight: 700; text-decoration: underline; text-underline-offset: 4px; }
+      .ob-route-fallback { min-height: 100vh; display: grid; place-items: center; padding: 32px; background: #f8fafc; color: #111827; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .ob-route-fallback > div { width: min(860px, 100%); border: 1px solid #d1d5db; border-radius: 18px; background: white; box-shadow: 0 20px 50px rgba(15, 23, 42, .12); padding: 24px; }
+      .ob-route-fallback h1 { margin: 0 0 10px; font-size: clamp(28px, 5vw, 48px); line-height: 1; }
+      .ob-kicker { margin: 0 0 8px; color: #047857; font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+      .ob-muted { color: #4b5563; }
+      .ob-route-fallback pre { max-height: 50vh; overflow: auto; background: #0f172a; color: #d1fae5; border-radius: 14px; padding: 16px; white-space: pre-wrap; font-size: 12px; line-height: 1.6; }
+      #ob-preview-error-overlay { position: fixed; inset: 16px; z-index: 2147483647; pointer-events: none; display: flex; align-items: flex-start; justify-content: center; }
+      .ob-error-card { width: min(760px, 100%); margin-top: 12px; border: 1px solid #fecaca; border-radius: 16px; background: #fff1f2; color: #7f1d1d; box-shadow: 0 24px 80px rgba(127, 29, 29, .22); padding: 16px; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .ob-error-title { font-size: 15px; font-weight: 800; }
+      .ob-error-location { margin-top: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; font-size: 12px; color: #be123c; }
+      .ob-error-detail { margin: 10px 0 0; max-height: 42vh; overflow: auto; white-space: pre-wrap; font-size: 12px; line-height: 1.55; color: #7f1d1d; }
+    </style>`;
   const htmlFile =
     files.find((file) => file.path.toLowerCase().endsWith("index.html")) ||
     files.find((file) => file.language === "html");
@@ -577,44 +883,57 @@ const buildPreviewDocument = (files: ArtifactFile[]) => {
   if (htmlFile) {
     const styleTags = cssFiles.map((file) => `<style data-file="${escapeHtml(file.path)}">\n${file.code}\n</style>`).join("\n");
     const scriptTags = scriptFiles
-      .map((file) => `<script type="module" data-file="${escapeHtml(file.path)}">\n${file.code}\n</script>`)
+      .map((file) => `<script type="module" data-file="${escapeHtml(file.path)}">\n${escapeScriptContent(file.code)}\n//# sourceURL=${file.path}\n</script>`)
       .join("\n");
-    const withStyles = htmlFile.code.includes("</head>")
-      ? htmlFile.code.replace("</head>", `${styleTags}\n</head>`)
-      : `${styleTags}\n${htmlFile.code}`;
-    return withStyles.includes("</body>")
-      ? withStyles.replace("</body>", `${scriptTags}\n</body>`)
-      : `${withStyles}\n${scriptTags}`;
-  }
-
-  if (reactFiles.length > 0) {
-    const appFile =
-      reactFiles.find((file) => /(?:^|\/)App\.(tsx|jsx)$/.test(file.path)) ||
-      reactFiles.find((file) => /(?:^|\/)(main|index)\.(tsx|jsx)$/.test(file.path)) ||
-      reactFiles[0];
+    const headMatch = htmlFile.code.match(/<head[^>]*>([\s\S]*?)<\/head>/i);
+    const body = getHtmlBody(htmlFile.code);
 
     return `<!doctype html>
 <html>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    ${headMatch?.[1] || ""}
+    ${routerStyles}
+    ${styleTags}
+  </head>
+  <body>
+    <div data-ob-preview-root>${body}</div>
+    ${scriptTags}
+    ${runtimeScript}
+  </body>
+</html>`;
+  }
+
+  if (reactFiles.length > 0) {
+    const navRoutes = routes.length > 0 ? routes : [{
+      path: "/",
+      filePath: reactFiles[0].path,
+      title: "Home",
+      kind: "react-component" as const,
+      code: reactFiles[0].code,
+    }];
+
+    return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    ${routerStyles}
     <style>
       body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f8fafc; color: #111827; }
-      .notice { min-height: 100vh; display: grid; place-items: center; padding: 32px; }
-      .panel { max-width: 760px; border: 1px solid #d1d5db; border-radius: 18px; background: white; box-shadow: 0 20px 50px rgba(15, 23, 42, .12); padding: 24px; }
-      pre { max-height: 50vh; overflow: auto; background: #0f172a; color: #d1fae5; border-radius: 14px; padding: 16px; white-space: pre-wrap; }
+      .ob-preview-nav { position: sticky; top: 0; z-index: 10; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; border-bottom: 1px solid #e5e7eb; background: rgba(255,255,255,.92); backdrop-filter: blur(12px); padding: 12px 16px; }
+      .ob-preview-nav a { color: #065f46; text-decoration: none; border-radius: 999px; padding: 8px 12px; }
+      .ob-preview-nav a:hover { background: #ecfdf5; }
       ${cssFiles.map((file) => file.code).join("\n")}
     </style>
   </head>
   <body>
-    <main class="notice">
-      <section class="panel">
-        <h1>React project workspace</h1>
-        <p>All generated files are connected in the editor and file explorer. Browser preview needs a JSX/TSX compiler dependency to execute React modules safely.</p>
-        <p><strong>Entry file:</strong> ${escapeHtml(appFile.path)}</p>
-        <pre>${escapeHtml(appFile.code)}</pre>
-      </section>
-    </main>
+    <nav class="ob-preview-nav">
+      ${navRoutes.map((route) => `<a href="${escapeHtml(route.path)}">${escapeHtml(route.title)}</a>`).join("")}
+    </nav>
+    <main data-ob-preview-root></main>
+    ${runtimeScript}
   </body>
 </html>`;
   }
@@ -627,10 +946,12 @@ const buildPreviewDocument = (files: ArtifactFile[]) => {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>${css}</style>
+    ${routerStyles}
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app" data-ob-preview-root></div>
     ${scripts}
+    ${runtimeScript}
   </body>
 </html>`;
 };

@@ -994,7 +994,7 @@ async function streamOpenRouterReply(messages, onDelta) {
                     messageCount: messages.length,
                     baseUrl: OPENROUTER_BASE_URL,
                     timeoutMs: AI_PROVIDER_TIMEOUT_MS,
-                    maxTokens: Number(process.env.OPENROUTER_MAX_TOKENS || "16384"),
+                    maxTokens: Number(process.env.OPENROUTER_MAX_TOKENS || "40000"),
                     stream: true,
                 });
                 const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
@@ -1008,7 +1008,7 @@ async function streamOpenRouterReply(messages, onDelta) {
                     body: JSON.stringify({
                         model,
                         messages,
-                        max_tokens: Number(process.env.OPENROUTER_MAX_TOKENS || "16384"),
+                        max_tokens: Number(process.env.OPENROUTER_MAX_TOKENS || "40000"),
                         temperature: Number(process.env.OPENROUTER_TEMPERATURE || "0.7"),
                         stream: true,
                     }),

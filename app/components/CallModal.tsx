@@ -1,21 +1,74 @@
 "use client";
 
 import {
+  Maximize2,
   Mic,
   MicOff,
+  Minimize2,
   Phone,
   PhoneOff,
   MonitorUp,
+  Move,
   Volume2,
   VolumeX,
   Video,
   VideoOff,
   Users,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useCall } from "../context/CallContext";
 import CallParticipantTile from "./CallParticipantTile";
+
+type CallWindowRect = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+type ResizeDirection = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
+
+const minCallWindow = {
+  width: 320,
+  height: 280,
+};
+
+const getViewportSize = () => ({
+  width: typeof window === "undefined" ? 1280 : window.innerWidth,
+  height: typeof window === "undefined" ? 800 : window.innerHeight,
+});
+
+const clamp = (value: number, min: number, max: number) =>
+  Math.min(Math.max(value, min), max);
+
+const clampWindowRect = (rect: CallWindowRect) => {
+  const viewport = getViewportSize();
+  const maxWidth = Math.max(minCallWindow.width, viewport.width - 24);
+  const maxHeight = Math.max(minCallWindow.height, viewport.height - 24);
+  const width = clamp(rect.width, minCallWindow.width, maxWidth);
+  const height = clamp(rect.height, minCallWindow.height, maxHeight);
+
+  return {
+    width,
+    height,
+    x: clamp(rect.x, 12, Math.max(12, viewport.width - width - 12)),
+    y: clamp(rect.y, 12, Math.max(12, viewport.height - height - 12)),
+  };
+};
+
+const getDefaultCallWindowRect = (video: boolean): CallWindowRect => {
+  const viewport = getViewportSize();
+  const width = video ? Math.min(420, viewport.width - 32) : Math.min(360, viewport.width - 32);
+  const height = video ? Math.min(700, viewport.height - 32) : Math.min(360, viewport.height - 32);
+
+  return clampWindowRect({
+    width,
+    height,
+    x: viewport.width - width - 24,
+    y: Math.max(24, (viewport.height - height) / 2),
+  });
+};
 
 export default function CallModal() {
   const {
@@ -41,6 +94,20 @@ export default function CallModal() {
   } = useCall();
   const { data: session } = useSession();
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [isDesktopViewport, setIsDesktopViewport] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [windowRect, setWindowRect] = useState<CallWindowRect>(() =>
+    getDefaultCallWindowRect(true)
+  );
+  const dragStateRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    startRect: CallWindowRect;
+    mode: "move" | "resize";
+    direction?: ResizeDirection;
+  } | null>(null);
 
   useEffect(() => {
     if (activeCall?.status !== "connected") {
@@ -54,6 +121,109 @@ export default function CallModal() {
 
     return () => window.clearInterval(timer);
   }, [activeCall?.status, activeCall?.callId]);
+
+  useEffect(() => {
+    const updateViewportMode = () => {
+      setIsDesktopViewport(window.innerWidth >= 768);
+      setWindowRect((current) => clampWindowRect(current));
+    };
+
+    updateViewportMode();
+    window.addEventListener("resize", updateViewportMode);
+    return () => window.removeEventListener("resize", updateViewportMode);
+  }, []);
+
+  useEffect(() => {
+    if (!activeCall?.callId) return;
+    const frame = window.requestAnimationFrame(() => {
+      setElapsedSeconds(0);
+      setIsMinimized(false);
+      setIsFullscreen(false);
+      setWindowRect(getDefaultCallWindowRect(activeCall.video));
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeCall?.callId, activeCall?.video]);
+
+  const handleWindowPointerMove = useCallback((event: PointerEvent) => {
+    const state = dragStateRef.current;
+    if (!state) return;
+
+    const dx = event.clientX - state.startX;
+    const dy = event.clientY - state.startY;
+
+    if (state.mode === "move") {
+      setWindowRect(
+        clampWindowRect({
+          ...state.startRect,
+          x: state.startRect.x + dx,
+          y: state.startRect.y + dy,
+        })
+      );
+      return;
+    }
+
+    const direction = state.direction || "se";
+    const nextRect = { ...state.startRect };
+
+    if (direction.includes("e")) {
+      nextRect.width = state.startRect.width + dx;
+    }
+    if (direction.includes("s")) {
+      nextRect.height = state.startRect.height + dy;
+    }
+    if (direction.includes("w")) {
+      nextRect.width = state.startRect.width - dx;
+      nextRect.x = state.startRect.x + dx;
+    }
+    if (direction.includes("n")) {
+      nextRect.height = state.startRect.height - dy;
+      nextRect.y = state.startRect.y + dy;
+    }
+
+    setWindowRect(clampWindowRect(nextRect));
+  }, []);
+
+  const finishWindowInteraction = useCallback(() => {
+    dragStateRef.current = null;
+    window.removeEventListener("pointermove", handleWindowPointerMove);
+  }, [handleWindowPointerMove]);
+
+  useEffect(() => {
+    return () => {
+      window.removeEventListener("pointermove", handleWindowPointerMove);
+      window.removeEventListener("pointerup", finishWindowInteraction);
+      window.removeEventListener("pointercancel", finishWindowInteraction);
+    };
+  }, [finishWindowInteraction, handleWindowPointerMove]);
+
+  const beginWindowInteraction = useCallback(
+    (
+      event: React.PointerEvent<HTMLElement>,
+      mode: "move" | "resize",
+      direction?: ResizeDirection
+    ) => {
+      if (!isDesktopViewport || isFullscreen) return;
+      event.preventDefault();
+      dragStateRef.current = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        startRect: windowRect,
+        mode,
+        direction,
+      };
+      window.addEventListener("pointermove", handleWindowPointerMove);
+      window.addEventListener("pointerup", finishWindowInteraction, { once: true });
+      window.addEventListener("pointercancel", finishWindowInteraction, { once: true });
+    },
+    [
+      finishWindowInteraction,
+      handleWindowPointerMove,
+      isDesktopViewport,
+      isFullscreen,
+      windowRect,
+    ]
+  );
 
   const formattedDuration = useMemo(() => {
     const minutes = Math.floor(elapsedSeconds / 60)
@@ -132,154 +302,277 @@ export default function CallModal() {
       ? "Connecting..."
       : formattedDuration;
   const activeError = screenShareError || connectError;
+  const displayAvatar = primaryRemote?.avatar;
+  const callTitle = activeCall.isGroup ? "Group call" : otherNames;
+  const isFloatingDesktop = isDesktopViewport && !isFullscreen;
+  const resizeHandles: Array<{ direction: ResizeDirection; className: string }> = [
+    { direction: "n", className: "left-3 right-3 top-0 h-2 cursor-n-resize" },
+    { direction: "s", className: "bottom-0 left-3 right-3 h-2 cursor-s-resize" },
+    { direction: "e", className: "bottom-3 right-0 top-3 w-2 cursor-e-resize" },
+    { direction: "w", className: "bottom-3 left-0 top-3 w-2 cursor-w-resize" },
+    { direction: "ne", className: "right-0 top-0 h-4 w-4 cursor-ne-resize" },
+    { direction: "nw", className: "left-0 top-0 h-4 w-4 cursor-nw-resize" },
+    { direction: "se", className: "bottom-0 right-0 h-4 w-4 cursor-se-resize" },
+    { direction: "sw", className: "bottom-0 left-0 h-4 w-4 cursor-sw-resize" },
+  ];
 
-  return (
-    <div className="fixed inset-0 z-[100] flex flex-col bg-black text-white">
-      <div className="flex items-center justify-between px-4 py-3 sm:px-5 sm:py-4">
-        <div>
-          <p className="text-sm font-semibold">
-            {activeCall.isGroup ? "Group call" : otherNames}
-          </p>
-          <p className="text-xs text-gray-400">{statusText}</p>
+  const avatarNode = (
+    <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-blue-600/20 ring-1 ring-white/10">
+      {displayAvatar ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={displayAvatar} alt="" className="h-full w-full object-cover" />
+      ) : activeCall.video ? (
+        <Video size={18} className="text-blue-300" />
+      ) : (
+        <Phone size={18} className="text-blue-300" />
+      )}
+    </div>
+  );
+
+  const callBody = (
+    <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 sm:px-4 sm:pb-4">
+      {isRinging ? (
+        <div className="flex h-full min-h-[15rem] flex-col items-center justify-center gap-3 text-gray-400">
+          <div className="flex h-28 w-28 animate-pulse items-center justify-center overflow-hidden rounded-full bg-blue-600/20 ring-4 ring-white/10">
+            {primaryRemote?.avatar ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={primaryRemote.avatar} alt="" className="h-full w-full object-cover" />
+            ) : activeCall.video ? (
+              <Video size={36} />
+            ) : (
+              <Phone size={36} />
+            )}
+          </div>
+          <p className="text-lg font-medium text-white">{otherNames}</p>
+          <p className="text-sm">{activeCall.status === "connecting" ? "Connecting..." : "Calling..."}</p>
         </div>
-        {activeError ? (
-          <p className="max-w-[52vw] truncate text-right text-xs text-red-400">
-            {activeError}
-          </p>
-        ) : null}
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 sm:px-5 sm:pb-4">
-        {isRinging ? (
-          <div className="flex h-full flex-col items-center justify-center gap-3 text-gray-400">
-            <div className="flex h-28 w-28 animate-pulse items-center justify-center overflow-hidden rounded-full bg-blue-600/20 ring-4 ring-white/10">
-              {primaryRemote?.avatar ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={primaryRemote.avatar} alt="" className="h-full w-full object-cover" />
-              ) : activeCall.video ? (
-                <Video size={36} />
-              ) : (
-                <Phone size={36} />
-              )}
+      ) : !activeCall.video ? (
+        <div className="flex h-full min-h-[13rem] flex-col items-center justify-center gap-4 text-center">
+          <div className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-full bg-gray-800 ring-4 ring-white/10 sm:h-32 sm:w-32">
+            {primaryRemote?.avatar ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={primaryRemote.avatar} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <Phone size={42} className="text-gray-300" />
+            )}
+          </div>
+          <div>
+            <p className="text-xl font-semibold">{otherNames}</p>
+            <p className="mt-1 text-xs text-emerald-400">Connected</p>
+            <p className="mt-1 text-sm text-gray-400">{formattedDuration}</p>
+          </div>
+        </div>
+      ) : remoteTiles.length <= 1 && primaryRemoteTile ? (
+        <div className="relative h-full min-h-[20rem] overflow-hidden rounded-2xl bg-gray-950">
+          <CallParticipantTile tile={primaryRemoteTile} fill />
+          {localTile ? (
+            <div className="absolute bottom-3 right-3 w-28 overflow-hidden rounded-xl border border-white/20 shadow-2xl sm:w-36">
+              <CallParticipantTile tile={localTile} compact />
             </div>
-            <p className="text-lg font-medium text-white">{otherNames}</p>
-            <p className="text-sm">{activeCall.status === "connecting" ? "Connecting..." : "Calling..."}</p>
-          </div>
-        ) : !activeCall.video ? (
-          <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
-            <div className="flex h-32 w-32 items-center justify-center overflow-hidden rounded-full bg-gray-800 ring-4 ring-white/10">
-              {primaryRemote?.avatar ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={primaryRemote.avatar} alt="" className="h-full w-full object-cover" />
-              ) : (
-                <Phone size={42} className="text-gray-300" />
-              )}
-            </div>
-            <div>
-              <p className="text-xl font-semibold">{otherNames}</p>
-              <p className="mt-1 text-xs text-emerald-400">Connected</p>
-              <p className="mt-1 text-sm text-gray-400">{formattedDuration}</p>
-            </div>
-          </div>
-        ) : remoteTiles.length <= 1 && primaryRemoteTile ? (
-          <div className="relative h-full min-h-[22rem] overflow-hidden rounded-2xl bg-gray-950">
-            <CallParticipantTile tile={primaryRemoteTile} fill />
-            {localTile ? (
-              <div className="absolute bottom-3 right-3 w-28 overflow-hidden rounded-xl border border-white/20 shadow-2xl sm:w-40">
-                <CallParticipantTile tile={localTile} compact />
-              </div>
-            ) : null}
-          </div>
-        ) : (
-          <div
-            className={`grid gap-3 ${
-              tiles.length <= 1
-                ? "grid-cols-1"
-                : tiles.length === 2
-                  ? "grid-cols-1 sm:grid-cols-2"
-                  : "grid-cols-2 sm:grid-cols-3"
-            }`}
-          >
-            {tiles.map((tile) => (
-              <CallParticipantTile key={tile.identity} tile={tile} />
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="flex flex-wrap items-center justify-center gap-2 px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 sm:gap-4 sm:px-5 sm:py-6">
-        <button
-          onClick={toggleMic}
-          className={`flex h-11 w-11 items-center justify-center rounded-full transition sm:h-12 sm:w-12 ${
-            isMicEnabled ? "bg-gray-700 hover:bg-gray-600" : "bg-red-600 hover:bg-red-500"
+          ) : null}
+        </div>
+      ) : (
+        <div
+          className={`grid gap-3 ${
+            tiles.length <= 1
+              ? "grid-cols-1"
+              : tiles.length === 2
+                ? "grid-cols-1 sm:grid-cols-2"
+                : "grid-cols-2 sm:grid-cols-3"
           }`}
-          aria-label="Toggle microphone"
         >
-          {isMicEnabled ? <Mic size={18} /> : <MicOff size={18} />}
-        </button>
+          {tiles.map((tile) => (
+            <CallParticipantTile key={tile.identity} tile={tile} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
-        {activeCall.video ? (
-          <button
-            onClick={toggleCamera}
-            className={`flex h-11 w-11 items-center justify-center rounded-full transition sm:h-12 sm:w-12 ${
-              isCameraEnabled ? "bg-gray-700 hover:bg-gray-600" : "bg-red-600 hover:bg-red-500"
-            }`}
-            aria-label="Toggle camera"
-          >
-            {isCameraEnabled ? <Video size={18} /> : <VideoOff size={18} />}
-          </button>
-        ) : null}
+  const callControls = (
+    <div className="flex flex-wrap items-center justify-center gap-2 px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 sm:gap-3 sm:px-4 sm:py-4">
+      <button
+        onClick={toggleMic}
+        className={`flex h-11 w-11 items-center justify-center rounded-full transition sm:h-12 sm:w-12 ${
+          isMicEnabled ? "bg-gray-700 hover:bg-gray-600" : "bg-red-600 hover:bg-red-500"
+        }`}
+        aria-label="Toggle microphone"
+      >
+        {isMicEnabled ? <Mic size={18} /> : <MicOff size={18} />}
+      </button>
 
+      {activeCall.video ? (
         <button
-          onClick={toggleSpeaker}
-          disabled={!isSpeakerToggleSupported}
+          onClick={toggleCamera}
           className={`flex h-11 w-11 items-center justify-center rounded-full transition sm:h-12 sm:w-12 ${
-            !isSpeakerToggleSupported
-              ? "cursor-not-allowed bg-gray-900 text-gray-600"
-              : isSpeakerEnabled
-                ? "bg-gray-700 hover:bg-gray-600"
-                : "bg-gray-800 text-gray-400 hover:bg-gray-700"
+            isCameraEnabled ? "bg-gray-700 hover:bg-gray-600" : "bg-red-600 hover:bg-red-500"
           }`}
-          aria-label="Toggle speaker"
+          aria-label="Toggle camera"
+        >
+          {isCameraEnabled ? <Video size={18} /> : <VideoOff size={18} />}
+        </button>
+      ) : null}
+
+      <button
+        onClick={toggleSpeaker}
+        disabled={!isSpeakerToggleSupported}
+        className={`flex h-11 w-11 items-center justify-center rounded-full transition sm:h-12 sm:w-12 ${
+          !isSpeakerToggleSupported
+            ? "cursor-not-allowed bg-gray-900 text-gray-600"
+            : isSpeakerEnabled
+              ? "bg-gray-700 hover:bg-gray-600"
+              : "bg-gray-800 text-gray-400 hover:bg-gray-700"
+        }`}
+        aria-label="Toggle speaker"
+        title={
+          isSpeakerToggleSupported
+            ? "Toggle speaker"
+            : "Speaker selection is not supported in this browser"
+        }
+      >
+        {isSpeakerEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
+      </button>
+
+      {activeCall.video ? (
+        <button
+          onClick={toggleScreenShare}
+          disabled={!isScreenShareSupported}
+          className={`flex h-11 w-11 items-center justify-center rounded-full transition sm:h-12 sm:w-12 ${
+            !isScreenShareSupported
+              ? "cursor-not-allowed bg-gray-900 text-gray-600"
+              : isScreenShareEnabled
+                ? "bg-blue-600 hover:bg-blue-500"
+                : "bg-gray-700 hover:bg-gray-600"
+          }`}
+          aria-label="Toggle screen share"
           title={
-            isSpeakerToggleSupported
-              ? "Toggle speaker"
-              : "Speaker selection is not supported in this browser"
+            isScreenShareSupported
+              ? "Toggle screen share"
+              : "Screen sharing is not supported in this browser"
           }
         >
-          {isSpeakerEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
+          <MonitorUp size={18} />
         </button>
+      ) : null}
 
-        {activeCall.video ? (
-          <button
-            onClick={toggleScreenShare}
-            disabled={!isScreenShareSupported}
-            className={`flex h-11 w-11 items-center justify-center rounded-full transition sm:h-12 sm:w-12 ${
-              !isScreenShareSupported
-                ? "cursor-not-allowed bg-gray-900 text-gray-600"
-                : isScreenShareEnabled
-                  ? "bg-blue-600 hover:bg-blue-500"
-                  : "bg-gray-700 hover:bg-gray-600"
-            }`}
-            aria-label="Toggle screen share"
-            title={
-              isScreenShareSupported
-                ? "Toggle screen share"
-                : "Screen sharing is not supported in this browser"
+      <button
+        onClick={isRinging ? cancelOutgoingCall : endCall}
+        className="flex h-12 w-12 items-center justify-center rounded-full bg-red-600 transition hover:bg-red-500 sm:h-14 sm:w-14"
+        aria-label="End call"
+      >
+        <PhoneOff size={22} />
+      </button>
+    </div>
+  );
+
+  if (isDesktopViewport && isMinimized) {
+    return (
+      <button
+        type="button"
+        onClick={() => setIsMinimized(false)}
+        className="fixed bottom-5 right-5 z-[100] flex max-w-[calc(100vw-2rem)] items-center gap-3 rounded-2xl border border-white/10 bg-gray-950 px-3 py-2 text-left text-white shadow-2xl shadow-black/30 transition hover:-translate-y-0.5 hover:bg-gray-900"
+        aria-label="Restore call window"
+      >
+        {avatarNode}
+        <div className="min-w-0">
+          <p className="max-w-40 truncate text-sm font-semibold">{callTitle}</p>
+          <p className="text-xs text-gray-400">{statusText}</p>
+          <p className="mt-1 flex items-center gap-2 text-[11px] text-gray-500">
+            {isMicEnabled ? <Mic size={12} /> : <MicOff size={12} className="text-red-400" />}
+            {activeCall.video ? (
+              isCameraEnabled ? <Video size={12} /> : <VideoOff size={12} className="text-red-400" />
+            ) : null}
+          </p>
+        </div>
+      </button>
+    );
+  }
+
+  return (
+    <div
+      className={`fixed z-[100] flex flex-col overflow-hidden bg-black text-white shadow-2xl ${
+        isFloatingDesktop
+          ? "rounded-2xl border border-white/10 shadow-black/35"
+          : "inset-0"
+      }`}
+      style={
+        isFloatingDesktop
+          ? {
+              left: windowRect.x,
+              top: windowRect.y,
+              width: windowRect.width,
+              height: windowRect.height,
             }
-          >
-            <MonitorUp size={18} />
-          </button>
-        ) : null}
+          : undefined
+      }
+    >
+      {isFloatingDesktop
+        ? resizeHandles.map((handle) => (
+            <span
+              key={handle.direction}
+              aria-hidden="true"
+              onPointerDown={(event) =>
+                beginWindowInteraction(event, "resize", handle.direction)
+              }
+              className={`absolute z-20 ${handle.className}`}
+            />
+          ))
+        : null}
 
-        <button
-          onClick={isRinging ? cancelOutgoingCall : endCall}
-          className="flex h-12 w-12 items-center justify-center rounded-full bg-red-600 transition hover:bg-red-500 sm:h-14 sm:w-14"
-          aria-label="End call"
-        >
-          <PhoneOff size={22} />
-        </button>
+      <div
+        className={`flex items-center justify-between gap-3 px-4 py-3 sm:px-5 ${
+          isFloatingDesktop ? "cursor-grab select-none active:cursor-grabbing" : ""
+        }`}
+        onPointerDown={(event) => {
+          if ((event.target as HTMLElement).closest("button")) return;
+          beginWindowInteraction(event, "move");
+        }}
+      >
+        <div className="flex min-w-0 items-center gap-3">
+          {avatarNode}
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold">{callTitle}</p>
+            <p className="text-xs text-gray-400">{statusText}</p>
+          </div>
+        </div>
+
+        <div className="flex min-w-0 items-center justify-end gap-2">
+          {activeError ? (
+            <p className="hidden max-w-[16rem] truncate text-right text-xs text-red-400 sm:block">
+              {activeError}
+            </p>
+          ) : null}
+          {isDesktopViewport ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setIsMinimized(true)}
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-gray-200 transition hover:bg-white/15"
+                aria-label="Minimize call"
+              >
+                <Minimize2 size={16} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsFullscreen((current) => !current)}
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-gray-200 transition hover:bg-white/15"
+                aria-label={isFullscreen ? "Restore call window" : "Fullscreen call"}
+              >
+                {isFullscreen ? <Move size={16} /> : <Maximize2 size={16} />}
+              </button>
+            </>
+          ) : null}
+        </div>
       </div>
+
+      {activeError ? (
+        <p className="mx-4 mb-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-300 sm:hidden">
+          {activeError}
+        </p>
+      ) : null}
+
+      {callBody}
+      {callControls}
     </div>
   );
 }
