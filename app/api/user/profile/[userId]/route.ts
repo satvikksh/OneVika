@@ -21,6 +21,30 @@ interface UserProfile {
   phone?: string;
   website?: string;
   status?: string;
+  cover?: string;
+  profession?: string;
+  headline?: string;
+  company?: string;
+  education?: string;
+  resume?: string;
+  portfolio?: string;
+  skills?: unknown[];
+  experiences?: unknown[];
+  experience?: unknown[];
+  educationHistory?: unknown[];
+  educations?: unknown[];
+  certifications?: unknown[];
+  certificates?: unknown[];
+  projects?: unknown[];
+  achievements?: unknown[];
+  languages?: unknown[];
+  interests?: string[];
+  recommendations?: unknown[];
+  profileViews?: number;
+  connectionsCount?: number;
+  username?: string;
+  isVerified?: boolean;
+  emailVerified?: boolean;
   lastSeen?: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -36,6 +60,19 @@ type PremiumStatus = {
   isPremium?: boolean;
   premiumExpiresAt?: Date | string | null;
 };
+
+function isSafeStoredImageUrl(value: unknown) {
+  if (typeof value !== "string") return false;
+  if (value === "") return true;
+  if (value.startsWith("/")) return true;
+
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.hostname === "res.cloudinary.com";
+  } catch {
+    return false;
+  }
+}
 
 export async function GET(
   req: NextRequest,
@@ -154,13 +191,33 @@ export async function GET(
     const formattedProfile = {
       id: userProfile._id.toString(),
       name: userProfile.name,
+      username: userProfile.username,
       email: userProfile.email,
       avatar: userProfile.avatar,
+      cover: userProfile.cover,
       bio: userProfile.bio,
       location: userProfile.location,
       phone: userProfile.phone,
       website: userProfile.website,
       status: userProfile.status,
+      profession: userProfile.profession,
+      headline: userProfile.headline,
+      company: userProfile.company,
+      education: userProfile.education,
+      resume: userProfile.resume,
+      portfolio: userProfile.portfolio,
+      skills: userProfile.skills || [],
+      experiences: userProfile.experiences || userProfile.experience || [],
+      educationHistory: userProfile.educationHistory || userProfile.educations || [],
+      certifications: userProfile.certifications || userProfile.certificates || [],
+      projects: userProfile.projects || [],
+      achievements: userProfile.achievements || [],
+      languages: userProfile.languages || [],
+      interests: userProfile.interests || [],
+      recommendations: userProfile.recommendations || [],
+      profileViews: userProfile.profileViews,
+      connectionsCount: userProfile.connectionsCount,
+      isVerified: Boolean(userProfile.isVerified || userProfile.emailVerified),
       joinedDate: userProfile.createdAt.toISOString(),
       lastSeen: userProfile.lastSeen ? userProfile.lastSeen.toISOString() : null,
       social: userProfile.social || {},
@@ -255,14 +312,21 @@ export async function PATCH(
     
     // Define allowed fields that can be updated
     const allowedUpdates = [
-      'name', 'avatar', 'bio', 'location', 'phone', 
-      'website', 'status', 'social'
+      'name', 'avatar', 'cover', 'bio', 'location', 'phone',
+      'website', 'status', 'profession', 'headline', 'company',
+      'education', 'resume', 'portfolio', 'social'
     ];
 
     // Filter updates to only include allowed fields
     const filteredUpdates: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(updates)) {
       if (allowedUpdates.includes(key)) {
+        if ((key === "avatar" || key === "cover") && !isSafeStoredImageUrl(value)) {
+          return NextResponse.json(
+            { error: "Invalid image. Please upload a valid image file." },
+            { status: 400 }
+          );
+        }
         filteredUpdates[key] = value;
       }
     }
