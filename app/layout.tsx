@@ -58,7 +58,7 @@ export default async function RootLayout({
         </Script>
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#000000" />
-        <link rel="icon" href="/icons/icon23.png" />
+        <link rel="icon" href="/icons/icon24.png" />
       </head>
       <body
         className={`${inter.className} antialiased`}

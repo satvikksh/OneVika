@@ -505,7 +505,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
             <Link href="/" className="flex items-center gap-3 group">
               <div className="relative w-10 h-10 transition-transform group-hover:scale-105 max-md:h-9 max-md:w-9">
                 <Image
-                  src="/img/icon23.png"
+                  src="/img/icon24.png"
                   alt="OrbitByte"
                   width={40}
                   height={40}
