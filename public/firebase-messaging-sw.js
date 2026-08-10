@@ -25,8 +25,8 @@ messaging.onBackgroundMessage(function (payload) {
     body: isIncomingCall
       ? `${callerName} is calling`
       : notification.body || "",
-    icon: data.callerAvatar || notification.icon || "/icons/icon24.png",
-    badge: notification.badge || "/icons/icon24.png",
+    icon: data.callerAvatar || notification.icon || "/icons/icon25.png",
+    badge: notification.badge || "/icons/icon25.png",
     tag: isIncomingCall
       ? `incoming_call_${data.callId || data.roomId || "active"}`
       : data.tag || undefined,
