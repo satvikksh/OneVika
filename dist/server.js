@@ -195,8 +195,8 @@ async function pushNotificationToUser(targetUserId, payload) {
                 Urgency: "high",
             },
             notification: {
-                icon: `${APP_URL}/icons/icon-192.png`,
-                badge: `${APP_URL}/icons/icon-192.png`,
+                icon: `${APP_URL}/icons/icon23.png`,
+                badge: `${APP_URL}/icons/icon23.png`,
                 tag: `${payload.type ?? "notification"}_${payload.senderId ?? "system"}`,
                 renotify: true,
             },
@@ -249,8 +249,8 @@ async function pushIncomingCallToUser(targetUserId, payload) {
                 TTL: String(Math.ceil(CALL_RING_TIMEOUT_MS / 1000)),
             },
             notification: {
-                icon: payload.fromAvatar || `${APP_URL}/icons/icon-192.png`,
-                badge: `${APP_URL}/icons/icon-192.png`,
+                icon: payload.fromAvatar || `${APP_URL}/icons/icon23.png`,
+                badge: `${APP_URL}/icons/icon23.png`,
                 tag: `incoming_call_${payload.callId ?? payload.roomId ?? targetUserId}`,
                 renotify: true,
                 requireInteraction: true,
