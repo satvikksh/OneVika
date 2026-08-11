@@ -1076,12 +1076,6 @@ export default function UserProfilePage() {
                 {isUserOnline ? "Online" : formatLastSeen(user.lastSeen)}
               </span>
             </div>
-            {isCurrentUser && (
-              <button onClick={openEdit} className="absolute bottom-3 right-3 inline-flex min-h-11 items-center gap-2 rounded-full bg-white/90 px-3 py-2 text-xs font-bold text-slate-950 shadow-lg transition hover:bg-white sm:bottom-auto sm:top-4">
-                <Camera className="h-4 w-4" />
-                Edit Cover
-              </button>
-            )}
           </div>
 
           <div className="relative px-3 pb-5 sm:px-8 sm:pb-6 lg:px-10">
@@ -1478,7 +1472,7 @@ export default function UserProfilePage() {
         </div>
       </main>
 
-      <div className={`fixed inset-x-0 bottom-0 z-40 border-t px-3 py-2 pb-[calc(.5rem+env(safe-area-inset-bottom))] backdrop-blur-2xl lg:hidden ${isPremiumProfile ? "border-amber-200/10 bg-[#080705]/90" : "border-slate-200 bg-white/90 dark:border-white/10 dark:bg-[#070a12]/90"}`}>
+      <div className={`"border-slate-200 bg-white/90 dark:border-white/10 dark:bg-[#070a12]/90"}`}>
         <div className="mx-auto grid max-w-md grid-cols-3 gap-2">
           <button onClick={isCurrentUser ? openEdit : handleFollowToggle} className={`min-h-11 truncate rounded-full px-2 py-3 text-sm font-bold ${theme.accentBg}`}>
             {isCurrentUser ? "Edit" : user.isFollowing ? "Following" : "Connect"}
