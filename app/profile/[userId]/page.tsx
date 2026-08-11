@@ -1408,9 +1408,15 @@ export default function UserProfilePage() {
             <div className="space-y-5 lg:hidden">
               <MobileInsightSections
                 theme={theme}
+                isCurrentUser={isCurrentUser}
                 completionPercent={completionPercent}
                 completionItems={completionItems}
+                premiumLoading={premiumLoading}
+                premiumStatus={premiumStatus}
+                canRenewPremium={canRenewPremium}
+                premiumActionLoading={premiumActionLoading}
                 premiumError={premiumError}
+                onActivatePremium={handleActivatePremium}
               />
             </div>
           </div>
@@ -2073,23 +2079,70 @@ function ProfileStrength({
 
 function MobileInsightSections({
   theme,
+  isCurrentUser,
   completionPercent,
   completionItems,
+  premiumLoading,
+  premiumStatus,
+  canRenewPremium,
+  premiumActionLoading,
   premiumError,
+  onActivatePremium,
 }: {
   theme: Theme;
+  isCurrentUser: boolean;
   completionPercent: number;
   completionItems: readonly (readonly [string, boolean])[];
+  premiumLoading: boolean;
+  premiumStatus: PremiumStatus | null;
+  canRenewPremium: boolean;
+  premiumActionLoading: boolean;
   premiumError: string | null;
+  onActivatePremium: () => void;
 }) {
   return (
     <>
-      <ProfileStrength theme={theme} completionPercent={completionPercent} completionItems={completionItems} />
-      {premiumError && (
-        <SidebarCard title="Premium Status" icon={Sparkles} theme={theme}>
-          <p className="text-sm text-red-500">{premiumError}</p>
+      {isCurrentUser && (
+        <SidebarCard title="Premium Membership" icon={Sparkles} theme={theme}>
+          <div className="flex flex-col gap-4">
+            <div className="min-w-0">
+              <p className={`text-sm ${theme.muted}`}>
+                {premiumLoading
+                  ? "Checking premium status..."
+                  : premiumStatus?.isPremium
+                    ? `Active, ${premiumStatus.daysRemaining} day(s) left`
+                    : "Inactive"}
+              </p>
+              {premiumStatus?.premiumPlan && (
+                <p className="mt-2 truncate text-base font-black">{premiumStatus.premiumPlan}</p>
+              )}
+              {premiumStatus?.paymentMethod?.last4 && (
+                <p className={`mt-1 truncate text-xs ${theme.muted}`}>
+                  {premiumStatus.paymentMethod.brand || "Card"} ending in {premiumStatus.paymentMethod.last4}
+                </p>
+              )}
+            </div>
+
+            {canRenewPremium ? (
+              <button
+                type="button"
+                onClick={onActivatePremium}
+                disabled={premiumActionLoading || premiumLoading}
+                className={`min-h-11 w-full rounded-full px-4 py-2.5 text-sm font-black transition active:scale-[0.98] disabled:opacity-60 ${theme.accentBg}`}
+              >
+                {premiumActionLoading ? "Redirecting..." : premiumStatus?.isPremium ? "Renew Premium" : "Activate Premium"}
+              </button>
+            ) : (
+              <div className={`rounded-2xl border px-4 py-3 text-sm font-bold ${theme.chip}`}>
+                Premium active
+              </div>
+            )}
+
+            {premiumError && <p className="text-sm text-red-500">{premiumError}</p>}
+          </div>
         </SidebarCard>
       )}
+      <ProfileStrength theme={theme} completionPercent={completionPercent} completionItems={completionItems} />
       <SidebarCard title="Recent Visitors" icon={Eye} theme={theme}><EmptyMini title="No visitor data available" /></SidebarCard>
       <SidebarCard title="Suggested Connections" icon={Users} theme={theme}><EmptyMini title="No suggestions available" /></SidebarCard>
       <SidebarCard title="Communities" icon={CircleDot} theme={theme}><EmptyMini title="No communities joined" /></SidebarCard>

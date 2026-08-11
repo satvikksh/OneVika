@@ -2,10 +2,13 @@ export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import type { UploadApiResponse } from "cloudinary";
 import { authOptions } from "@/app/lib/authOptions";
 import cloudinary from "@/app/lib/cloudinary";
 import { dbConnect } from "@/app/lib/mongodb";
 import User from "@/app/models/User";
+
+const ALLOWED_ORBIT_PETS = new Set(["dog", "cat", "rabbit"]);
 
 export async function POST(req: Request) {
   try {
@@ -22,7 +25,14 @@ export async function POST(req: Request) {
     const bio = formData.get("bio") as string | null;
     const isPrivate = formData.get("isPrivate") === "true";
     const removeAvatar = formData.get("removeAvatar") === "true";
+    const favoritePet = formData.get("favoritePet");
     const file = formData.get("file") as File | null;
+
+    if (favoritePet !== null && (typeof favoritePet !== "string" || !ALLOWED_ORBIT_PETS.has(favoritePet))) {
+      return NextResponse.json({ error: "Invalid Orbit Pet selection" }, { status: 400 });
+    }
+
+    const nextFavoritePet = typeof favoritePet === "string" ? favoritePet : null;
 
     // ✅ Update text fields FIRST (SAFE)
     const user = await User.findOneAndUpdate(
@@ -31,6 +41,7 @@ export async function POST(req: Request) {
         ...(name !== null && { name }),
         ...(bio !== null && { bio }),
         isPrivate,
+        ...(nextFavoritePet && { favoritePet: nextFavoritePet }),
         ...(removeAvatar && { avatar: "" }),
       },
       { new: true }
@@ -45,7 +56,7 @@ export async function POST(req: Request) {
       const bytes = await file.arrayBuffer();
       const buffer = Buffer.from(bytes);
 
-      const uploadResult: any = await new Promise((resolve, reject) => {
+      const uploadResult = await new Promise<UploadApiResponse>((resolve, reject) => {
         cloudinary.uploader.upload_stream(
           { folder: "avatars", resource_type: "image" },
           (error, result) => {

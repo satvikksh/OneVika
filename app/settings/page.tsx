@@ -4,8 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "../theme-provider";
-import { Settings, Save, RotateCcw, Moon, Sun, Bell, Shield, User, Check, AlertCircle, Camera, Trash2 } from "lucide-react";
+import { Settings, Save, RotateCcw, Moon, Sun, Bell, Shield, User, Check, AlertCircle, Camera, Trash2, PawPrint } from "lucide-react";
 import AvatarCropperModal from "../components/AvatarCropperModal";
+import OrbitPet, {
+  DEFAULT_ORBIT_PET,
+  ORBIT_PETS,
+  ORBIT_PET_STORAGE_KEY,
+  OrbitPetKind,
+  normalizeOrbitPet,
+} from "../components/orbit-pet/OrbitPet";
 
 type SettingsState = {
   profile: {
@@ -29,6 +36,9 @@ type SettingsState = {
   privacy: {
     showOnlineStatus: boolean;
     allowTracking: boolean;
+  };
+  orbitPet: {
+    companion: OrbitPetKind;
   };
 };
 
@@ -57,6 +67,9 @@ const DEFAULT_SETTINGS: SettingsState = {
     showOnlineStatus: true,
     allowTracking: false,
   },
+  orbitPet: {
+    companion: DEFAULT_ORBIT_PET,
+  },
 };
 
 export default function SettingsPage() {
@@ -65,7 +78,7 @@ export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
 
   const [settings, setSettings] = useState<SettingsState>(DEFAULT_SETTINGS);
-  const [activeTab, setActiveTab] = useState<"profile" | "appearance" | "feed" | "notifications" | "privacy">("profile");
+  const [activeTab, setActiveTab] = useState<"profile" | "appearance" | "feed" | "notifications" | "privacy" | "orbitPet">("profile");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
@@ -103,7 +116,15 @@ export default function SettingsPage() {
                 isPrivate: Boolean(user.isPrivate),
                 avatar: user.avatar ?? user.image ?? "",
               },
+              orbitPet: {
+                companion: normalizeOrbitPet(user.favoritePet),
+              },
             }));
+
+            localStorage.setItem(
+              ORBIT_PET_STORAGE_KEY,
+              normalizeOrbitPet(user.favoritePet)
+            );
           }
         }
       } catch {
@@ -118,6 +139,21 @@ export default function SettingsPage() {
             ...prev,
             ...localSettings,
             profile: prev.profile,
+            orbitPet: {
+              companion: normalizeOrbitPet(
+                localSettings?.orbitPet?.companion ??
+                  localStorage.getItem(ORBIT_PET_STORAGE_KEY)
+              ),
+            },
+          }));
+        } else {
+          setSettings((prev) => ({
+            ...prev,
+            orbitPet: {
+              companion: normalizeOrbitPet(
+                localStorage.getItem(ORBIT_PET_STORAGE_KEY)
+              ),
+            },
           }));
         }
       } catch {
@@ -159,6 +195,7 @@ export default function SettingsPage() {
       formData.append("bio", settings.profile.bio);
       formData.append("isPrivate", String(settings.profile.isPrivate));
       formData.append("removeAvatar", String(removeAvatar));
+      formData.append("favoritePet", settings.orbitPet.companion);
       if (avatarFile) {
         formData.append("file", avatarFile);
       }
@@ -178,8 +215,10 @@ export default function SettingsPage() {
           feed: settings.feed,
           notifications: settings.notifications,
           privacy: settings.privacy,
+          orbitPet: settings.orbitPet,
         })
       );
+      localStorage.setItem(ORBIT_PET_STORAGE_KEY, settings.orbitPet.companion);
 
       try {
         const profileRefreshRes = await fetch("/api/user/profile", {
@@ -215,9 +254,11 @@ export default function SettingsPage() {
       feed: DEFAULT_SETTINGS.feed,
       notifications: DEFAULT_SETTINGS.notifications,
       privacy: DEFAULT_SETTINGS.privacy,
+      orbitPet: DEFAULT_SETTINGS.orbitPet,
     }));
     setTheme("dark");
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.setItem(ORBIT_PET_STORAGE_KEY, DEFAULT_ORBIT_PET);
   };
 
   const tabs = useMemo(
@@ -225,6 +266,7 @@ export default function SettingsPage() {
       { id: "profile", label: "Profile", icon: User },
       { id: "appearance", label: "Appearance", icon: theme === "dark" ? Sun : Moon },
       { id: "feed", label: "Feed", icon: Settings },
+      { id: "orbitPet", label: "Orbit Pet", icon: PawPrint },
       { id: "notifications", label: "Notifications", icon: Bell },
       { id: "privacy", label: "Privacy", icon: Shield },
     ],
@@ -378,6 +420,61 @@ export default function SettingsPage() {
                 <Toggle label="Auto-play videos" checked={settings.feed.autoPlayVideos} onChange={(checked) => setSettings((s) => ({ ...s, feed: { ...s.feed, autoPlayVideos: checked } }))} />
                 <Toggle label="Mute videos by default" checked={settings.feed.muteVideos} onChange={(checked) => setSettings((s) => ({ ...s, feed: { ...s.feed, muteVideos: checked } }))} />
                 <Toggle label="Show reels" checked={settings.feed.showReels} onChange={(checked) => setSettings((s) => ({ ...s, feed: { ...s.feed, showReels: checked } }))} />
+              </div>
+            )}
+
+            {activeTab === "orbitPet" && (
+              <div className="space-y-5">
+                <div>
+                  <h2 className="text-xl font-bold">Orbit Pet</h2>
+                  <p className="mt-1 text-sm text-white/60">
+                    Choose the companion that appears beside Stories on your Home Feed.
+                  </p>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-3">
+                  {ORBIT_PETS.map((pet) => {
+                    const selected = settings.orbitPet.companion === pet.id;
+                    return (
+                      <div
+                        key={pet.id}
+                        className={`rounded-3xl border p-4 transition ${
+                          selected
+                            ? "border-indigo-300/70 bg-indigo-500/15 shadow-[0_18px_60px_rgba(99,102,241,0.16)]"
+                            : "border-white/10 bg-black/20 hover:border-white/20 hover:bg-white/[0.07]"
+                        }`}
+                      >
+                        <OrbitPet kind={pet.id} preview className="mx-auto max-w-[8rem]" />
+                        <div className="mt-4 min-w-0 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <span className="text-lg" aria-hidden="true">{pet.emoji}</span>
+                            <h3 className="truncate text-lg font-black">{pet.name}</h3>
+                          </div>
+                          <p className="mt-2 min-h-[2.75rem] text-sm leading-5 text-white/60">
+                            {pet.description}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSettings((s) => ({
+                              ...s,
+                              orbitPet: { companion: pet.id },
+                            }));
+                            localStorage.setItem(ORBIT_PET_STORAGE_KEY, pet.id);
+                          }}
+                          className={`mt-4 min-h-11 w-full rounded-2xl px-4 py-2.5 text-sm font-bold transition ${
+                            selected
+                              ? "bg-indigo-500 text-white"
+                              : "border border-white/10 text-white/80 hover:bg-white/10"
+                          }`}
+                        >
+                          {selected ? "Selected" : "Select"}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
 

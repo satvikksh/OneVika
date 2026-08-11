@@ -1,17 +1,33 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import MoodStory from "./components/home/MoodStory";
 import NewPosts from "./components/home/NewPosts";
 import Thoughts from "./components/home/Thoughts";
 import FeedToggle from "./components/home/FeedToggle";
 import RoomModal from "./components/room/RoomModal";
+import OrbitPet, {
+  DEFAULT_ORBIT_PET,
+  ORBIT_PET_STORAGE_KEY,
+  OrbitPetKind,
+  normalizeOrbitPet,
+} from "./components/orbit-pet/OrbitPet";
 
 export default function Home() {
+  const { status } = useSession();
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
   const [greeting, setGreeting] = useState("Good afternoon");
   const [activeTab, setActiveTab] = useState<"thoughts" | "posts">("thoughts");
   const [showRoomModal, setShowRoomModal] = useState(false);
+  const [selectedPet, setSelectedPet] = useState<OrbitPetKind>(() => {
+    if (typeof window === "undefined") return DEFAULT_ORBIT_PET;
+    try {
+      return normalizeOrbitPet(localStorage.getItem(ORBIT_PET_STORAGE_KEY));
+    } catch {
+      return DEFAULT_ORBIT_PET;
+    }
+  });
 
   const updateGreeting = (hours: number) => {
     if (hours < 12) setGreeting("Good morning");
@@ -33,6 +49,36 @@ export default function Home() {
 
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    const syncPet = (event: StorageEvent) => {
+      if (event.key === ORBIT_PET_STORAGE_KEY) {
+        setSelectedPet(normalizeOrbitPet(event.newValue));
+      }
+    };
+
+    window.addEventListener("storage", syncPet);
+    return () => window.removeEventListener("storage", syncPet);
+  }, []);
+
+  useEffect(() => {
+    if (status !== "authenticated") return;
+
+    const loadPet = async () => {
+      try {
+        const res = await fetch("/api/user/profile", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        const nextPet = normalizeOrbitPet(data?.user?.favoritePet);
+        setSelectedPet(nextPet);
+        localStorage.setItem(ORBIT_PET_STORAGE_KEY, nextPet);
+      } catch {
+        // Keep the local/default pet if profile preferences are unavailable.
+      }
+    };
+
+    void loadPet();
+  }, [status]);
 
   if (!currentTime) return null;
 
@@ -71,8 +117,12 @@ export default function Home() {
           </div>
         </header>
 
-        {/* ✅ STORIES (ONLY ONCE) */}
-        <MoodStory />
+        <section className="flex min-w-0 items-start gap-3 overflow-visible">
+          <div className="min-w-0 flex-1">
+            <MoodStory />
+          </div>
+          <OrbitPet kind={selectedPet} />
+        </section>
 
         <section className="flex flex-col gap-5">
           <FeedToggle activeTab={activeTab} onTabChange={setActiveTab} />
