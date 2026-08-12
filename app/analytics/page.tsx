@@ -34,6 +34,7 @@ type VideoAnalytics = {
 type AnalyticsPayload = {
   generatedAt: string;
   ratePerLike: number;
+  minimumAmountToWithdraw: number;
   totalLikes: number;
   totalEarnings: number;
   totalVideos: number;
@@ -45,6 +46,7 @@ type AnalyticsPayload = {
 const EMPTY_ANALYTICS: AnalyticsPayload = {
   generatedAt: new Date().toISOString(),
   ratePerLike: 0.05,
+  minimumAmountToWithdraw: 100,
   totalLikes: 0,
   totalEarnings: 0,
   totalVideos: 0,
@@ -237,8 +239,8 @@ export default function AnalyticsPage() {
                 icon={<Wallet size={22} />}
               />
               <SummaryCard
-                label="Per Like"
-                value={formatCurrency(analytics.ratePerLike)}
+                label="Minimum Amount to Withdraw"
+                value={formatCurrency(analytics.minimumAmountToWithdraw)}
                 helper="Fixed rate per like, equal to 5 paise"
                 icon={<Trophy size={22} />}
               />
