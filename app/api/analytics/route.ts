@@ -4,9 +4,15 @@ import { Types } from "mongoose";
 
 import { authOptions } from "@/app/lib/authOptions";
 import { dbConnect } from "@/app/lib/mongodb";
+import {
+  getEarningsSettings,
+  getOpenCycle,
+  getOrCreateWallet,
+  paiseToRupees,
+  publicWithdrawal,
+} from "@/app/lib/earnings";
 import Post from "@/app/models/Post";
-
-const PER_LIKE_RATE = 0.05;
+import Withdrawal from "@/app/models/Withdrawal";
 
 type UserPostAnalyticsRow = {
   _id: Types.ObjectId;
@@ -26,10 +32,6 @@ function titleFromPost(post: UserPostAnalyticsRow, index: number) {
   return `Video ${index + 1}`;
 }
 
-function toMoney(value: number) {
-  return Math.round(value * 100) / 100;
-}
-
 export async function GET() {
   try {
     await dbConnect();
@@ -42,6 +44,9 @@ export async function GET() {
     }
 
     const userObjectId = new Types.ObjectId(userId);
+    const settings = await getEarningsSettings();
+    const wallet = await getOrCreateWallet(userObjectId);
+    const cycle = await getOpenCycle(userObjectId);
 
     const posts = await Post.aggregate<UserPostAnalyticsRow>([
       { $match: { userId: userObjectId } },
@@ -61,7 +66,7 @@ export async function GET() {
 
     const videos = videoPosts.map((post, index) => {
       const likes = post.likeCount ?? 0;
-      const earnings = toMoney(likes * PER_LIKE_RATE);
+      const earnings = paiseToRupees(likes * settings.likeRatePaise);
       const videoUrl = (post.images ?? []).find(isVideoUrl) ?? "";
 
       return {
@@ -81,13 +86,34 @@ export async function GET() {
 
     return NextResponse.json({
       generatedAt: new Date().toISOString(),
-      ratePerLike: PER_LIKE_RATE,
+      ratePerLike: paiseToRupees(settings.likeRatePaise),
+      minimumAmountToWithdraw: paiseToRupees(settings.minimumWithdrawalPaise),
+      maximumAmountToWithdraw: settings.maximumWithdrawalPaise
+        ? paiseToRupees(settings.maximumWithdrawalPaise)
+        : null,
+      withdrawalsEnabled: settings.withdrawalsEnabled && !settings.maintenanceMode,
+      wallet: {
+        availableBalance: paiseToRupees(wallet.availableBalancePaise),
+        totalEarned: paiseToRupees(wallet.totalEarnedPaise),
+        totalWithdrawn: paiseToRupees(wallet.totalWithdrawnPaise),
+      },
+      currentCycle: {
+        id: cycle._id.toString(),
+        eligibleLikes: cycle.eligibleLikes,
+        earnedAmount: paiseToRupees(cycle.earnedAmountPaise),
+        status: cycle.status,
+      },
+      lifetimeLikes: totalLikes,
       totalLikes,
-      totalEarnings: toMoney(totalLikes * PER_LIKE_RATE),
+      totalEarnings: paiseToRupees(wallet.totalEarnedPaise),
       totalVideos: videos.length,
       totalContent: posts.length,
       topVideo,
       videos,
+      withdrawals: (await Withdrawal.find({ userId: userObjectId })
+        .sort({ createdAt: -1 })
+        .limit(20)
+        .lean()).map(publicWithdrawal),
     });
   } catch (error) {
     console.error("USER ANALYTICS ERROR:", error);

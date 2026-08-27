@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 
 import User from "@/app/models/User";
 import { dbConnect } from "@/app/lib/mongodb";
+import { authorizeConfiguredAdmin } from "@/app/lib/adminAuth";
 
 const canonicalAuthUrl =
   process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_BASE_URL;
@@ -34,6 +35,31 @@ if (googleClientId && googleClientSecret) {
 
 providers.push(
   CredentialsProvider({
+    id: "admin-credentials",
+    name: "admin-credentials",
+    credentials: {
+      email: { label: "Admin email", type: "email" },
+      password: { label: "Password", type: "password" },
+    },
+
+    async authorize(credentials) {
+      try {
+        await dbConnect();
+        return await authorizeConfiguredAdmin({
+          email: credentials?.email,
+          password: credentials?.password,
+        });
+      } catch (err) {
+        console.error("ADMIN AUTH ERROR:", err instanceof Error ? err.message : err);
+        throw err;
+      }
+    },
+  })
+);
+
+providers.push(
+  CredentialsProvider({
+    id: "credentials",
     name: "credentials",
     credentials: {
       email: { label: "Email", type: "email" },
@@ -71,6 +97,7 @@ providers.push(
           email: user.email,
           image: user.avatar || user.image || "",
           sessionVersion: user.sessionVersion ?? 0,
+          role: user.role || "USER",
         };
       } catch (err) {
         console.error("AUTH ERROR:", err);
@@ -156,6 +183,7 @@ export const authOptions: NextAuthOptions = {
         user.email = normalizedEmail;
         user.image = dbUser.avatar || dbUser.image || user.image;
         user.sessionVersion = dbUser.sessionVersion ?? 0;
+        user.role = dbUser.role || "USER";
       }
 
       return true;
@@ -168,6 +196,7 @@ export const authOptions: NextAuthOptions = {
         token.email = user.email;
         token.picture = user.image || token.picture;
         token.sessionVersion = user.sessionVersion ?? 0;
+        token.role = user.role ?? "USER";
       }
       return token;
     },
@@ -181,6 +210,7 @@ export const authOptions: NextAuthOptions = {
         session.user.avatar = image || session.user.avatar || "";
         session.user.image = image || session.user.image || null;
         session.user.sessionVersion = token.sessionVersion as number;
+        session.user.role = (token.role as "USER" | "ADMIN") || "USER";
       }
       return session;
     },

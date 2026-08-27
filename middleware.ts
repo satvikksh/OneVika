@@ -9,6 +9,7 @@ const PUBLIC_PATHS = new Set([
   "/forgot-password",
   "/reset-password",
   "/verify-otp",
+  "/admin/login",
 ]);
 
 function isPublicPage(pathname: string) {
@@ -23,6 +24,9 @@ export default withAuth(
     callbacks: {
       authorized: ({ token, req }) => {
         if (isPublicPage(req.nextUrl.pathname)) return true;
+        if (req.nextUrl.pathname.startsWith("/admin")) {
+          return token?.role === "ADMIN";
+        }
         return Boolean(token);
       },
     },

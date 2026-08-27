@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { Providers } from "./providers";
 import Navbar from "./components/navbar";
 import NotificationListener from "./components/NotificationListener";
@@ -13,18 +14,25 @@ export default function ClientLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+  const isAdminRoute = pathname?.startsWith("/admin");
+
   return (
     <Providers>
-      <SocketProvider>
-        <CallProvider>
-          <NotificationProvider>
-            <NotificationListener />
-            <Navbar />
-            <main className="pt-16 pb-16 lg:pb-0">{children}</main>
-            <CallModal />
-          </NotificationProvider>
-        </CallProvider>
-      </SocketProvider>
+      {isAdminRoute ? (
+        children
+      ) : (
+        <SocketProvider>
+          <CallProvider>
+            <NotificationProvider>
+              <NotificationListener />
+              <Navbar />
+              <main className="pt-16 pb-16 lg:pb-0">{children}</main>
+              <CallModal />
+            </NotificationProvider>
+          </CallProvider>
+        </SocketProvider>
+      )}
     </Providers>
   );
 }

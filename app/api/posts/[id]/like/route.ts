@@ -7,6 +7,20 @@ import { isPremiumActive } from "@/app/lib/premium";
 import Post from "@/app/models/Post";
 import User from "@/app/models/User";
 import { Types } from "mongoose";
+import { creditLikeEarning } from "@/app/lib/earnings";
+
+function getObjectId(value: unknown) {
+  if (value instanceof Types.ObjectId) return value;
+  if (
+    value &&
+    typeof value === "object" &&
+    "_id" in value &&
+    value._id instanceof Types.ObjectId
+  ) {
+    return value._id;
+  }
+  return new Types.ObjectId(String(value));
+}
 
 // Handle GET request to get users who liked the post
 export async function GET(
@@ -81,30 +95,42 @@ export async function POST(
 
     await dbConnect();
 
-    const post = await Post.findById(id);
+    if (!Types.ObjectId.isValid(id)) {
+      return NextResponse.json({ error: "Invalid post ID" }, { status: 400 });
+    }
+
+    const post = await Post.findById(id).select("_id userId likes");
     
     if (!post) {
       return NextResponse.json({ error: "Post not found" }, { status: 404 });
     }
 
     const userId = new Types.ObjectId(session.user.id);
-    
-    // Check if user already liked the post
-    const alreadyLiked = post.likes.includes(userId);
+    const contentId = new Types.ObjectId(id);
+    const creatorId = getObjectId(post.userId);
+    const alreadyLiked = post.likes.some(
+      (likeId: Types.ObjectId) => likeId.toString() === userId.toString()
+    );
 
     if (alreadyLiked) {
-      // Unlike: remove user from likes array
-      post.likes = post.likes.filter((likeId: Types.ObjectId) => likeId.toString() !== userId.toString());
+      await Post.updateOne({ _id: contentId }, { $pull: { likes: userId } });
     } else {
-      // Like: add user to likes array
-      post.likes.push(userId);
+      const updateResult = await Post.updateOne(
+        { _id: contentId, likes: { $ne: userId } },
+        { $addToSet: { likes: userId } }
+      );
+
+      if (updateResult.modifiedCount === 1) {
+        await creditLikeEarning({ creatorId, likerId: userId, contentId });
+      }
     }
 
-    await post.save();
+    const updatedPost = await Post.findById(id).select("likes").lean();
+    const likes = (updatedPost?.likes || []).map((likeId) => likeId.toString());
 
     return NextResponse.json({
       success: true,
-      likes: post.likes,
+      likes,
       liked: !alreadyLiked
     });
     

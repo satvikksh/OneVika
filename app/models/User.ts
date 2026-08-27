@@ -26,6 +26,7 @@ export interface IUser extends Document {
   isAI?: boolean;
   fcmToken?: string;
   fcmTokens?: string[];
+  role: "USER" | "ADMIN";
 
   isPrivate: boolean;
   cover?: string;
@@ -220,6 +221,12 @@ const UserSchema = new Schema<IUser>(
     fcmTokens: {
       type: [String],
       default: [],
+    },
+    role: {
+      type: String,
+      enum: ["USER", "ADMIN"],
+      default: "USER",
+      index: true,
     },
   },
   { timestamps: true }

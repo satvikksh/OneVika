@@ -19,6 +19,7 @@ declare module "next-auth" {
     // 🖼️ profile
     avatar?: string;
     image?: string | null;
+    role?: "USER" | "ADMIN";
   }
 
   /**
@@ -34,6 +35,7 @@ declare module "next-auth" {
 
       avatar?: string;
       image?: string | null;
+      role?: "USER" | "ADMIN";
     } & DefaultSession["user"];
   }
 }
@@ -50,5 +52,6 @@ declare module "next-auth/jwt" {
     signature?: string;
 
     avatar?: string;
+    role?: "USER" | "ADMIN";
   }
 }
