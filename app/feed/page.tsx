@@ -263,7 +263,7 @@ function FeedSkeleton() {
             </div>
           ))}
         </div>
-        <div className="absolute top-16 left-0 right-0 p-4">
+        <div className="absolute top-16 max-lg:top-0 left-0 right-0 p-4">
           <div className="flex justify-between">
             <div className="h-6 w-20 bg-gray-800 rounded animate-pulse" />
           </div>

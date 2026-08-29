@@ -275,7 +275,7 @@ export default function CosmicArchivesPage() {
       </div>
 
       {/* Hero Section */}
-      <div className="relative pt-16 pb-24 overflow-hidden">
+      <div className="relative pt-16 max-lg:pt-0 pb-24 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/5 via-transparent to-blue-500/5" />
         <div className="container mx-auto px-6 relative">
           <div className="max-w-3xl mx-auto text-center">
@@ -325,7 +325,7 @@ export default function CosmicArchivesPage() {
       </div>
 
       {/* Search & Controls */}
-      <div className="sticky top-20 z-40 mb-12">
+      <div className="sticky top-0 lg:top-20 z-40 mb-12">
         <div className="container mx-auto px-6">
           {/* Main Search */}
           <div className="max-w-2xl mx-auto mb-8">

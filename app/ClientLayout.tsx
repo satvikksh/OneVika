@@ -16,6 +16,7 @@ export default function ClientLayout({
 }) {
   const pathname = usePathname();
   const isAdminRoute = pathname?.startsWith("/admin");
+  const isHomeRoute = pathname === "/";
 
   return (
     <Providers>
@@ -27,7 +28,11 @@ export default function ClientLayout({
             <NotificationProvider>
               <NotificationListener />
               <Navbar />
-              <main className="pt-16 pb-16 lg:pb-0">{children}</main>
+              <main
+                className={`${isHomeRoute ? "pt-16" : "lg:pt-16"} pb-16 lg:pb-0`}
+              >
+                {children}
+              </main>
               <CallModal />
             </NotificationProvider>
           </CallProvider>

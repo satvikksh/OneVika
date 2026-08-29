@@ -63,6 +63,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
 }) => {
   const pathname = usePathname();
   const router = useRouter();
+  const isHome = pathname === "/";
   const { data: session } = useSession();
   const { avatar, isPremium } = useUserAvatar();
   const { theme, toggleTheme } = useTheme();
@@ -494,6 +495,10 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
     <>
       <header
         className={`fixed top-0 inset-x-0 z-50 max-md:z-[70] transition-all duration-300 ${
+          isHome
+            ? ""
+            : "max-lg:hidden"
+        } ${
           scrolled
             ? "bg-white/80 dark:bg-gray-950/80 backdrop-blur-xl border-b border-gray-200 dark:border-gray-800 shadow-sm"
             : "bg-white/0 dark:bg-gray-950/0 backdrop-blur-md"
