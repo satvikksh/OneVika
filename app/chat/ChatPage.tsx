@@ -627,6 +627,15 @@ export default function ChatPage() {
     }
   }, [selectedUser, isMobile]);
 
+  /* ---------------------------- HIDE GLOBAL MOBILE BOTTOM NAV WHILE A CHAT IS OPEN ---------------------------- */
+  useEffect(() => {
+    const isOpen = isMobile && Boolean(selectedUser);
+    const event = new CustomEvent("chatMobileNavbarVisibility", {
+      detail: { isOpen },
+    });
+    window.dispatchEvent(event);
+  }, [isMobile, selectedUser]);
+
   useEffect(() => {
     if (typeof window === "undefined") {
       return;
@@ -3805,7 +3814,6 @@ export default function ChatPage() {
               setChatMode={setChatMode}
               vanishSeconds={vanishSeconds}
               setVanishSeconds={setVanishSeconds}
-              canUsePolishedMode={canUsePolishedMode}
               isPremiumUser={isPremiumUser}
               polishedPreview={polishedPreview}
               onRegeneratePolishedPreview={handleRegeneratePolishedPreview}

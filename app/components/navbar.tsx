@@ -81,6 +81,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
 
   // State to track if chat text area is focused
   const [isChatTextAreaFocused, setIsChatTextAreaFocused] = useState(false);
+  const [isMobileChatOpen, setIsMobileChatOpen] = useState(false);
   // State for auto-hide bottom nav
   const [showBottomNav, setShowBottomNav] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
@@ -185,6 +186,10 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
       setIsChatTextAreaFocused(e.detail.isFocused);
     };
 
+    const handleMobileChatVisibility = (e: CustomEvent) => {
+      setIsMobileChatOpen(Boolean(e.detail.isOpen));
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
       // If user presses Escape key in chat, show bottom nav
       if (e.key === "Escape" && pathname.startsWith("/chat")) {
@@ -196,12 +201,20 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
       "chatTextAreaFocus",
       handleTextAreaFocus as EventListener
     );
+    window.addEventListener(
+      "chatMobileNavbarVisibility",
+      handleMobileChatVisibility as EventListener
+    );
     window.addEventListener("keydown", handleKeyDown);
 
     return () => {
       window.removeEventListener(
         "chatTextAreaFocus",
         handleTextAreaFocus as EventListener
+      );
+      window.removeEventListener(
+        "chatMobileNavbarVisibility",
+        handleMobileChatVisibility as EventListener
       );
       window.removeEventListener("keydown", handleKeyDown);
     };
@@ -286,6 +299,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
   useEffect(() => {
     setShowBottomNav(true);
     setIsVisible(true);
+    setIsMobileChatOpen(false);
     if (hideTimeoutRef.current) {
       clearTimeout(hideTimeoutRef.current);
       hideTimeoutRef.current = null;
@@ -349,7 +363,9 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
   ];
 
   const isChatPage = pathname.startsWith("/chat");
-  const finalShowBottomNav = showBottomNav && !(isChatPage && isChatTextAreaFocused);
+  const finalShowBottomNav =
+    showBottomNav &&
+    !(isChatPage && (isChatTextAreaFocused || isMobileChatOpen));
 
   // Scroll blur with throttling
   useEffect(() => {

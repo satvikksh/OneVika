@@ -1,6 +1,25 @@
 import mongoose, { Document, Model, Schema, Types } from "mongoose";
 
-export type ProjectStatus = "active" | "completed" | "research" | "paused";
+export type ProjectStatus =
+  | "planning"
+  | "in-progress"
+  | "on-hold"
+  | "completed"
+  | "cancelled"
+  | "active"
+  | "research"
+  | "paused";
+
+export const PROJECT_STATUSES: ProjectStatus[] = [
+  "planning",
+  "in-progress",
+  "on-hold",
+  "completed",
+  "cancelled",
+  "active",
+  "research",
+  "paused",
+];
 
 export interface IProject extends Document {
   userId: Types.ObjectId;
@@ -54,8 +73,8 @@ const ProjectSchema = new Schema<IProject>(
     },
     status: {
       type: String,
-      enum: ["active", "completed", "research", "paused"],
-      default: "active",
+      enum: PROJECT_STATUSES,
+      default: "planning",
     },
     progress: {
       type: Number,

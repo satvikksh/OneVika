@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { Loader2, Plus } from "lucide-react";
-import { ProjectsShell, statusConfig, type ProjectStatus } from "../project-ui";
+import { ProjectsShell, selectableProjectStatuses, type ProjectStatus } from "../project-ui";
 
 type FormState = {
   title: string;
@@ -25,7 +25,7 @@ const initialForm: FormState = {
   tagline: "",
   category: "",
   description: "",
-  status: "active",
+  status: "planning",
   progress: "0",
   techStack: "",
   highlights: "",
@@ -176,9 +176,9 @@ export default function AddProjectPage() {
                 onChange={handleChange}
                 className="w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-white outline-none focus:border-cyan-400/40"
               >
-                {Object.entries(statusConfig).map(([value, config]) => (
-                  <option key={value} value={value}>
-                    {config.label}
+                {selectableProjectStatuses.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
                   </option>
                 ))}
               </select>

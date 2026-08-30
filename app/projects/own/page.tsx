@@ -3,7 +3,13 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { Loader2 } from "lucide-react";
-import { EmptyProjects, ProjectCard, ProjectsShell, type ProjectItem } from "../project-ui";
+import {
+  EmptyProjects,
+  ProjectCard,
+  ProjectsShell,
+  type ProjectItem,
+  type ProjectStatus,
+} from "../project-ui";
 
 export default function OwnProjectsPage() {
   const { data: session, status } = useSession();
@@ -49,6 +55,20 @@ export default function OwnProjectsPage() {
     );
   }
 
+  const handleStatusUpdated = (
+    projectId: string,
+    newStatus: ProjectStatus,
+    newProgress: number
+  ) => {
+    setProjects((current) =>
+      current.map((project) =>
+        project.id === projectId
+          ? { ...project, status: newStatus, progress: newProgress }
+          : project
+      )
+    );
+  };
+
   return (
     <ProjectsShell
       eyebrow="Own Projects"
@@ -70,7 +90,13 @@ export default function OwnProjectsPage() {
       ) : (
         <section className="grid gap-6 lg:grid-cols-2">
           {projects.map((project) => (
-            <ProjectCard key={project.id} project={project} showAuthor={false} />
+            <ProjectCard
+              key={project.id}
+              project={project}
+              showAuthor={false}
+              canEdit
+              onStatusUpdated={handleStatusUpdated}
+            />
           ))}
         </section>
       )}

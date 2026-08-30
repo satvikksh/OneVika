@@ -14,6 +14,7 @@ import {
   Camera,
   Check,
   CheckCheck,
+  ChevronDown,
   Clock,
   Code2,
   Contact,
@@ -22,11 +23,13 @@ import {
   Edit3,
   Eye,
   FileText,
+  Flame,
   FolderTree,
   ImagePlus,
   Loader2,
   Lock,
   MapPin,
+  MessageSquare,
   Mic,
   Package,
   Paperclip,
@@ -47,6 +50,61 @@ import {
 } from "lucide-react";
 import DateSeparator from "./DateSeparator";
 import PremiumUpgradePrompt from "../components/PremiumUpgradePrompt";
+
+type ComposerChatMode = "normal" | "vanish" | "polished";
+type ComposerScheduleMode = "now" | "delay" | "later";
+
+const CHAT_MODE_OPTIONS: Array<{
+  id: ComposerChatMode;
+  label: string;
+  description: string;
+  icon: React.ComponentType<{ size?: number | string; className?: string }>;
+}> = [
+  {
+    id: "normal",
+    label: "Normal",
+    description: "Standard chat messages",
+    icon: MessageSquare,
+  },
+  {
+    id: "vanish",
+    label: "Vanish",
+    description: "Auto-delete after a timer",
+    icon: Flame,
+  },
+  {
+    id: "polished",
+    label: "Polished",
+    description: "AI-polished messages",
+    icon: Sparkles,
+  },
+];
+
+const SEND_TIMING_OPTIONS: Array<{
+  id: ComposerScheduleMode;
+  label: string;
+  description: string;
+  icon: React.ComponentType<{ size?: number | string; className?: string }>;
+}> = [
+  {
+    id: "now",
+    label: "Send Now",
+    description: "Send immediately",
+    icon: Send,
+  },
+  {
+    id: "delay",
+    label: "Send After Delay",
+    description: "Deliver after a set delay",
+    icon: Timer,
+  },
+  {
+    id: "later",
+    label: "Schedule for Later",
+    description: "Choose a specific date and time",
+    icon: Clock,
+  },
+];
 
 interface ChatAreaProps {
   selectedUser: User | null;
@@ -110,7 +168,6 @@ interface ChatAreaProps {
   setChatMode: (mode: "normal" | "vanish" | "polished") => void;
   vanishSeconds: number;
   setVanishSeconds: (seconds: number) => void;
-  canUsePolishedMode: boolean;
   isPremiumUser: boolean;
   polishedPreview: {
     originalText: string;
@@ -1626,7 +1683,6 @@ function ChatArea({
   setChatMode,
   vanishSeconds,
   setVanishSeconds,
-  canUsePolishedMode,
   isPremiumUser,
   polishedPreview,
   onRegeneratePolishedPreview,
@@ -1659,6 +1715,8 @@ function ChatArea({
   const [customDateTime, setCustomDateTime] = React.useState("");
   const [showPremiumPrompt, setShowPremiumPrompt] = React.useState(false);
   const [showAttachmentSheet, setShowAttachmentSheet] = React.useState(false);
+  const [showModeMenu, setShowModeMenu] = React.useState(false);
+  const modeMenuRef = React.useRef<HTMLDivElement | null>(null);
   const [isArtifactWorkspaceOpen, setIsArtifactWorkspaceOpen] = React.useState(false);
   const [previewWidth, setPreviewWidth] = React.useState(420);
   const [dismissedArtifactMessageId, setDismissedArtifactMessageId] =
@@ -1715,6 +1773,32 @@ function ChatArea({
     setChatMode("polished");
     inputRef.current?.focus();
   }, [inputRef, isPremiumUser, setChatMode]);
+
+  React.useEffect(() => {
+    if (!showModeMenu) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (
+        modeMenuRef.current &&
+        !modeMenuRef.current.contains(event.target as Node)
+      ) {
+        setShowModeMenu(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setShowModeMenu(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [showModeMenu]);
 
   React.useEffect(() => {
     const interval = window.setInterval(() => setNow(Date.now()), 1000);
@@ -1901,6 +1985,10 @@ function ChatArea({
   const showInitialConversationLoader =
     Boolean(selectedUser) && loadingInitialMessages && messages.length === 0;
   const isComposerDisabled = isChatBlocked || isSelectionMode;
+  const activeChatMode = React.useMemo(
+    () => CHAT_MODE_OPTIONS.find((mode) => mode.id === chatMode) ?? CHAT_MODE_OPTIONS[0],
+    [chatMode]
+  );
 
   return (
     <div
@@ -2431,7 +2519,7 @@ function ChatArea({
       {/* Input Area - Fixed at bottom within chat area */}
       {selectedUser && (
         <div
-          className={`fixed bottom-0 left-0 right-0 max-w-full overflow-x-hidden border-t transition-[right] duration-300 lg:left-80 ${
+          className={`fixed bottom-0 left-0 right-0 max-w-full border-t transition-[right] duration-300 lg:left-80 ${
             isAiConversation
               ? "border-white/50 bg-white/70 shadow-2xl shadow-gray-950/10 backdrop-blur-2xl dark:border-white/10 dark:bg-gray-950/70"
               : "border-gray-200 bg-white dark:border-gray-800 dark:bg-black"
@@ -2485,151 +2573,16 @@ function ChatArea({
           
           {/* Input Form */}
           <div className={`${isAiConversation ? "mx-auto max-w-5xl p-3 sm:p-4" : "p-3 sm:p-4"}`}>
-            {!isSelectionMode && !isChatBlocked ? (
+            {!isSelectionMode && !isChatBlocked && isAiConversation && isMobile && activeArtifact ? (
               <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
-                {isAiConversation ? (
-                  <div className="flex w-full gap-2 overflow-x-auto pb-1">
-                    {isMobile && activeArtifact ? (
-                      <button
-                        type="button"
-                        onClick={openArtifactWorkspace}
-                        className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-100 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-200"
-                      >
-                        <Eye size={14} />
-                        Preview
-                      </button>
-                    ) : null}
-                    {/* {[
-                      "Continue",
-                      "Explain",
-                      "Summarize",
-                      "Optimize",
-                      "Translate",
-                      "Generate UI",
-                      "Create API",
-                      "Fix Errors",
-                      "Improve Performance",
-                      "Generate Tests",
-                    ].map((suggestion) => (
-                      <button
-                        key={suggestion}
-                        type="button"
-                        onClick={() => {
-                          setNewMessage(newMessage.trim() ? `${newMessage} ${suggestion.toLowerCase()}` : suggestion);
-                          inputRef.current?.focus();
-                        }}
-                        className="shrink-0 rounded-full border border-gray-200 bg-white/80 px-3 py-1.5 text-xs font-semibold text-gray-600 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:text-emerald-700 dark:border-white/10 dark:bg-white/10 dark:text-gray-300 dark:hover:text-emerald-200"
-                      >
-                        {suggestion}
-                      </button>
-                    ))} */}
-                  </div>
-                ) : null}
-                <div className="inline-flex rounded-xl border border-gray-300 bg-gray-100 p-1 dark:border-gray-700 dark:bg-gray-900">
-                  {(["normal", "vanish"] as const).map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      onClick={() => setChatMode(mode)}
-                      className={`rounded-lg px-2.5 py-1.5 font-medium capitalize transition ${
-                        chatMode === mode
-                          ? "bg-white text-blue-700 shadow-sm dark:bg-gray-800 dark:text-blue-300"
-                          : "text-gray-600 dark:text-gray-300"
-                      }`}
-                    >
-                      {mode}
-                    </button>
-                  ))}
-                  {canUsePolishedMode ? (
-                    <div className="relative">
-                      <button
-                        type="button"
-                        onClick={handlePolishedFeatureClick}
-                        disabled={sendingMessage && chatMode === "polished"}
-                        title={
-                          isPremiumUser
-                            ? "Polish with AI"
-                            : "Premium required for Polished Chat"
-                        }
-                        className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                          chatMode === "polished"
-                            ? "bg-white text-green-700 shadow-sm dark:bg-gray-800 dark:text-green-500"
-                            : isPremiumUser
-                              ? "text-gray-600 dark:text-gray-300"
-                              : "text-gray-500 dark:text-gray-400"
-                        }`}
-                      >
-                        {sendingMessage && chatMode === "polished" ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : !isPremiumUser ? (
-                          <Lock size={13} />
-                        ) : (
-                          <Sparkles size={13} />
-                        )}
-                        {sendingMessage && chatMode === "polished"
-                          ? "Polishing..."
-                          : isPremiumUser
-                            ? "Polished"
-                            : "Polished"}
-                        {!isPremiumUser ? (
-                          <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-amber-700 dark:bg-amber-950 dark:text-amber-200">
-                            Premium
-                          </span>
-                        ) : null}
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-                {chatMode === "vanish" ? (
-                  <label className="inline-flex items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-2 py-1.5 text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">
-                    <Timer size={14} />
-                    <select
-                      value={vanishSeconds}
-                      onChange={(event) => setVanishSeconds(Number(event.target.value))}
-                      className="bg-transparent outline-none"
-                    >
-                      <option value={30}>30 sec</option>
-                      <option value={60}>1 min</option>
-                      <option value={300}>5 min</option>
-                      <option value={900}>15 min</option>
-                      <option value={3600}>1 hour</option>
-                      <option value={86400}>24 hours</option>
-                    </select>
-                  </label>
-                ) : null}
-                <select
-                  value={scheduleMode}
-                  onChange={(event) =>
-                    setScheduleMode(event.target.value as "now" | "delay" | "later")
-                  }
-                  className="rounded-lg border border-gray-300 bg-white px-2 py-2 text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
+                <button
+                  type="button"
+                  onClick={openArtifactWorkspace}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-100 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-200"
                 >
-                  <option value="now">Send Now</option>
-                  <option value="delay">Send After Delay</option>
-                  <option value="later">Schedule for Later</option>
-                </select>
-                {scheduleMode === "delay" ? (
-                  <select
-                    value={delayMs}
-                    onChange={(event) => setDelayMs(Number(event.target.value))}
-                    className="rounded-lg border border-gray-300 bg-white px-2 py-2 text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
-                  >
-                    <option value={60_000}>1 minute</option>
-                    <option value={120_000}>2 minutes</option>
-                    <option value={300_000}>5 minutes</option>
-                    <option value={600_000}>10 minutes</option>
-                    <option value={1_800_000}>30 minutes</option>
-                    <option value={3_600_000}>1 hour</option>
-                  </select>
-                ) : null}
-                {scheduleMode === "later" ? (
-                  <input
-                    type="datetime-local"
-                    value={customDateTime}
-                    onChange={(event) => setCustomDateTime(event.target.value)}
-                    className="rounded-lg border border-gray-300 bg-white px-2 py-2 text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
-                  />
-                ) : null}
+                  <Eye size={14} />
+                  Preview
+                </button>
               </div>
             ) : null}
             <div
@@ -2657,7 +2610,10 @@ function ChatArea({
                 />
                 <button
                   type="button"
-                  onClick={() => setShowAttachmentSheet(true)}
+                  onClick={() => {
+                    setShowModeMenu(false);
+                    setShowAttachmentSheet(true);
+                  }}
                   disabled={isComposerDisabled}
                   className="flex h-11 w-11 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 shadow-sm transition hover:border-blue-200 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:text-blue-300"
                   aria-label="Open attachment menu"
@@ -2739,7 +2695,203 @@ function ChatArea({
                     style={{ minHeight: isAiConversation ? "56px" : "48px", maxHeight: "192px" }}
                   />
                 </div>
-                
+
+                {/* Mode selector */}
+                <div className="relative shrink-0" ref={modeMenuRef}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAttachmentSheet(false);
+                      setShowModeMenu((prev) => !prev);
+                    }}
+                    disabled={isComposerDisabled}
+                    className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border bg-white text-gray-600 shadow-sm transition hover:border-blue-200 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-900 dark:text-gray-300 dark:hover:text-blue-300 ${
+                      chatMode === "polished"
+                        ? "border-green-200 dark:border-green-500/30"
+                        : "border-gray-200 dark:border-gray-700"
+                    }`}
+                    aria-label="Select chat mode and send timing"
+                    aria-haspopup="menu"
+                    aria-expanded={showModeMenu}
+                    title={`Mode: ${activeChatMode.label}`}
+                  >
+                    <activeChatMode.icon size={20} />
+                    <ChevronDown
+                      size={12}
+                      className={`-ml-1 transition-transform ${showModeMenu ? "rotate-180" : ""}`}
+                    />
+                  </button>
+
+                  <AnimatePresence>
+                    {showModeMenu && !isComposerDisabled ? (
+                      <motion.div
+                        className="absolute bottom-full right-0 z-[85] mb-2 max-h-[60vh] w-64 overflow-y-auto rounded-2xl border border-gray-200 bg-white p-1.5 shadow-2xl dark:border-gray-800 dark:bg-gray-950 sm:w-72 sm:max-h-[70vh]"
+                        initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                        transition={{ duration: 0.15 }}
+                      >
+                        <p className="px-3 pb-1 pt-2 text-[11px] font-bold uppercase tracking-[0.12em] text-gray-400 dark:text-gray-500">
+                          Chat Mode
+                        </p>
+                        {CHAT_MODE_OPTIONS.map((modeInfo) => {
+                          const selected = chatMode === modeInfo.id;
+                          const premiumLocked =
+                            modeInfo.id === "polished" && !isPremiumUser;
+                          return (
+                            <button
+                              key={modeInfo.id}
+                              type="button"
+                              onClick={() => {
+                                if (modeInfo.id === "polished") {
+                                  setShowModeMenu(false);
+                                  handlePolishedFeatureClick();
+                                } else {
+                                  setChatMode(modeInfo.id);
+                                  inputRef.current?.focus();
+                                  if (modeInfo.id !== "vanish") {
+                                    setShowModeMenu(false);
+                                  }
+                                }
+                              }}
+                              className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${
+                                selected
+                                  ? "bg-blue-50 dark:bg-blue-500/10"
+                                  : "hover:bg-gray-50 dark:hover:bg-gray-900"
+                              }`}
+                            >
+                              <span
+                                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+                                  modeInfo.id === "polished"
+                                    ? "bg-green-50 text-green-600 dark:bg-green-500/10 dark:text-green-400"
+                                    : modeInfo.id === "vanish"
+                                      ? "bg-orange-50 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400"
+                                      : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"
+                                }`}
+                              >
+                                <modeInfo.icon size={18} />
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="flex items-center gap-1.5 text-sm font-semibold text-gray-900 dark:text-white">
+                                  <span className="capitalize">{modeInfo.label}</span>
+                                  {modeInfo.id === "polished" && !isPremiumUser ? (
+                                    <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-amber-700 dark:bg-amber-950 dark:text-amber-200">
+                                      Premium
+                                    </span>
+                                  ) : null}
+                                  {premiumLocked ? (
+                                    <Lock size={11} className="text-gray-400" />
+                                  ) : null}
+                                </span>
+                                <span className="block truncate text-xs text-gray-500 dark:text-gray-400">
+                                  {modeInfo.description}
+                                </span>
+                              </span>
+                              {selected ? (
+                                <Check size={18} className="shrink-0 text-blue-600 dark:text-blue-400" />
+                              ) : null}
+                            </button>
+                          );
+                        })}
+                        {chatMode === "vanish" ? (
+                          <div className="mt-1 flex items-center gap-2 rounded-xl bg-gray-50 px-3 py-2 dark:bg-gray-900">
+                            <Timer size={14} className="shrink-0 text-gray-400 dark:text-gray-500" />
+                            <select
+                              value={vanishSeconds}
+                              onChange={(event) => setVanishSeconds(Number(event.target.value))}
+                              className="w-full bg-transparent text-xs font-semibold text-gray-700 outline-none dark:text-gray-200"
+                              aria-label="Vanish message timer"
+                            >
+                              <option value={30}>30 sec</option>
+                              <option value={60}>1 min</option>
+                              <option value={300}>5 min</option>
+                              <option value={900}>15 min</option>
+                              <option value={3600}>1 hour</option>
+                              <option value={86400}>24 hours</option>
+                            </select>
+                          </div>
+                        ) : null}
+
+                        <div className="my-1.5 h-px bg-gray-100 dark:bg-gray-800" />
+
+                        <p className="px-3 pb-1 pt-2 text-[11px] font-bold uppercase tracking-[0.12em] text-gray-400 dark:text-gray-500">
+                          Send Timing
+                        </p>
+                        {SEND_TIMING_OPTIONS.map((timingOption) => {
+                          const selected = scheduleMode === timingOption.id;
+                          return (
+                            <button
+                              key={timingOption.id}
+                              type="button"
+                              onClick={() => {
+                                setScheduleMode(timingOption.id);
+                                if (timingOption.id === "now") {
+                                  setShowModeMenu(false);
+                                  inputRef.current?.focus();
+                                }
+                              }}
+                              className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${
+                                selected
+                                  ? "bg-blue-50 dark:bg-blue-500/10"
+                                  : "hover:bg-gray-50 dark:hover:bg-gray-900"
+                              }`}
+                            >
+                              <span
+                                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+                                  selected
+                                    ? "bg-blue-100 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400"
+                                    : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"
+                                }`}
+                              >
+                                <timingOption.icon size={18} />
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block text-sm font-semibold text-gray-900 dark:text-white">
+                                  {timingOption.label}
+                                </span>
+                                <span className="block truncate text-xs text-gray-500 dark:text-gray-400">
+                                  {timingOption.description}
+                                </span>
+                              </span>
+                              {selected ? (
+                                <Check size={18} className="shrink-0 text-blue-600 dark:text-blue-400" />
+                              ) : null}
+                            </button>
+                          );
+                        })}
+                        {scheduleMode === "delay" ? (
+                          <div className="mt-1 flex items-center gap-2 rounded-xl bg-gray-50 px-3 py-2 dark:bg-gray-900">
+                            <select
+                              value={delayMs}
+                              onChange={(event) => setDelayMs(Number(event.target.value))}
+                              className="w-full bg-transparent text-xs font-semibold text-gray-700 outline-none dark:text-gray-200"
+                              aria-label="Delay duration"
+                            >
+                              <option value={60_000}>1 minute</option>
+                              <option value={120_000}>2 minutes</option>
+                              <option value={300_000}>5 minutes</option>
+                              <option value={600_000}>10 minutes</option>
+                              <option value={1_800_000}>30 minutes</option>
+                              <option value={3_600_000}>1 hour</option>
+                            </select>
+                          </div>
+                        ) : null}
+                        {scheduleMode === "later" ? (
+                          <div className="mt-1 rounded-xl bg-gray-50 px-2 py-2 dark:bg-gray-900">
+                            <input
+                              type="datetime-local"
+                              value={customDateTime}
+                              onChange={(event) => setCustomDateTime(event.target.value)}
+                              className="w-full bg-transparent text-xs font-semibold text-gray-700 outline-none dark:text-gray-200"
+                              aria-label="Scheduled date and time"
+                            />
+                          </div>
+                        ) : null}
+                      </motion.div>
+                    ) : null}
+                  </AnimatePresence>
+                </div>
+
                 {/* Send Button on Side */}
                 <button
                   type="button"

@@ -38,6 +38,7 @@ import {
   reportCreatorActivity,
   generateEventId,
 } from "../lib/creator-activity-client";
+import { readSavedPosts, persistSavedPosts, toggleSavedEntry, savedIds } from "../lib/savedPosts";
 // import { useSettings } from "../components/settings-provider";
 
 
@@ -1200,7 +1201,6 @@ const SCROLL_UNLOCK_DELAY_MS = 260;
 const FEED_CACHE_WRITE_DELAY_MS = 250;
 const BLINK_STATUS_BANNER_DURATION_MS = 3500;
 const SETTINGS_STORAGE_KEY = "orbitbyte.settings.v1";
-const SAVED_POSTS_KEY = "orbitbyte:saved-posts";
 
 function readBlinkScrollSetting() {
   if (typeof window === "undefined") return true;
@@ -1356,12 +1356,7 @@ export default function FeedPage() {
   }, [currentPostIndex]);
 
   useEffect(() => {
-    try {
-      const saved = JSON.parse(window.localStorage.getItem(SAVED_POSTS_KEY) || "[]");
-      setSavedPostIds(Array.isArray(saved) ? saved : []);
-    } catch {
-      setSavedPostIds([]);
-    }
+    setSavedPostIds(savedIds(readSavedPosts()));
   }, []);
 
   useEffect(() => {
@@ -2064,13 +2059,9 @@ export default function FeedPage() {
   };
 
   const toggleSavedPost = (postId: string) => {
-    setSavedPostIds((current) => {
-      const next = current.includes(postId)
-        ? current.filter((id) => id !== postId)
-        : [...current, postId];
-      window.localStorage.setItem(SAVED_POSTS_KEY, JSON.stringify(next));
-      return next;
-    });
+    const next = toggleSavedEntry(readSavedPosts(), postId);
+    persistSavedPosts(next);
+    setSavedPostIds(savedIds(next));
   };
 
   const openLikeModal = (postId: string, likeCount: number) => {

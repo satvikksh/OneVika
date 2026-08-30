@@ -5,7 +5,7 @@ import { getServerSession } from "next-auth";
 import mongoose from "mongoose";
 import { authOptions } from "@/app/lib/authOptions";
 import { dbConnect } from "@/app/lib/mongodb";
-import Project, { ProjectStatus } from "@/app/models/Project";
+import Project, { PROJECT_STATUSES, ProjectStatus } from "@/app/models/Project";
 
 type FollowRow = {
   followerId?: mongoose.Types.ObjectId;
@@ -244,7 +244,7 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!["active", "completed", "research", "paused"].includes(status)) {
+    if (!(PROJECT_STATUSES as string[]).includes(status)) {
       return NextResponse.json({ error: "Invalid status" }, { status: 400 });
     }
 

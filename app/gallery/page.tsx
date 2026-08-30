@@ -1,631 +1,480 @@
-'use client';
+"use client";
 
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
-import { useState, useEffect } from "react";
-import { 
-  Search, 
-  Filter, 
-  X, 
-  ChevronLeft, 
-  ChevronRight,
+import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
+import {
+  ArrowRight,
+  BookMarked,
+  Bookmark,
+  CalendarDays,
+  FileText,
   Heart,
-  Download,
+  Loader2,
+  MessageCircle,
+  Play,
   Share2,
-  ZoomIn,
-  Grid,
-  List,
-  ChevronDown
+  Video,
 } from "lucide-react";
+import { PremiumAvatar } from "../components/premium-ui";
+import {
+  SAVED_POSTS_KEY,
+  SavedPostEntry,
+  readSavedPosts,
+  persistSavedPosts,
+  toggleSavedEntry,
+} from "../lib/savedPosts";
 
+type GalleryTab = "all" | "posts" | "videos";
 
-// Define image type
-interface GalleryImage {
-  id: number;
-  src: string;
-  alt: string;
-  title: string;
-  description: string;
-  category: string;
-  tags: string[];
-  likes: number;
-  featured?: boolean;
+type SavedFeedPost = {
+  _id: string;
+  content?: string;
+  contentType?: string;
+  images?: string[];
+  userId?: {
+    _id?: string;
+    name?: string;
+    email?: string;
+    image?: string;
+    avatar?: string;
+    isPremium?: boolean;
+  } | null;
+  likes?: string[];
+  comments?: unknown[];
+  createdAt?: string;
+};
+
+function isVideoUrl(url: string | undefined | null): boolean {
+  if (!url) return false;
+  return (
+    url.endsWith(".mp4") || url.endsWith(".webm") || url.endsWith(".mov")
+  );
 }
 
-// Mock data - replace with your actual images
-const galleryImages: GalleryImage[] = [
-  { 
-    id: 1, 
-    src: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80", 
-    alt: "Mountain Landscape", 
-    title: "Golden Peaks",
-    description: "Beautiful mountain landscape at sunset",
-    category: "nature",
-    tags: ["mountains", "sunset", "landscape"],
-    likes: 245,
-    featured: true
-  },
-  { 
-    id: 2, 
-    src: "https://images.unsplash.com/photo-1518837695005-2083093ee35b?w-800&q=80", 
-    alt: "City Skyline", 
-    title: "Urban Dreams",
-    description: "Modern city skyline at twilight",
-    category: "urban",
-    tags: ["city", "architecture", "night"],
-    likes: 189
-  },
-  { 
-    id: 3, 
-    src: "https://images.unsplash.com/photo-1540206395-68808572332f?w=800&q=80", 
-    alt: "Beach Sunset", 
-    title: "Ocean Breeze",
-    description: "Peaceful beach sunset scene",
-    category: "nature",
-    tags: ["beach", "sunset", "ocean"],
-    likes: 312,
-    featured: true
-  },
-  { 
-    id: 4, 
-    src: "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=800&q=80", 
-    alt: "Abstract Art", 
-    title: "Color Waves",
-    description: "Abstract colorful art composition",
-    category: "art",
-    tags: ["abstract", "colorful", "art"],
-    likes: 156
-  },
-  { 
-    id: 5, 
-    src: "https://images.unsplash.com/photo-1513475382585-d06e58bcb0e0?w=800&q=80", 
-    alt: "Minimal Design", 
-    title: "Minimal Lines",
-    description: "Clean minimalist architectural design",
-    category: "architecture",
-    tags: ["minimal", "design", "architecture"],
-    likes: 201
-  },
-  { 
-    id: 6, 
-    src: "https://images.unsplash.com/photo-1528164344705-47542687000d?w=800&q=80", 
-    alt: "Forest Path", 
-    title: "Enchanted Forest",
-    description: "Magical forest path covered in fog",
-    category: "nature",
-    tags: ["forest", "fog", "path"],
-    likes: 278
-  },
-  { 
-    id: 7, 
-    src: "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=800&q=80", 
-    alt: "Portrait", 
-    title: "Portrait Session",
-    description: "Professional portrait photography",
-    category: "portrait",
-    tags: ["portrait", "people", "photography"],
-    likes: 134
-  },
-  { 
-    id: 8, 
-    src: "https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=800&q=80", 
-    alt: "Wildlife", 
-    title: "Wild Kingdom",
-    description: "Wildlife in natural habitat",
-    category: "wildlife",
-    tags: ["animals", "wildlife", "nature"],
-    likes: 289
-  },
-  { 
-    id: 9, 
-    src: "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=800&q=80", 
-    alt: "Macro Photography", 
-    title: "Tiny Worlds",
-    description: "Macro photography details",
-    category: "macro",
-    tags: ["macro", "details", "closeup"],
-    likes: 167
-  },
-];
+function hasVideo(post: SavedFeedPost): boolean {
+  return (post.images || []).some((url) => isVideoUrl(url));
+}
 
-const categories = ["All", "Nature", "Urban", "Art", "Architecture", "Portrait", "Wildlife", "Macro"];
-const tags = ["mountains", "city", "sunset", "abstract", "minimal", "forest", "portrait", "animals", "macro"];
+function formatSavedDate(iso: string): string {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function truncate(text: string, max = 150): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= max) return trimmed;
+  return `${trimmed.slice(0, max).trimEnd()}…`;
+}
+
+function isAllowedAvatarHost(src: string | undefined | null): boolean {
+  if (!src) return false;
+  try {
+    const host = new URL(src).hostname;
+    return (
+      host === "res.cloudinary.com" || host.endsWith(".googleusercontent.com")
+    );
+  } catch {
+    return false;
+  }
+}
 
 export default function GalleryPage() {
-  const [selectedImage, setSelectedImage] = useState<GalleryImage | null>(null);
-  const [filter, setFilter] = useState("All");
-  const [search, setSearch] = useState("");
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [likedImages, setLikedImages] = useState<number[]>([]);
+  const router = useRouter();
+  const { data: session, status } = useSession();
 
-  // Filter images based on search, category, and tags
-  const filteredImages = galleryImages.filter(image => {
-    // Category filter
-    if (filter !== "All" && image.category.toLowerCase() !== filter.toLowerCase()) {
-      return false;
+  const [savedEntries, setSavedEntries] = useState<SavedPostEntry[]>([]);
+  const [posts, setPosts] = useState<SavedFeedPost[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<GalleryTab>("all");
+
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.replace("/login");
     }
-    
-    // Search filter
-    if (search && !image.title.toLowerCase().includes(search.toLowerCase()) && 
-        !image.description.toLowerCase().includes(search.toLowerCase()) &&
-        !image.tags.some(tag => tag.toLowerCase().includes(search.toLowerCase()))) {
-      return false;
+  }, [status, router]);
+
+  const refreshSaved = useCallback(() => {
+    setSavedEntries(readSavedPosts());
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    refreshSaved();
+
+    (async () => {
+      try {
+        const response = await fetch("/api/posts");
+        if (!response.ok) throw new Error("Failed to fetch posts");
+        const data = await response.json();
+        if (active) {
+          setPosts(Array.isArray(data) ? data : []);
+          setLoadError(null);
+        }
+      } catch {
+        if (active) setLoadError("Couldn’t load your saved content.");
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === SAVED_POSTS_KEY) refreshSaved();
+    };
+    const onFocus = () => refreshSaved();
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") refreshSaved();
+    };
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+    const interval = window.setInterval(refreshSaved, 20000);
+
+    return () => {
+      active = false;
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.clearInterval(interval);
+    };
+  }, [refreshSaved]);
+
+  const savedAtMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const entry of savedEntries) map[entry.id] = entry.savedAt;
+    return map;
+  }, [savedEntries]);
+
+  const savedPosts = useMemo(() => {
+    const matched = posts.filter((post) => savedAtMap[post._id]);
+    return [...matched].sort((a, b) => {
+      const timeA = savedAtMap[a._id] || a.createdAt || "";
+      const timeB = savedAtMap[b._id] || b.createdAt || "";
+      return new Date(timeB).getTime() - new Date(timeA).getTime();
+    });
+  }, [posts, savedAtMap]);
+
+  const videoCount = useMemo(
+    () => savedPosts.filter((post) => hasVideo(post)).length,
+    [savedPosts]
+  );
+  const postCount = savedPosts.length - videoCount;
+
+  const visiblePosts = useMemo(() => {
+    if (activeTab === "videos") return savedPosts.filter((post) => hasVideo(post));
+    if (activeTab === "posts") return savedPosts.filter((post) => !hasVideo(post));
+    return savedPosts;
+  }, [activeTab, savedPosts]);
+
+  const tabs: { id: GalleryTab; label: string; count: number }[] = [
+    { id: "all", label: "All", count: savedPosts.length },
+    { id: "posts", label: "Posts", count: postCount },
+    { id: "videos", label: "Videos", count: videoCount },
+  ];
+
+  const openPost = (postId: string) =>
+    router.push(`/feed?postId=${encodeURIComponent(postId)}`);
+
+  const unsave = (postId: string) => {
+    setSavedEntries((current) => {
+      const next = toggleSavedEntry(current, postId);
+      persistSavedPosts(next);
+      return next;
+    });
+  };
+
+  const share = async (postId: string, content: string) => {
+    const url = `${window.location.origin}/feed?postId=${encodeURIComponent(postId)}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: "OrbitByte post", text: content, url });
+      } else {
+        await navigator.clipboard.writeText(url);
+      }
+    } catch {
+      /* user cancelled share */
     }
-    
-    // Tags filter
-    if (selectedTags.length > 0 && !selectedTags.some(tag => image.tags.includes(tag))) {
-      return false;
-    }
-    
-    return true;
-  });
-
-  const openLightbox = (image: GalleryImage, index: number) => {
-    setSelectedImage(image);
-    setCurrentImageIndex(index);
-    setIsLightboxOpen(true);
   };
 
-  const closeLightbox = () => {
-    setIsLightboxOpen(false);
-    setSelectedImage(null);
-  };
-
-  const navigateLightbox = (direction: "prev" | "next") => {
-    let newIndex = currentImageIndex;
-    if (direction === "next" && currentImageIndex < filteredImages.length - 1) {
-      newIndex = currentImageIndex + 1;
-    } else if (direction === "prev" && currentImageIndex > 0) {
-      newIndex = currentImageIndex - 1;
-    }
-    setCurrentImageIndex(newIndex);
-    setSelectedImage(filteredImages[newIndex]);
-  };
-
-  const toggleLike = (imageId: number) => {
-    setLikedImages(prev => 
-      prev.includes(imageId) 
-        ? prev.filter(id => id !== imageId)
-        : [...prev, imageId]
-    );
-  };
-
-  const toggleTag = (tag: string) => {
-    setSelectedTags(prev =>
-      prev.includes(tag)
-        ? prev.filter(t => t !== tag)
-        : [...prev, tag]
-    );
-  };
-
-  const downloadImage = (image: GalleryImage) => {
-    const link = document.createElement('a');
-    link.href = image.src;
-    link.download = `${image.title}.jpg`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+  const renderEmptyState = () => (
+    <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-stone-300 px-6 py-20 text-center dark:border-gray-800">
+      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-stone-100 text-stone-400 dark:bg-white/5 dark:text-stone-500">
+        <BookMarked className="h-8 w-8" />
+      </div>
+      <h2 className="mt-5 text-lg font-bold text-stone-900 dark:text-stone-100">
+        Nothing saved yet
+      </h2>
+      <p className="mt-1 max-w-sm text-sm text-stone-500 dark:text-stone-400">
+        Tap the bookmark on any post or video to keep it here — your own private
+        collection.
+      </p>
+      <button
+        onClick={() => router.push("/feed")}
+        className="mt-6 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-pink-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-500/20 transition hover:opacity-90"
+      >
+        Explore the Feed <ArrowRight size={16} />
+      </button>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-gray-900 to-slate-800 text-white">
-      {/* Hero Section */}
-      <div className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-blue-600/20 via-transparent to-pink-600/20" />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 relative">
-          <div className="text-center max-w-3xl mx-auto">
-            <h1 className="text-5xl md:text-6xl font-extrabold mb-6">
-              <span className="bg-gradient-to-r from-blue-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
-                Gallery
-              </span>
-            </h1>
-            <p className="text-xl text-gray-300 mb-8">
-              A visual collection of creativity, memories, and moments captured by our community.
-            </p>
-            
-            {/* Search Bar */}
-            <div className="relative max-w-2xl mx-auto mb-8">
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search images by title, description, or tags..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-12 pr-4 py-4 bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Filters Section */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-12">
-        <div className="bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl p-6">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-6">
+    <main className="flex min-h-screen justify-center bg-stone-50 text-stone-950 transition-colors dark:bg-black dark:text-stone-100">
+      <div className="flex w-full max-w-7xl flex-col gap-6 px-5 py-8 pb-24 lg:pb-12">
+        {/* Header */}
+        <header className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-pink-600 text-white shadow-lg shadow-blue-500/20">
+              <BookMarked size={20} />
+            </span>
             <div>
-              <h2 className="text-xl font-bold mb-2 flex items-center">
-                <Filter className="mr-2" />
-                Filters
-              </h2>
-              <p className="text-gray-400 text-sm">
-                {filteredImages.length} of {galleryImages.length} images
+              <h1 className="text-xl font-bold text-stone-950 dark:text-stone-100">
+                Gallery
+              </h1>
+              <p className="text-xs text-stone-500 dark:text-stone-400">
+                Your saved posts and videos
               </p>
             </div>
-            
-            {/* View Toggle */}
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2 bg-white/5 rounded-lg p-1">
-                <button
-                  onClick={() => setViewMode("grid")}
-                  className={`p-2 rounded-md transition-colors ${
-                    viewMode === "grid" ? "bg-blue-500" : "hover:bg-white/10"
-                  }`}
-                >
-                  <Grid className="w-5 h-5" />
-                </button>
-                <button
-                  onClick={() => setViewMode("list")}
-                  className={`p-2 rounded-md transition-colors ${
-                    viewMode === "list" ? "bg-blue-500" : "hover:bg-white/10"
-                  }`}
-                >
-                  <List className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
           </div>
 
-          {/* Category Filters */}
-          <div className="mb-6">
-            <h3 className="text-sm font-semibold text-gray-400 mb-3">CATEGORIES</h3>
-            <div className="flex flex-wrap gap-2">
-              {categories.map(category => (
-                <button
-                  key={category}
-                  onClick={() => setFilter(category)}
-                  className={`px-4 py-2 rounded-full text-sm transition-all ${
-                    filter === category
-                      ? "bg-gradient-to-r from-blue-500 to-pink-500 text-white"
-                      : "bg-white/5 hover:bg-white/10 text-gray-300"
-                  }`}
-                >
-                  {category}
-                </button>
-              ))}
-            </div>
-          </div>
+          {savedPosts.length > 0 && (
+            <span className="rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs font-semibold text-stone-600 dark:border-gray-800 dark:bg-white/5 dark:text-stone-300">
+              {savedPosts.length} saved
+            </span>
+          )}
+        </header>
 
-          {/* Tag Filters */}
-          <div>
-            <h3 className="text-sm font-semibold text-gray-400 mb-3">POPULAR TAGS</h3>
-            <div className="flex flex-wrap gap-2">
-              {tags.map(tag => (
-                <button
-                  key={tag}
-                  onClick={() => toggleTag(tag)}
-                  className={`px-3 py-1.5 rounded-full text-xs transition-all ${
-                    selectedTags.includes(tag)
-                      ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white"
-                      : "bg-white/5 hover:bg-white/10 text-gray-300"
-                  }`}
-                >
-                  #{tag}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Gallery Grid */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20">
-        {viewMode === "grid" ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredImages.map((image, index) => (
-              <div
-                key={image.id}
-                className="group relative overflow-hidden rounded-2xl bg-white/5 border border-white/10 backdrop-blur-lg shadow-xl hover:shadow-2xl transition-all duration-300 cursor-pointer"
-                onClick={() => openLightbox(image, index)}
+        {/* Tabs */}
+        <div className="sticky top-0 z-30 -mx-5 flex gap-2 px-5 py-3 backdrop-blur-lg sm:mx-0 sm:px-0">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                activeTab === tab.id
+                  ? "bg-stone-900 text-white dark:bg-white dark:text-stone-900"
+                  : "border border-stone-200 bg-white text-stone-600 hover:border-stone-300 dark:border-gray-800 dark:bg-white/5 dark:text-stone-300 dark:hover:border-gray-700"
+              }`}
+            >
+              {tab.label}
+              <span
+                className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none ${
+                  activeTab === tab.id
+                    ? "bg-white/20 dark:bg-stone-900/20"
+                    : "bg-stone-100 text-stone-500 dark:bg-white/10 dark:text-stone-400"
+                }`}
               >
-                {/* Featured Badge */}
-                {/* {image.featured && (
-                  <div className="absolute top-4 left-4 z-10">
-                    <span className="px-3 py-1 bg-gradient-to-r from-blue-500 to-pink-500 text-white text-xs font-bold rounded-full">
-                      Featured
-                    </span>
-                  </div>
-                )} */}
+                {tab.count}
+              </span>
+            </button>
+          ))}
+        </div>
 
-                {/* Image Container */}
-                <div className="aspect-square overflow-hidden">
-                  <div className="relative w-full h-full">
-                    {/* <Image
-                      src={image.src}
-                      alt={image.alt}
-                      fill
-                      className="object-cover transition-transform duration-500 group-hover:scale-110"
-                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                    /> */}
-                  </div>
-                </div>
-
-                {/* Hover Overlay */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-6">
-                  <h3 className="text-xl font-bold text-white mb-2">{image.title}</h3>
-                  <p className="text-gray-200 text-sm mb-3">{image.description}</p>
-                  
-                  <div className="flex items-center justify-between">
-                    <div className="flex flex-wrap gap-1">
-                      {image.tags.map(tag => (
-                        <span key={tag} className="px-2 py-1 bg-white/20 text-white text-xs rounded">
-                          #{tag}
-                        </span>
-                      ))}
-                    </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleLike(image.id);
-                      }}
-                      className="p-2 hover:bg-white/20 rounded-full transition-colors"
-                    >
-                      <Heart 
-                        className={`w-5 h-5 ${
-                          likedImages.includes(image.id) 
-                            ? "fill-red-500 text-red-500" 
-                            : "text-white"
-                        }`} 
-                      />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Zoom Icon */}
-                <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <div className="bg-black/50 p-2 rounded-full backdrop-blur-sm">
-                    <ZoomIn className="w-5 h-5 text-white" />
-                  </div>
-                </div>
-              </div>
-            ))}
+        {/* Content */}
+        {loading && savedPosts.length === 0 ? (
+          <div className="flex items-center justify-center py-24 text-stone-400">
+            <Loader2 className="h-7 w-7 animate-spin text-stone-300 dark:text-stone-500" />
+            <span className="ml-2 text-sm">Loading your gallery…</span>
+          </div>
+        ) : savedPosts.length === 0 ? (
+          renderEmptyState()
+        ) : loadError ? (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-500/25 dark:bg-rose-500/10 dark:text-rose-200">
+            {loadError} Saved items still show for posts already loaded.
+          </div>
+        ) : visiblePosts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-stone-100 text-stone-400 dark:bg-white/5 dark:text-stone-500">
+              {activeTab === "videos" ? <Video size={26} /> : <FileText size={26} />}
+            </div>
+            <p className="mt-4 text-sm font-semibold text-stone-900 dark:text-stone-100">
+              No saved {activeTab === "videos" ? "videos" : "posts"} yet
+            </p>
+            <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+              Save {activeTab === "videos" ? "videos" : "posts"} from the Feed with
+              the bookmark icon.
+            </p>
           </div>
         ) : (
-          // List View
-          <div className="space-y-6">
-            {filteredImages.map((image, index) => (
-              <div
-                key={image.id}
-                className="group bg-white/5 border border-white/10 backdrop-blur-lg rounded-2xl overflow-hidden hover:bg-white/10 transition-all duration-300 cursor-pointer"
-                onClick={() => openLightbox(image, index)}
-              >
-                <div className="flex flex-col md:flex-row">
-                  <div className="md:w-64 h-64 relative flex-shrink-0">
-                    {/* <Image
-                      src={image.src}
-                      alt={image.alt}
-                      fill
-                      className="object-cover"
-                      sizes="(max-width: 768px) 100vw, 256px"
-                    />
-                    {image.featured && (
-                      <div className="absolute top-4 left-4">
-                        <span className="px-3 py-1 bg-gradient-to-r from-blue-500 to-pink-500 text-white text-xs font-bold rounded-full">
-                          Featured
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {visiblePosts.map((post) => {
+              const creator = post.userId || {};
+              const name = creator.name || "OrbitByte User";
+              const avatarSrc =
+                creator.image ||
+                creator.avatar ||
+                (isAllowedAvatarHost(creator.image) ? creator.image : null);
+              const firstMedia = (post.images || [])[0];
+              const isVideo = isVideoUrl(firstMedia);
+              const savedDate = savedAtMap[post._id]
+                ? formatSavedDate(savedAtMap[post._id])
+                : "";
+              const liked = (post.likes || []).some(
+                (like) => String(like) === session?.user?.id
+              );
+              const commentCount = (post.comments && post.comments.length) || 0;
+
+              return (
+                <div
+                  key={post._id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => openPost(post._id)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      openPost(post._id);
+                    }
+                  }}
+                  className="group flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm transition-colors hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-800 dark:bg-[#0d0d0f] dark:hover:border-gray-600"
+                >
+                  {/* Media */}
+                  <div className="relative aspect-[4/3] w-full overflow-hidden bg-stone-100 dark:bg-black/40">
+                    {firstMedia ? (
+                      isVideo ? (
+                        <video
+                          src={firstMedia}
+                          muted
+                          playsInline
+                          preload="metadata"
+                          tabIndex={-1}
+                          className="absolute inset-0 h-full w-full object-cover"
+                        />
+                      ) : (
+                        <Image
+                          src={firstMedia}
+                          alt=""
+                          fill
+                          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                          className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                        />
+                      )
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center px-6">
+                        <p className="text-center text-sm text-stone-500 dark:text-stone-400">
+                          {truncate(post.content || "No media", 120)}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Content type badge */}
+                    <span className="absolute left-3 top-3 z-10 flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur">
+                      {isVideo ? <Video size={12} /> : <FileText size={12} />}
+                      {isVideo ? "Video" : "Post"}
+                    </span>
+
+                    {/* Extra media count */}
+                    {!isVideo && (post.images || []).length > 1 && (
+                      <span className="absolute bottom-3 right-3 z-10 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur">
+                        +{(post.images || []).length - 1}
+                      </span>
+                    )}
+
+                    {/* Video play overlay */}
+                    {isVideo && (
+                      <div className="absolute inset-0 z-[5] flex items-center justify-center bg-black/15 transition-colors group-hover:bg-black/5">
+                        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/95 text-stone-900 shadow-lg transition-transform group-hover:scale-110">
+                          <Play size={20} className="ml-0.5 fill-current" />
                         </span>
                       </div>
-                    )} */}
+                    )}
+
+                    {/* Unsave */}
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        unsave(post._id);
+                      }}
+                      aria-label="Remove from Gallery"
+                      title="Remove from Gallery"
+                      className="absolute right-3 top-3 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-blue-400 backdrop-blur transition-transform hover:scale-110"
+                    >
+                      <Bookmark size={15} className="fill-current" />
+                    </button>
                   </div>
-                  <div className="flex-1 p-6">
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <h3 className="text-2xl font-bold mb-2">{image.title}</h3>
-                        <p className="text-gray-300 mb-4">{image.description}</p>
-                        <div className="flex flex-wrap gap-2 mb-4">
-                          <span className="px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full text-sm">
-                            {image.category}
-                          </span>
-                          {image.tags.map(tag => (
-                            <span key={tag} className="px-2 py-1 bg-white/10 text-gray-300 text-sm rounded">
-                              #{tag}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleLike(image.id);
-                          }}
-                          className="p-2 hover:bg-white/10 rounded-full transition-colors"
-                        >
-                          <Heart 
-                            className={`w-5 h-5 ${
-                              likedImages.includes(image.id) 
-                                ? "fill-red-500 text-red-500" 
-                                : "text-gray-300"
-                            }`} 
-                          />
-                        </button>
-                        <span className="text-gray-400 text-sm">{image.likes + (likedImages.includes(image.id) ? 1 : 0)} likes</span>
+
+                  {/* Body */}
+                  <div className="flex flex-1 flex-col gap-3 p-4">
+                    {/* Creator */}
+                    <div className="flex items-center gap-2.5">
+                      <PremiumAvatar
+                        src={isAllowedAvatarHost(avatarSrc) ? avatarSrc : null}
+                        alt={name}
+                        fallback={name}
+                        size={36}
+                        isPremium={!!creator.isPremium}
+                      />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-stone-900 dark:text-stone-100">
+                          {name}
+                        </p>
+                        {savedDate ? (
+                          <p className="flex items-center gap-1 text-[11px] text-stone-500 dark:text-stone-400">
+                            <CalendarDays size={11} />
+                            Saved {savedDate}
+                          </p>
+                        ) : (
+                          <p className="text-[11px] text-stone-400 dark:text-stone-500">
+                            @{creator._id?.slice(-6) || "orbitbyte"}
+                          </p>
+                        )}
                       </div>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <button className="text-sm text-gray-400 hover:text-white flex items-center">
-                        <ZoomIn className="w-4 h-4 mr-1" />
-                        View full size
+
+                    {/* Post content */}
+                    {post.content ? (
+                      <p className="text-sm leading-relaxed text-stone-600 dark:text-stone-300">
+                        {truncate(post.content, 150)}
+                      </p>
+                    ) : (
+                      <p className="text-sm text-stone-400 dark:text-stone-500">
+                        Share this post and see replies in the Feed.
+                      </p>
+                    )}
+
+                    {/* Stats */}
+                    <div className="mt-auto flex items-center gap-4 border-t border-stone-100 pt-3 text-xs text-stone-500 dark:border-gray-800 dark:text-stone-400">
+                      <span className="flex items-center gap-1.5">
+                        <Heart
+                          size={14}
+                          className={
+                            liked ? "fill-rose-500 text-rose-500" : ""
+                          }
+                        />
+                        {(post.likes && post.likes.length) || 0}
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <MessageCircle size={14} />
+                        {commentCount}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          share(post._id, post.content || "");
+                        }}
+                        aria-label="Share post"
+                        className="ml-auto flex items-center gap-1.5 rounded-lg px-2 py-1 font-medium text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-700 dark:text-stone-400 dark:hover:bg-white/5 dark:hover:text-stone-200"
+                      >
+                        <Share2 size={14} />
+                        Share
                       </button>
-                      <span className="text-xs text-gray-500">Click to expand</span>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* No Results */}
-        {filteredImages.length === 0 && (
-          <div className="text-center py-20">
-            <div className="max-w-md mx-auto">
-              <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-white/5 flex items-center justify-center">
-                <Search className="w-10 h-10 text-gray-400" />
-              </div>
-              <h3 className="text-2xl font-bold mb-2">No images found</h3>
-              <p className="text-gray-400 mb-6">
-                Try adjusting your search or filters to find what you're looking for.
-              </p>
-              <button
-                onClick={() => {
-                  setFilter("All");
-                  setSearch("");
-                  setSelectedTags([]);
-                }}
-                className="px-6 py-3 bg-gradient-to-r from-blue-500 to-pink-500 text-white rounded-lg hover:opacity-90 transition-opacity"
-              >
-                Clear all filters
-              </button>
-            </div>
+              );
+            })}
           </div>
         )}
       </div>
-
-      {/* Lightbox Modal */}
-      {isLightboxOpen && selectedImage && (
-        <div className="fixed inset-0 z-50 bg-black/95 backdrop-blur-sm flex items-center justify-center p-4">
-          {/* Close Button */}
-          <button
-            onClick={closeLightbox}
-            className="absolute top-6 right-6 z-50 p-3 bg-white/10 hover:bg-white/20 rounded-full backdrop-blur-sm transition-colors"
-          >
-            <X className="w-6 h-6 text-white" />
-          </button>
-
-          {/* Navigation Buttons */}
-          <button
-            onClick={() => navigateLightbox("prev")}
-            disabled={currentImageIndex === 0}
-            className="absolute left-6 top-1/2 transform -translate-y-1/2 z-50 p-3 bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed rounded-full backdrop-blur-sm transition-colors"
-          >
-            <ChevronLeft className="w-8 h-8 text-white" />
-          </button>
-
-          <button
-            onClick={() => navigateLightbox("next")}
-            disabled={currentImageIndex === filteredImages.length - 1}
-            className="absolute right-6 top-1/2 transform -translate-y-1/2 z-50 p-3 bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed rounded-full backdrop-blur-sm transition-colors"
-          >
-            <ChevronRight className="w-8 h-8 text-white" />
-          </button>
-
-          {/* Lightbox Content */}
-          <div className="max-w-6xl w-full max-h-[90vh] flex flex-col lg:flex-row gap-8">
-            {/* Image */}
-            <div className="flex-1 relative min-h-[60vh] lg:min-h-[80vh] rounded-2xl overflow-hidden bg-white/5">
-              <Image
-                src={selectedImage.src}
-                alt={selectedImage.alt}
-                fill
-                className="object-contain"
-                sizes="(max-width: 1200px) 100vw, 800px"
-              />
-            </div>
-
-            {/* Image Info */}
-            <div className="lg:w-96 bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl p-6 overflow-y-auto">
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <h2 className="text-2xl font-bold mb-2">{selectedImage.title}</h2>
-                  <p className="text-gray-300 mb-4">{selectedImage.description}</p>
-                </div>
-                {selectedImage.featured && (
-                  <span className="px-3 py-1 bg-gradient-to-r from-blue-500 to-pink-500 text-white text-xs font-bold rounded-full">
-                    Featured
-                  </span>
-                )}
-              </div>
-
-              {/* Category & Tags */}
-              <div className="mb-6">
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-sm text-gray-400">Category:</span>
-                  <span className="px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full text-sm">
-                    {selectedImage.category}
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {selectedImage.tags.map(tag => (
-                    <span key={tag} className="px-3 py-1 bg-white/10 text-gray-300 text-sm rounded-full">
-                      #{tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              {/* Stats */}
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <div className="bg-white/5 rounded-lg p-4 text-center">
-                  <div className="text-2xl font-bold mb-1">
-                    {selectedImage.likes + (likedImages.includes(selectedImage.id) ? 1 : 0)}
-                  </div>
-                  <div className="text-sm text-gray-400">Likes</div>
-                </div>
-                <div className="bg-white/5 rounded-lg p-4 text-center">
-                  <div className="text-2xl font-bold mb-1">{selectedImage.id}</div>
-                  <div className="text-sm text-gray-400">Image ID</div>
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={() => toggleLike(selectedImage.id)}
-                  className="flex-1 flex items-center justify-center gap-2 py-3 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
-                >
-                  <Heart 
-                    className={`w-5 h-5 ${
-                      likedImages.includes(selectedImage.id) 
-                        ? "fill-red-500 text-red-500" 
-                        : "text-white"
-                    }`} 
-                  />
-                  {likedImages.includes(selectedImage.id) ? "Liked" : "Like"}
-                </button>
-                <button
-                  onClick={() => downloadImage(selectedImage)}
-                  className="flex-1 flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 hover:opacity-90 rounded-lg transition-opacity"
-                >
-                  <Download className="w-5 h-5" />
-                  Download
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Image Counter */}
-          <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full">
-            <span className="text-sm text-white">
-              {currentImageIndex + 1} / {filteredImages.length}
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* Footer */}
-      <footer className="border-t border-white/10 py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center">
-            <p className="text-gray-400 text-sm">
-              © {new Date().getFullYear()} Skimagination. All rights reserved.
-            </p>
-            <p className="text-gray-500 text-xs mt-2">
-              All images are used for demonstration purposes.
-            </p>
-          </div>
-        </div>
-      </footer>
-    </div>
+    </main>
   );
 }

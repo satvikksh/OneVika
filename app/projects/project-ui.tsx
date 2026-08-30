@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -8,11 +9,22 @@ import {
   Clock,
   ExternalLink,
   Github,
+  Loader2,
+  Pencil,
   Sparkles,
   Users,
+  X,
 } from "lucide-react";
 
-export type ProjectStatus = "active" | "completed" | "research" | "paused";
+export type ProjectStatus =
+  | "planning"
+  | "in-progress"
+  | "on-hold"
+  | "completed"
+  | "cancelled"
+  | "active"
+  | "research"
+  | "paused";
 
 export type ProjectItem = {
   id: string;
@@ -42,13 +54,29 @@ export const statusConfig: Record<
   ProjectStatus,
   { label: string; className: string }
 > = {
-  active: {
-    label: "Active",
-    className: "border-emerald-500/30 bg-emerald-500/15 text-emerald-300",
+  planning: {
+    label: "Planning",
+    className: "border-violet-500/30 bg-violet-500/15 text-violet-300",
+  },
+  "in-progress": {
+    label: "In Progress",
+    className: "border-cyan-500/30 bg-cyan-500/15 text-cyan-300",
+  },
+  "on-hold": {
+    label: "On Hold",
+    className: "border-orange-500/30 bg-orange-500/15 text-orange-300",
   },
   completed: {
     label: "Completed",
     className: "border-blue-500/30 bg-blue-500/15 text-blue-300",
+  },
+  cancelled: {
+    label: "Cancelled",
+    className: "border-rose-500/30 bg-rose-500/15 text-rose-300",
+  },
+  active: {
+    label: "Active",
+    className: "border-emerald-500/30 bg-emerald-500/15 text-emerald-300",
   },
   research: {
     label: "Research",
@@ -59,6 +87,22 @@ export const statusConfig: Record<
     className: "border-slate-500/30 bg-slate-500/15 text-slate-300",
   },
 };
+
+const FALLBACK_STATUS = {
+  label: "Unknown",
+  className: "border-slate-500/30 bg-slate-500/15 text-slate-300",
+};
+
+export const selectableProjectStatuses: {
+  value: ProjectStatus;
+  label: string;
+}[] = [
+  { value: "planning", label: "Planning" },
+  { value: "in-progress", label: "In Progress" },
+  { value: "on-hold", label: "On Hold" },
+  { value: "completed", label: "Completed" },
+  { value: "cancelled", label: "Cancelled" },
+];
 
 export function ProjectsShell({
   eyebrow,
@@ -141,14 +185,23 @@ export function EmptyProjects({
 export function ProjectCard({
   project,
   showAuthor,
+  canEdit = false,
+  onStatusUpdated,
 }: {
   project: ProjectItem;
   showAuthor: boolean;
+  canEdit?: boolean;
+  onStatusUpdated?: (
+    projectId: string,
+    status: ProjectStatus,
+    progress: number
+  ) => void;
 }) {
-  const status = statusConfig[project.status];
+  const status = statusConfig[project.status] ?? FALLBACK_STATUS;
+  const [editorOpen, setEditorOpen] = useState(false);
 
   return (
-    <article className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl transition-colors hover:border-white/20">
+    <article className="relative rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl transition-colors hover:border-white/20">
       <div className="mb-5 flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -160,6 +213,17 @@ export function ProjectCard({
             >
               {status.label}
             </span>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => setEditorOpen(true)}
+                aria-label={`Update status for ${project.title}`}
+                className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-slate-950/40 px-2.5 py-1 text-xs font-medium text-slate-300 transition-colors hover:border-cyan-400/40 hover:text-cyan-200"
+              >
+                <Pencil className="h-3 w-3" />
+                Update Status
+              </button>
+            )}
           </div>
           <h3 className="truncate text-2xl font-bold text-white">{project.title}</h3>
           {project.tagline && (
@@ -260,31 +324,243 @@ export function ProjectCard({
       </div>
 
       {(project.githubUrl || project.liveUrl) && (
-        <div className="mt-5 flex flex-wrap gap-3">
-          {project.githubUrl && (
-            <a
-              href={project.githubUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-200 transition-colors hover:bg-white/10"
-            >
-              <Github className="h-4 w-4" />
-              GitHub
-            </a>
+            <div className="mt-5 flex flex-wrap gap-3">
+              {project.githubUrl && (
+                <a
+                  href={project.githubUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-200 transition-colors hover:bg-white/10"
+                >
+                  <Github className="h-4 w-4" />
+                  GitHub
+                </a>
+              )}
+              {project.liveUrl && (
+                <a
+                  href={project.liveUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  Live Demo
+                </a>
+              )}
+            </div>
           )}
-          {project.liveUrl && (
-            <a
-              href={project.liveUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
-            >
-              <ExternalLink className="h-4 w-4" />
-              Live Demo
-            </a>
-          )}
-        </div>
+
+      {editorOpen && canEdit && (
+        <ProjectStatusEditor
+          project={project}
+          onClose={() => setEditorOpen(false)}
+          onUpdated={(projectId, newStatus, newProgress) => {
+            onStatusUpdated?.(projectId, newStatus, newProgress);
+            setEditorOpen(false);
+          }}
+        />
       )}
     </article>
+  );
+}
+
+function ProjectStatusEditor({
+  project,
+  onClose,
+  onUpdated,
+}: {
+  project: ProjectItem;
+  onClose: () => void;
+  onUpdated: (projectId: string, status: ProjectStatus, progress: number) => void;
+}) {
+  const currentConfig = statusConfig[project.status] ?? FALLBACK_STATUS;
+  const [status, setStatus] = useState<ProjectStatus>(project.status);
+  const [progressInput, setProgressInput] = useState(String(project.progress));
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const options = useMemo(() => {
+    const list = [...selectableProjectStatuses];
+    if (!list.some((option) => option.value === project.status)) {
+      list.push({
+        value: project.status,
+        label: currentConfig.label,
+      });
+    }
+    return list;
+  }, [project.status, currentConfig.label]);
+
+  const parsedProgress = Number(progressInput);
+  const currentProgress = Number(project.progress) || 0;
+  const unchanged =
+    status === project.status &&
+    Number.isFinite(parsedProgress) &&
+    parsedProgress === currentProgress;
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const handleSave = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (submitting || unchanged) return;
+
+    const progress = Number(progressInput);
+    if (!Number.isFinite(progress) || progress < 0 || progress > 100) {
+      setError("Progress must be between 0 and 100");
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      setError(null);
+
+      const response = await fetch(`/api/projects/${project.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status, progress }),
+      });
+      const payload = (await response.json()) as { error?: string };
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Failed to update project");
+      }
+
+      onUpdated(project.id, status, progress);
+    } catch (saveError) {
+      console.error("Failed to update project:", saveError);
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Failed to update project"
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <button
+        type="button"
+        aria-label="Close status editor"
+        onClick={onClose}
+        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+      />
+      <form
+        onSubmit={handleSave}
+        className="relative w-full max-w-md rounded-3xl border border-white/10 bg-slate-900/95 p-6 shadow-2xl backdrop-blur-xl"
+      >
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h3 className="text-xl font-bold text-white">Update status &amp; progress</h3>
+            <p className="mt-1 truncate text-sm text-slate-400">{project.title}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="rounded-xl border border-white/10 bg-white/5 p-2 text-slate-300 transition-colors hover:bg-white/10"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="mb-5 grid grid-cols-2 gap-3">
+          <div>
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+              Current status
+            </p>
+            <span
+              className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium ${currentConfig.className}`}
+            >
+              {currentConfig.label}
+            </span>
+          </div>
+          <div>
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+              Current progress
+            </p>
+            <span className="inline-flex items-center rounded-full border border-slate-500/30 bg-slate-500/15 px-3 py-1 text-xs font-medium text-slate-300">
+              {currentProgress}%
+            </span>
+          </div>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label
+              htmlFor="project-status-select"
+              className="mb-2 block text-sm font-medium text-slate-300"
+            >
+              Status
+            </label>
+            <select
+              id="project-status-select"
+              value={status}
+              onChange={(event) => setStatus(event.target.value as ProjectStatus)}
+              className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-white outline-none focus:border-cyan-400/40"
+            >
+              {options.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label
+              htmlFor="project-progress-input"
+              className="mb-2 block text-sm font-medium text-slate-300"
+            >
+              Progress (0–100)
+            </label>
+            <input
+              id="project-progress-input"
+              type="number"
+              min="0"
+              max="100"
+              step="1"
+              value={progressInput}
+              onChange={(event) => setProgressInput(event.target.value)}
+              className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-white outline-none focus:border-cyan-400/40"
+            />
+          </div>
+        </div>
+
+        <div className="mt-5 flex items-center justify-between gap-4">
+          <div className="min-h-5 flex-1 text-sm">
+            {error && <span className="text-rose-400">{error}</span>}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={submitting}
+              className="rounded-2xl border border-white/10 bg-white/5 px-5 py-2.5 text-sm font-medium text-slate-200 transition-colors hover:bg-white/10 disabled:opacity-60"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting || unchanged}
+              className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-blue-500 via-cyan-400 to-emerald-400 px-5 py-2.5 text-sm font-semibold text-slate-950 transition-opacity hover:opacity-90 disabled:opacity-60"
+            >
+              {submitting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <CheckCircle className="h-4 w-4" />
+              )}
+              Save Changes
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
   );
 }

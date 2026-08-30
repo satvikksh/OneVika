@@ -14,11 +14,16 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { PremiumAvatar, PremiumName } from "../premium-ui";
+import {
+  readSavedPosts,
+  persistSavedPosts,
+  toggleSavedEntry,
+  savedIds,
+} from "../../lib/savedPosts";
 
 const RECENT_POST_WINDOW_DAYS = 3;
 const RECENT_POST_LIMIT = 10;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
-const SAVED_POSTS_KEY = "orbitbyte:saved-posts";
 
 interface User {
   _id: string;
@@ -68,12 +73,7 @@ export default function NewPosts() {
   const [savedPostIds, setSavedPostIds] = useState<string[]>([]);
 
   useEffect(() => {
-    try {
-      const saved = JSON.parse(window.localStorage.getItem(SAVED_POSTS_KEY) || "[]");
-      setSavedPostIds(Array.isArray(saved) ? saved : []);
-    } catch {
-      setSavedPostIds([]);
-    }
+    setSavedPostIds(savedIds(readSavedPosts()));
   }, []);
 
   useEffect(() => {
@@ -186,13 +186,9 @@ export default function NewPosts() {
   }
 
   function toggleSaved(postId: string) {
-    setSavedPostIds((current) => {
-      const next = current.includes(postId)
-        ? current.filter((id) => id !== postId)
-        : [...current, postId];
-      window.localStorage.setItem(SAVED_POSTS_KEY, JSON.stringify(next));
-      return next;
-    });
+    const next = toggleSavedEntry(readSavedPosts(), postId);
+    persistSavedPosts(next);
+    setSavedPostIds(savedIds(next));
   }
 
   if (loading || error || posts.length === 0) {
