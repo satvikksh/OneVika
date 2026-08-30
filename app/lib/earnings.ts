@@ -4,6 +4,8 @@ import { getServerSession } from "next-auth";
 
 import { authOptions } from "@/app/lib/authOptions";
 import AdminAuditLog from "@/app/models/AdminAuditLog";
+import CreatorRevenueAllocation from "@/app/models/CreatorRevenueAllocation";
+import CreatorEarningTransaction from "@/app/models/CreatorEarningTransaction";
 import EarningCycle from "@/app/models/EarningCycle";
 import EarningTransaction from "@/app/models/EarningTransaction";
 import PlatformSettings from "@/app/models/PlatformSettings";
@@ -311,31 +313,99 @@ export async function transitionWithdrawal({
       if (!withdrawal) throw new Error("Withdrawal not found");
 
       const wallet = await getOrCreateWallet(withdrawal.userId, dbSession);
-      const cycle = await EarningCycle.findById(withdrawal.earningCycleId).session(dbSession);
-      if (!cycle) throw new Error("Earning cycle not found");
+      const isCreatorAllocation = Boolean(
+        withdrawal.creatorAllocationIds?.length
+      );
+      const cycle = isCreatorAllocation
+        ? null
+        : await EarningCycle.findById(withdrawal.earningCycleId).session(dbSession);
+
+      if (!isCreatorAllocation && !cycle) {
+        throw new Error("Earning cycle not found");
+      }
+
+      const allocations = isCreatorAllocation
+        ? await CreatorRevenueAllocation.find({
+            _id: { $in: withdrawal.creatorAllocationIds },
+          }).session(dbSession)
+        : [];
+
+      const allocationIds = allocations.map((a) => a._id);
+      const markAllocationWithdrawalTxn = async (status: string) => {
+        if (allocationIds.length > 0) {
+          await CreatorEarningTransaction.updateMany(
+            {
+              allocationId: { $in: allocationIds },
+              type: "WITHDRAWAL",
+              withdrawalId: withdrawal._id,
+            },
+            { $set: { status, description: `Withdrawal ${status.toLowerCase()}` } },
+            { session: dbSession }
+          );
+        }
+      };
+      const refundAllocations = async () => {
+        if (allocations.length > 0) {
+          for (const allocation of allocations) {
+            const existing = await CreatorEarningTransaction.findOne({
+              allocationId: allocation._id,
+              type: "REFUND",
+            }).session(dbSession);
+            if (!existing) {
+              await CreatorEarningTransaction.create(
+                [
+                  {
+                    creatorId: allocation.creatorId,
+                    cycleId: allocation.cycleId,
+                    allocationId: allocation._id,
+                    withdrawalId: withdrawal._id,
+                    type: "REFUND",
+                    amountPaise: allocation.finalRevenuePaise,
+                    currency: INR_CURRENCY,
+                    status: "COMPLETED",
+                    description: "Withdrawal refunded",
+                  },
+                ],
+                { session: dbSession }
+              );
+            }
+          }
+          await CreatorRevenueAllocation.updateMany(
+            { _id: { $in: allocationIds } },
+            { $set: { revenueState: "RELEASED" } },
+            { session: dbSession }
+          );
+        }
+      };
 
       if (nextStatus === "APPROVED") {
         if (withdrawal.status !== "PENDING") throw new Error("Only pending withdrawals can be approved");
         withdrawal.status = "APPROVED";
-        cycle.status = "APPROVED";
+        if (cycle) cycle.status = "APPROVED";
       } else if (nextStatus === "REJECTED") {
         if (withdrawal.status !== "PENDING") throw new Error("Only pending withdrawals can be rejected");
         wallet.availableBalancePaise += withdrawal.amountPaise;
         withdrawal.status = "REJECTED";
         withdrawal.failureReason = note || "Rejected by admin";
-        cycle.status = "REJECTED";
-        cycle.withdrawalId = null;
-        cycle.cycleEnd = null;
-        await EarningTransaction.updateOne(
-          { withdrawalId: withdrawal._id, type: "WITHDRAWAL" },
-          { $set: { status: "FAILED", description: "Withdrawal rejected" } },
-          { session: dbSession }
-        );
+        if (cycle) {
+          cycle.status = "REJECTED";
+          cycle.withdrawalId = null;
+          cycle.cycleEnd = null;
+        }
+        await markAllocationWithdrawalTxn("FAILED");
+        await refundAllocations();
+        if (!isCreatorAllocation) {
+          await EarningTransaction.updateOne(
+            { withdrawalId: withdrawal._id, type: "WITHDRAWAL" },
+            { $set: { status: "FAILED", description: "Withdrawal rejected" } },
+            { session: dbSession }
+          );
+        }
       } else if (nextStatus === "PROCESSING") {
         if (withdrawal.status !== "APPROVED") throw new Error("Only approved withdrawals can be processed");
         withdrawal.status = "PROCESSING";
         withdrawal.processedAt = new Date();
-        cycle.status = "PROCESSING";
+        if (cycle) cycle.status = "PROCESSING";
       } else if (nextStatus === "COMPLETED") {
         if (!["APPROVED", "PROCESSING"].includes(withdrawal.status)) {
           throw new Error("Only approved or processing withdrawals can be completed");
@@ -343,12 +413,15 @@ export async function transitionWithdrawal({
         withdrawal.status = "COMPLETED";
         withdrawal.completedAt = new Date();
         wallet.totalWithdrawnPaise += withdrawal.amountPaise;
-        cycle.status = "PAID";
-        await EarningTransaction.updateOne(
-          { withdrawalId: withdrawal._id, type: "WITHDRAWAL" },
-          { $set: { status: "COMPLETED", description: "Withdrawal completed" } },
-          { session: dbSession }
-        );
+        if (cycle) cycle.status = "PAID";
+        await markAllocationWithdrawalTxn("COMPLETED");
+        if (!isCreatorAllocation) {
+          await EarningTransaction.updateOne(
+            { withdrawalId: withdrawal._id, type: "WITHDRAWAL" },
+            { $set: { status: "COMPLETED", description: "Withdrawal completed" } },
+            { session: dbSession }
+          );
+        }
       } else if (nextStatus === "FAILED") {
         if (!["APPROVED", "PROCESSING"].includes(withdrawal.status)) {
           throw new Error("Only approved or processing withdrawals can fail");
@@ -356,23 +429,25 @@ export async function transitionWithdrawal({
         wallet.availableBalancePaise += withdrawal.amountPaise;
         withdrawal.status = "FAILED";
         withdrawal.failureReason = note || "Payout failed";
-        cycle.status = "FAILED";
-        cycle.withdrawalId = null;
-        cycle.cycleEnd = null;
-        await EarningTransaction.updateOne(
-          { withdrawalId: withdrawal._id, type: "WITHDRAWAL" },
-          { $set: { status: "FAILED", description: "Withdrawal failed" } },
-          { session: dbSession }
-        );
+        if (cycle) {
+          cycle.status = "FAILED";
+          cycle.withdrawalId = null;
+          cycle.cycleEnd = null;
+        }
+        await markAllocationWithdrawalTxn("FAILED");
+        await refundAllocations();
+        if (!isCreatorAllocation) {
+          await EarningTransaction.updateOne(
+            { withdrawalId: withdrawal._id, type: "WITHDRAWAL" },
+            { $set: { status: "FAILED", description: "Withdrawal failed" } },
+            { session: dbSession }
+          );
+        }
       } else if (nextStatus === "REVERSED") {
         if (!["COMPLETED", "PROCESSING"].includes(withdrawal.status)) {
           throw new Error("Only completed or processing withdrawals can be reversed");
         }
-        const existingRefund = await EarningTransaction.findOne({
-          withdrawalId: withdrawal._id,
-          type: "REFUND",
-        }).session(dbSession);
-        if (!existingRefund) {
+        if (isCreatorAllocation) {
           wallet.availableBalancePaise += withdrawal.amountPaise;
           if (withdrawal.status === "COMPLETED") {
             wallet.totalWithdrawnPaise = Math.max(
@@ -380,34 +455,52 @@ export async function transitionWithdrawal({
               wallet.totalWithdrawnPaise - withdrawal.amountPaise
             );
           }
-          await EarningTransaction.create(
-            [
-              {
-                userId: withdrawal.userId,
-                type: "REFUND",
-                amountPaise: withdrawal.amountPaise,
-                currency: INR_CURRENCY,
-                status: "COMPLETED",
-                withdrawalId: withdrawal._id,
-                earningCycleId: withdrawal.earningCycleId,
-                description: "Withdrawal reversed",
-              },
-            ],
-            { session: dbSession }
-          );
+          await markAllocationWithdrawalTxn("REVERSED");
+          await refundAllocations();
+        } else {
+          const existingRefund = await EarningTransaction.findOne({
+            withdrawalId: withdrawal._id,
+            type: "REFUND",
+          }).session(dbSession);
+          if (!existingRefund) {
+            wallet.availableBalancePaise += withdrawal.amountPaise;
+            if (withdrawal.status === "COMPLETED") {
+              wallet.totalWithdrawnPaise = Math.max(
+                0,
+                wallet.totalWithdrawnPaise - withdrawal.amountPaise
+              );
+            }
+            await EarningTransaction.create(
+              [
+                {
+                  userId: withdrawal.userId,
+                  type: "REFUND",
+                  amountPaise: withdrawal.amountPaise,
+                  currency: INR_CURRENCY,
+                  status: "COMPLETED",
+                  withdrawalId: withdrawal._id,
+                  earningCycleId: withdrawal.earningCycleId,
+                  description: "Withdrawal reversed",
+                },
+              ],
+              { session: dbSession }
+            );
+          }
+          if (cycle) {
+            cycle.status = "REVERSED";
+            cycle.withdrawalId = null;
+            cycle.cycleEnd = null;
+          }
         }
         withdrawal.status = "REVERSED";
         withdrawal.failureReason = note || "Payout reversed";
-        cycle.status = "REVERSED";
-        cycle.withdrawalId = null;
-        cycle.cycleEnd = null;
       } else {
         throw new Error("Unsupported withdrawal transition");
       }
 
       withdrawal.adminNote = note || withdrawal.adminNote || "";
       await wallet.save({ session: dbSession });
-      await cycle.save({ session: dbSession });
+      if (cycle) await cycle.save({ session: dbSession });
       await withdrawal.save({ session: dbSession });
       await logAdminAction({
         adminId,

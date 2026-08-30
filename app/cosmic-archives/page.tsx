@@ -325,7 +325,7 @@ export default function CosmicArchivesPage() {
       </div>
 
       {/* Search & Controls */}
-      <div className="sticky top-0 lg:top-20 z-40 mb-12">
+      <div className="sticky top-14 lg:top-20 z-40 mb-12">
         <div className="container mx-auto px-6">
           {/* Main Search */}
           <div className="max-w-2xl mx-auto mb-8">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertCircle, CheckCircle2, Loader2, RefreshCw, Send, Wallet } from "lucide-react";
+import { AlertCircle, CheckCircle2, Loader2, RefreshCw, Send, Sparkles, Wallet } from "lucide-react";
 
 type Withdrawal = {
   id: string;
@@ -11,6 +11,41 @@ type Withdrawal = {
   transactionId: string;
   failureReason?: string;
   createdAt: string | null;
+};
+
+type CreatorEstimate = {
+  score: number;
+  qualifiedViews: number;
+  qualifiedWatchMs: number;
+  completedViews: number;
+  uniqueViewers: number;
+  returningViewers: number;
+  meaningfulComments: number;
+  qualifiedShares: number;
+  qualifiedFollows: number;
+  eligible: boolean;
+  reasons: string[];
+  parts?: Array<{ key: string; subScore: number; weighted: number }>;
+  totalEligibleScores: number;
+  shareFraction: number;
+  sharePercent: number;
+  estimatedPoolPaise: number;
+  estimatedRevenuePaise: number;
+  revenueState?: string;
+  hasCachedCalculation?: boolean;
+};
+
+type CreatorAllocation = {
+  id: string;
+  cycleLabel?: string;
+  score?: number;
+  poolAmount?: number;
+  creatorSharePercent?: number;
+  finalRevenuePaise?: number;
+  currency?: string;
+  revenueState?: string;
+  finalizedAt?: string | null;
+  releasedAt?: string | null;
 };
 
 type AnalyticsPayload = {
@@ -25,6 +60,11 @@ type AnalyticsPayload = {
   topVideo: { title: string; likes: number } | null;
   videos: Array<{ id: string; title: string; likes: number; earnings: number; createdAt: string | null }>;
   withdrawals: Withdrawal[];
+  creatorRevenue: {
+    cycle: { id: string; label: string; status: string; poolAmount: number } | null;
+    estimate: CreatorEstimate | null;
+    history: { allocations: CreatorAllocation[]; transactions: Array<{ id: string; type: string; amountPaise: number; status: string; createdAt: string | null }> };
+  } | null;
 };
 
 const EMPTY: AnalyticsPayload = {
@@ -39,6 +79,7 @@ const EMPTY: AnalyticsPayload = {
   topVideo: null,
   videos: [],
   withdrawals: [],
+  creatorRevenue: null,
 };
 
 function formatNumber(value: number) {
@@ -201,6 +242,106 @@ export default function AnalyticsPage() {
                 Withdraw
               </button>
             </Card>
+
+            {analytics.creatorRevenue?.cycle && (
+              <Card className="flex flex-col gap-5">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 text-fuchsia-200">
+                      <Sparkles size={20} />
+                      <h2 className="text-xl font-black">Creator Earning Score</h2>
+                    </div>
+                    <p className="mt-1 text-sm text-slate-400">
+                      Cycle <span className="font-bold text-white">{analytics.creatorRevenue.cycle.label}</span> ·{" "}
+                      {analytics.creatorRevenue.cycle.status}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-5xl font-black text-fuchsia-300">
+                      {(analytics.creatorRevenue.estimate?.score ?? 0).toFixed(1)}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {analytics.creatorRevenue.estimate?.revenueState
+                        ? `${analytics.creatorRevenue.estimate.revenueState} earning score`
+                        : "estimated earning score"}
+                    </p>
+                  </div>
+                </div>
+
+                {analytics.creatorRevenue.estimate ? (
+                  <>
+                    <div className="grid gap-3 rounded-xl border border-white/10 bg-black/20 p-4 sm:grid-cols-3">
+                      <div>
+                        <p className="text-xs uppercase text-slate-500">Est. monthly revenue</p>
+                        <p className="mt-1 text-2xl font-black text-emerald-300">
+                          {formatCurrency(analytics.creatorRevenue.estimate.estimatedRevenuePaise / 100)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase text-slate-500">Pool share</p>
+                        <p className="mt-1 text-2xl font-black">{analytics.creatorRevenue.estimate.sharePercent.toFixed(2)}%</p>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase text-slate-500">Cycle pool</p>
+                        <p className="mt-1 text-2xl font-black">{formatCurrency(analytics.creatorRevenue.cycle.poolAmount / 100)}</p>
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="text-sm font-bold text-slate-300">Metric breakdown</p>
+                      <div className="mt-3 space-y-3">
+                        {(analytics.creatorRevenue.estimate.parts ?? []).map((part) => (
+                          <div key={part.key}>
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="font-bold text-white">{part.key.replace(/([A-Z])/g, " $1").trim()}</span>
+                              <span className="text-slate-400">{part.subScore.toFixed(1)} / weighted {part.weighted.toFixed(1)}</span>
+                            </div>
+                            <div className="mt-1 h-2 overflow-hidden rounded-full bg-white/10">
+                              <div className="h-full rounded-full bg-fuchsia-400" style={{ width: `${Math.min(100, part.subScore)}%` }} />
+                            </div>
+                          </div>
+                        ))}
+                        {!analytics.creatorRevenue.estimate.parts?.length && (
+                          <p className="text-sm text-slate-500">No scoring data yet for this cycle.</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {analytics.creatorRevenue.estimate.eligible === false &&
+                      analytics.creatorRevenue.estimate.reasons?.length > 0 && (
+                        <div className="rounded-xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                          <p className="font-bold">Not yet eligible for this cycle:</p>
+                          <ul className="mt-1 list-inside list-disc space-y-0.5">
+                            {analytics.creatorRevenue.estimate.reasons.map((reason) => (
+                              <li key={reason}>{reason}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                    <div>
+                      <p className="text-sm font-bold text-slate-300">Revenue history</p>
+                      <div className="mt-3 space-y-2">
+                        {analytics.creatorRevenue.history.allocations.map((allocation) => (
+                          <div key={allocation.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+                            <div>
+                              <p className="font-black">{allocation.cycleLabel}</p>
+                              <p className="mt-0.5 text-xs text-slate-500">Score {allocation.score?.toFixed(1) ?? "—"} · {allocation.revenueState}</p>
+                            </div>
+                            <p className="font-black text-emerald-300">{formatCurrency((allocation.finalRevenuePaise ?? 0) / 100)}</p>
+                          </div>
+                        ))}
+                        {analytics.creatorRevenue.history.allocations.length === 0 && (
+                          <p className="text-sm text-slate-500">No finalized payouts yet.</p>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-sm text-slate-500">No qualifying activity for this cycle yet.</p>
+                )}
+              </Card>
+            )}
 
             <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <Metric label="Lifetime Likes" value={formatNumber(analytics.lifetimeLikes)} helper="Never reset after withdrawal" />

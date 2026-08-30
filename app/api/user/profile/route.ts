@@ -29,7 +29,7 @@ export async function GET() {
     ? user.following.length
     : 0;
 
-  const posts = await Post.find({ userId: user._id }).sort({
+  const posts = await Post.find({ userId: user._id, status: { $ne: "removed" } }).sort({
     createdAt: -1,
   });
 

@@ -7,6 +7,7 @@ import { authOptions } from "../../lib/authOptions";
 import { dbConnect } from "../../lib/mongodb";
 import { isPremiumActive } from "../../lib/premium";
 import Post from "../../models/Post";
+import User from "../../models/User";
 
 type PopulatedAuthor = {
   _id?: { toString?: () => string } | string;
@@ -40,8 +41,11 @@ export async function GET(req: Request) {
     const query: {
       userId?: string;
       createdAt?: { $gte: Date };
+      status?: { $ne: "removed" };
       $or?: Array<{ contentType: "post" } | { contentType: { $exists: false } }>;
-    } = {};
+    } = {
+      status: { $ne: "removed" },
+    };
 
     if (userId) {
       query.userId = userId; // 🔥 filter by profile user
@@ -97,6 +101,30 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    await dbConnect();
+
+    const author = await User.findById(session.user.id).select(
+      "accountStatus accountStatusReason"
+    );
+
+    if (!author) {
+      return NextResponse.json({ error: "Account not found" }, { status: 404 });
+    }
+
+    if (author.accountStatus === "banned") {
+      return NextResponse.json(
+        { error: "Your account has been banned. You can no longer create content." },
+        { status: 403 }
+      );
+    }
+
+    if (author.accountStatus === "restricted") {
+      return NextResponse.json(
+        { error: "Your account is restricted. Posting is temporarily disabled." },
+        { status: 403 }
+      );
+    }
+
     const body = await req.json();
     const content = body.content?.trim() || "";
     const images: string[] = body.images || [];
@@ -107,8 +135,6 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
-
-    await dbConnect();
 
     const post = await Post.create({
       userId: session.user.id,

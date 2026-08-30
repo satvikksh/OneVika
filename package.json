@@ -9,6 +9,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "test": "tsx --test app/lib/creator-revenue/creator-revenue.test.ts",
     "socket": "node --loader ts-node/esm server.ts",
     "build:socket": "tsc -p tsconfig.socket.json",
     "start:socket": "node dist/server.js"

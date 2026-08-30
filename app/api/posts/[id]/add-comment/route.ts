@@ -3,7 +3,9 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/lib/authOptions";
 import { dbConnect } from "@/app/lib/mongodb";
+import { Types } from "mongoose";
 import Post, { IComment } from "@/app/models/Post"; // Import IComment if needed
+import { recordActivity } from "@/app/lib/creator-revenue/service";
 
 export async function POST(
   req: Request,
@@ -43,6 +45,17 @@ export async function POST(
     if (result.modifiedCount === 0) {
       return NextResponse.json({ error: "Post not found or failed to add comment" }, { status: 404 });
     }
+
+    await recordActivity({
+      viewerId: new Types.ObjectId(session.user.id),
+      events: [
+        {
+          eventType: "comment",
+          contentId: params.id,
+          commentText: content.trim(),
+        },
+      ],
+    });
 
     // Fetch the updated post with populated data
     const updatedPost = await Post.findById(params.id)

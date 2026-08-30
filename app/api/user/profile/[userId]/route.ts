@@ -257,7 +257,7 @@ export async function GET(
     }
 
     const posts = canViewPosts
-      ? await Post.find({ userId: profileObjectId })
+      ? await Post.find({ userId: profileObjectId, status: { $ne: "removed" } })
           .sort({ createdAt: -1 })
           .lean()
       : [];

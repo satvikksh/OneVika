@@ -13,6 +13,10 @@ import {
 } from "@/app/lib/earnings";
 import Post from "@/app/models/Post";
 import Withdrawal from "@/app/models/Withdrawal";
+import {
+  estimateForCreator,
+  creatorRevenueHistory,
+} from "@/app/lib/creator-revenue/service";
 
 type UserPostAnalyticsRow = {
   _id: Types.ObjectId;
@@ -64,6 +68,28 @@ export async function GET() {
     const totalLikes = posts.reduce((sum, post) => sum + (post.likeCount ?? 0), 0);
     const videoPosts = posts.filter((post) => (post.images ?? []).some(isVideoUrl));
 
+    let creatorRevenue = null;
+    try {
+      const [estimate, history] = await Promise.all([
+        estimateForCreator(userObjectId),
+        creatorRevenueHistory(userObjectId),
+      ]);
+      creatorRevenue = {
+        cycle: estimate.cycle
+          ? {
+              id: estimate.cycle._id.toString(),
+              label: estimate.cycle.label,
+              status: estimate.cycle.status,
+              poolAmount: estimate.cycle.revenuePoolPaise || estimate.cycle.estimatedPoolPaise,
+            }
+          : null,
+        estimate: estimate.estimate,
+        history,
+      };
+    } catch (error) {
+      console.error("CREATOR REVENUE LOOKUP ERROR:", error);
+    }
+
     const videos = videoPosts.map((post, index) => {
       const likes = post.likeCount ?? 0;
       const earnings = paiseToRupees(likes * settings.likeRatePaise);
@@ -92,6 +118,7 @@ export async function GET() {
         ? paiseToRupees(settings.maximumWithdrawalPaise)
         : null,
       withdrawalsEnabled: settings.withdrawalsEnabled && !settings.maintenanceMode,
+      creatorRevenue,
       wallet: {
         availableBalance: paiseToRupees(wallet.availableBalancePaise),
         totalEarned: paiseToRupees(wallet.totalEarnedPaise),

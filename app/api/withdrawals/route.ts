@@ -14,7 +14,10 @@ import {
 } from "@/app/lib/earnings";
 import EarningCycle from "@/app/models/EarningCycle";
 import EarningTransaction from "@/app/models/EarningTransaction";
+import CreatorRevenueAllocation from "@/app/models/CreatorRevenueAllocation";
+import CreatorEarningTransaction from "@/app/models/CreatorEarningTransaction";
 import Withdrawal from "@/app/models/Withdrawal";
+import { getReleasedAllocationsForUser } from "@/app/lib/creator-revenue/service";
 
 type WithdrawalRequestBody = {
   idempotencyKey?: unknown;
@@ -113,6 +116,81 @@ export async function POST(req: Request) {
       }
 
       const wallet = await getOrCreateWallet(userId, dbSession);
+
+      // New creator-revenue path: withdrawn from released allocations.
+      const releasedAllocations = await getReleasedAllocationsForUser(
+        userId,
+        dbSession
+      );
+
+      if (releasedAllocations.length > 0) {
+        const amountPaise = releasedAllocations.reduce(
+          (sum, allocation) => sum + allocation.finalRevenuePaise,
+          0
+        );
+
+        if (amountPaise <= 0) {
+          throw new Error("No released revenue is available to withdraw");
+        }
+        if (amountPaise > wallet.availableBalancePaise) {
+          throw new Error("Wallet balance mismatch; please contact support");
+        }
+        if (amountPaise < settings.minimumWithdrawalPaise) {
+          throw new Error("Available balance is below the minimum withdrawal amount");
+        }
+        if (settings.maximumWithdrawalPaise && amountPaise > settings.maximumWithdrawalPaise) {
+          throw new Error("Available balance is above the maximum withdrawal amount");
+        }
+
+        wallet.availableBalancePaise -= amountPaise;
+        await wallet.save({ session: dbSession });
+
+        const allocationIds = releasedAllocations.map((a) => a._id);
+        const [withdrawal] = await Withdrawal.create(
+          [
+            {
+              userId,
+              amountPaise,
+              currency: INR_CURRENCY,
+              status: "PENDING",
+              payoutMethod: payout.method,
+              payoutProvider: settings.payoutProvider,
+              idempotencyKey,
+              earningCycleId: null,
+              creatorAllocationIds: allocationIds,
+              eligibleLikes: 0,
+              payoutDetailsEncrypted: payout.encrypted,
+              payoutDetailsMasked: payout.masked,
+            },
+          ],
+          { session: dbSession }
+        );
+
+        await CreatorRevenueAllocation.updateMany(
+          { _id: { $in: allocationIds } },
+          { $set: { revenueState: "WITHDRAWN" } },
+          { session: dbSession }
+        );
+
+        await CreatorEarningTransaction.create(
+          releasedAllocations.map((allocation) => ({
+            creatorId: userId,
+            cycleId: allocation.cycleId,
+            allocationId: allocation._id,
+            withdrawalId: withdrawal._id,
+            type: "WITHDRAWAL",
+            amountPaise: allocation.finalRevenuePaise,
+            currency: INR_CURRENCY,
+            status: "PENDING",
+            description: "Withdrawal requested",
+          })),
+          { session: dbSession }
+        );
+
+        createdOrExisting = withdrawal;
+        return;
+      }
+
       const cycle = await getOpenCycle(userId, dbSession);
       const amountPaise = wallet.availableBalancePaise;
 

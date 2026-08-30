@@ -25,6 +25,8 @@ import {
   ChevronRight,
   Eye,
   Loader2,
+  ShieldAlert,
+  CheckCircle2,
 } from "lucide-react";
 import { useTheme } from "../theme-provider";
 import { useSession } from "next-auth/react";
@@ -32,6 +34,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useUserAvatar } from "../hooks/useUserAvatar";
 import { useBlinkNavigation } from "../hooks/useBlinkNavigation";
 import { PremiumAvatar, PremiumName } from "../components/premium-ui";
+import {
+  reportCreatorActivity,
+  generateEventId,
+} from "../lib/creator-activity-client";
 // import { useSettings } from "../components/settings-provider";
 
 
@@ -98,6 +104,13 @@ interface EditPostModalProps {
   postId: string;
   currentContent: string;
   onPostUpdated: (postId: string, newContent: string) => void;
+}
+
+interface ReportModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  post: PostType | null;
+  contentType: "post" | "video";
 }
 
 interface ShareChatUser {
@@ -229,6 +242,247 @@ function EditPostModal({ isOpen, onClose, postId, currentContent, onPostUpdated 
         </div>
       </motion.div>
     </div>
+  );
+}
+
+function ReportModal({ isOpen, onClose, post, contentType }: ReportModalProps) {
+  const REPORT_REASONS = [
+    "Spam",
+    "Harassment",
+    "Hate or Abuse",
+    "Nudity or Sexual Content",
+    "Violence",
+    "Misinformation",
+    "Copyright",
+    "Scam or Fraud",
+    "Other",
+  ];
+
+  const [reason, setReason] = useState<string>("");
+  const [description, setDescription] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [alreadyReported, setAlreadyReported] = useState(false);
+  const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen || !post) return;
+    setReason("");
+    setDescription("");
+    setError(null);
+    setAlreadyReported(false);
+    setSuccess(false);
+    setIsSubmitting(false);
+    fetch(`/api/reports?contentId=${post._id}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.alreadyReported) setAlreadyReported(true);
+      })
+      .catch(() => {});
+  }, [isOpen, post]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [isOpen, onClose]);
+
+  const handleSubmit = async () => {
+    if (!reason || !post || isSubmitting) return;
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contentId: post._id, reason, description }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 409) {
+        setAlreadyReported(true);
+      } else if (!res.ok) {
+        setError(data.error || "Unable to submit report");
+      } else {
+        setSuccess(true);
+      }
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <motion.div
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[70] p-4"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={onClose}
+    >
+      <motion.div
+        className="bg-white dark:bg-neutral-900 rounded-2xl w-full max-w-md shadow-2xl border border-neutral-200 dark:border-neutral-700 flex flex-col max-h-[82vh] overflow-hidden"
+        initial={{ scale: 0.95, y: 12 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.95, y: 12 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-200 dark:border-neutral-700">
+          <div className="flex items-center gap-2.5">
+            <span className="w-9 h-9 rounded-xl bg-red-50 dark:bg-red-500/10 flex items-center justify-center">
+              <Flag className="h-5 w-5 text-red-600 dark:text-red-400" />
+            </span>
+            <div>
+              <h3 className="text-base font-semibold text-neutral-900 dark:text-white leading-tight">
+                Report {contentType === "video" ? "Video" : "Post"}
+              </h3>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                Your report is confidential. Our team reviews every report.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-neutral-500 hover:text-neutral-800 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+            aria-label="Close"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {success ? (
+          <div className="flex flex-col items-center justify-center text-center px-8 py-12 gap-4">
+            <span className="w-16 h-16 rounded-full bg-green-50 dark:bg-green-500/10 flex items-center justify-center">
+              <CheckCircle2 className="h-8 w-8 text-green-600 dark:text-green-400" />
+            </span>
+            <div>
+              <h4 className="text-lg font-semibold text-neutral-900 dark:text-white">
+                Report Submitted
+              </h4>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1.5">
+                Thank you for keeping OrbitByte safe. Our moderators will review this{" "}
+                {contentType} shortly.
+              </p>
+            </div>
+            <button
+              onClick={onClose}
+              className="mt-2 px-6 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition-colors"
+            >
+              Done
+            </button>
+          </div>
+        ) : alreadyReported ? (
+          <div className="flex flex-col items-center justify-center text-center px-8 py-12 gap-4">
+            <span className="w-16 h-16 rounded-full bg-amber-50 dark:bg-amber-500/10 flex items-center justify-center">
+              <ShieldAlert className="h-8 w-8 text-amber-600 dark:text-amber-400" />
+            </span>
+            <div>
+              <h4 className="text-lg font-semibold text-neutral-900 dark:text-white">
+                Already Reported
+              </h4>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1.5">
+                You&apos;ve already reported this {contentType}. Our moderators are on it.
+              </p>
+            </div>
+            <button
+              onClick={onClose}
+              className="mt-2 px-6 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition-colors"
+            >
+              Got It
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+              <p className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                Choose a reason
+              </p>
+              <div className="grid grid-cols-1 gap-2">
+                {REPORT_REASONS.map((r) => {
+                  const selected = reason === r;
+                  return (
+                    <button
+                      key={r}
+                      onClick={() => setReason(r)}
+                      className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-left text-sm transition-all ${
+                        selected
+                          ? "border-red-400 bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-300"
+                          : "border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800"
+                      }`}
+                    >
+                      <span
+                        className={`h-4 w-4 rounded-full border-2 flex items-center justify-center transition-all ${
+                          selected
+                            ? "border-red-500"
+                            : "border-neutral-300 dark:border-neutral-600"
+                        }`}
+                      >
+                        {selected && <span className="h-2 w-2 rounded-full bg-red-500" />}
+                      </span>
+                      {r}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div>
+                <p className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+                  Add more detail <span className="text-neutral-400">(optional)</span>
+                </p>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={3}
+                  maxLength={1200}
+                  placeholder="Tell us exactly what happened so we can review faster..."
+                  className="w-full resize-none rounded-xl border border-neutral-200 dark:border-neutral-700 bg-transparent px-3.5 py-3 text-sm text-neutral-900 dark:text-white placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-transparent"
+                />
+                <p className="text-right text-xs text-neutral-400 mt-1">
+                  {description.length}/1200
+                </p>
+              </div>
+
+              {error && (
+                <p className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 rounded-lg px-3 py-2">
+                  {error}
+                </p>
+              )}
+            </div>
+
+            <div className="px-5 py-4 border-t border-neutral-200 dark:border-neutral-700 flex gap-3">
+              <button
+                onClick={onClose}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-neutral-200 dark:border-neutral-700 text-sm font-medium text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={!reason || isSubmitting}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Submitting...
+                  </>
+                ) : (
+                  <>
+                    <Flag className="h-4 w-4" />
+                    Submit Report
+                  </>
+                )}
+              </button>
+            </div>
+          </>
+        )}
+      </motion.div>
+    </motion.div>
   );
 }
 
@@ -706,6 +960,11 @@ function SharePostModal({ isOpen, onClose, post }: SharePostModalProps) {
   const handleCopyLink = async () => {
     if (!shareUrl) return;
     await navigator.clipboard.writeText(shareUrl);
+    if (post) {
+      reportCreatorActivity([
+        { eventId: generateEventId(), eventType: "share", contentId: post._id },
+      ]);
+    }
   };
 
   const handleSystemShare = async () => {
@@ -719,6 +978,9 @@ function SharePostModal({ isOpen, onClose, post }: SharePostModalProps) {
         text: post.content || "Shared from feed",
         url: shareUrl,
       });
+      reportCreatorActivity([
+        { eventId: generateEventId(), eventType: "share", contentId: post._id },
+      ]);
       return;
     }
 
@@ -760,6 +1022,9 @@ function SharePostModal({ isOpen, onClose, post }: SharePostModalProps) {
         throw new Error(data?.error || "Failed to share to chat");
       }
 
+      reportCreatorActivity([
+        { eventId: generateEventId(), eventType: "share", contentId: post._id },
+      ]);
       onClose();
     } catch (sendError) {
       console.error("Failed to share post to chat:", sendError);
@@ -1039,15 +1304,29 @@ export default function FeedPage() {
     isOpen: false,
     post: null,
   });
+  const [reportModal, setReportModal] = useState<{
+    isOpen: boolean;
+    post: PostType | null;
+    contentType: "post" | "video";
+  }>({
+    isOpen: false,
+    post: null,
+    contentType: "post",
+  });
   const isBlinkNavigationPaused =
     likeModal.isOpen ||
     commentsModal.isOpen ||
     shareModal.isOpen ||
-    editModal.isOpen;
+    editModal.isOpen ||
+    reportModal.isOpen;
 
   const feedContainerRef = useRef<HTMLDivElement>(null);
   const carouselContainerRef = useRef<HTMLDivElement>(null); // REF FOR CAROUSEL
   const videoRefs = useRef<Record<string, HTMLVideoElement | null>>({});
+  const watchSessionsRef = useRef<Record<
+    string,
+    { postId: string; lastTime: number; seenMs: number; durationMs: number }
+  >>({});
   const lastTapRef = useRef<number>(0);
   const tapTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
@@ -1716,6 +1995,63 @@ export default function FeedPage() {
   }, []);
 
   /* ============================
+       VIDEO ACTIVITY TRACKING
+  ============================ */
+  const endVideoSession = useCallback((key: string, completed: boolean) => {
+    const session = watchSessionsRef.current[key];
+    delete watchSessionsRef.current[key];
+    if (!session) return;
+
+    const watchedMs = Math.round(session.seenMs * 1000);
+    if (watchedMs < 500) return;
+
+    reportCreatorActivity([
+      {
+        eventId: generateEventId(),
+        eventType: completed ? "complete" : "watch",
+        contentId: session.postId,
+        watchedMs,
+        durationMs: Math.round(session.durationMs) || undefined,
+        completed,
+      },
+    ]);
+  }, []);
+
+  const trackVideoTime = useCallback((key: string, video: HTMLVideoElement) => {
+    const session = watchSessionsRef.current[key];
+    if (!session) return;
+    const now = video.currentTime || 0;
+    if (now > session.lastTime) {
+      session.seenMs += now - session.lastTime;
+    }
+    session.lastTime = now;
+
+    // Videos loop here, so the `ended` event never fires. Treat a full
+    // playthrough (or the platform's completion threshold) as completed.
+    const completionThresholdSec = Math.max(session.durationMs / 1000, 15);
+    if (session.seenMs + 1 >= completionThresholdSec) {
+      endVideoSession(key, true);
+    }
+  }, [endVideoSession]);
+
+  const trackVideoPlay = useCallback(
+    (key: string, postId: string, video: HTMLVideoElement) => {
+      if (watchSessionsRef.current[key]) return;
+      const durationMs =
+        Number.isFinite(video.duration) && video.duration > 0
+          ? video.duration * 1000
+          : 0;
+      watchSessionsRef.current[key] = {
+        postId,
+        lastTime: video.currentTime || 0,
+        seenMs: 0,
+        durationMs,
+      };
+    },
+    []
+  );
+
+  /* ============================
        SHARE POST FUNCTION
   ============================ */
   const handleShare = (postId: string) => {
@@ -2074,6 +2410,14 @@ export default function FeedPage() {
                                       loop
                                       muted={isVideoMuted[key]}
                                       playsInline
+                                      onPlay={(e) =>
+                                        trackVideoPlay(key, currentPost._id, e.currentTarget)
+                                      }
+                                      onTimeUpdate={(e) =>
+                                        trackVideoTime(key, e.currentTarget)
+                                      }
+                                      onPause={() => endVideoSession(key, false)}
+                                      onEnded={() => endVideoSession(key, true)}
                                     />
                                     {!isVideoPlaying[key] && (
                                       <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/20">
@@ -2192,6 +2536,18 @@ export default function FeedPage() {
                           loop
                           muted={isVideoMuted[`${currentPost._id}-0`]}
                           playsInline
+                          onPlay={(e) =>
+                            trackVideoPlay(
+                              `${currentPost._id}-0`,
+                              currentPost._id,
+                              e.currentTarget
+                            )
+                          }
+                          onTimeUpdate={(e) =>
+                            trackVideoTime(`${currentPost._id}-0`, e.currentTarget)
+                          }
+                          onPause={() => endVideoSession(`${currentPost._id}-0`, false)}
+                          onEnded={() => endVideoSession(`${currentPost._id}-0`, true)}
                         />
                         {!isVideoPlaying[`${currentPost._id}-0`] && (
                           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -2457,7 +2813,11 @@ export default function FeedPage() {
                           ) : (
                             <button
                               onClick={() => {
-                                alert("Report feature coming soon");
+                                setReportModal({
+                                  isOpen: true,
+                                  post: currentPost,
+                                  contentType: currentMediaIsVideo ? "video" : "post",
+                                });
                                 setShowOptions(false);
                               }}
                               className="flex items-center gap-2 w-full px-4 py-3 text-left text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-sm font-medium"
@@ -2561,6 +2921,15 @@ export default function FeedPage() {
         isOpen={shareModal.isOpen}
         onClose={() => setShareModal({ isOpen: false, post: null })}
         post={shareModal.post}
+      />
+
+      <ReportModal
+        isOpen={reportModal.isOpen}
+        onClose={() =>
+          setReportModal({ isOpen: false, post: null, contentType: "post" })
+        }
+        post={reportModal.post}
+        contentType={reportModal.contentType}
       />
     </>
   );

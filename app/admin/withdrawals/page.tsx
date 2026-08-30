@@ -26,6 +26,19 @@ function currency(value: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(value || 0);
 }
 
+function formatRequested(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  }).format(date);
+}
+
 function statusClass(status: string) {
   if (status === "COMPLETED" || status === "APPROVED") return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200";
   if (status === "PENDING" || status === "PROCESSING") return "border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-400/20 dark:bg-cyan-400/10 dark:text-cyan-200";
@@ -161,32 +174,60 @@ export default function AdminWithdrawalsPage() {
         ) : (
           <>
             <div className="hidden overflow-x-auto lg:block">
-              <table className="w-full min-w-[1040px] text-left text-sm">
-                <thead className="sticky top-20 z-10 bg-slate-50 text-xs uppercase text-slate-500 dark:bg-slate-900 dark:text-slate-400">
+              <table className="w-full min-w-[1360px] text-left text-sm">
+                <colgroup>
+                  <col className="w-[20%]" />
+                  <col className="w-[9%]" />
+                  <col className="w-[9%]" />
+                  <col className="w-[15%]" />
+                  <col className="w-[13%]" />
+                  <col className="w-[14%]" />
+                  <col className="w-[20%]" />
+                </colgroup>
+                <thead className="sticky top-0 z-10 bg-slate-50 uppercase tracking-wide text-slate-500 dark:bg-slate-900 dark:text-slate-400">
                   <tr>
-                    <th className="p-4">Creator</th>
-                    <th className="p-4">Amount</th>
-                    <th className="p-4">Status</th>
-                    <th className="p-4">Payment method</th>
-                    <th className="p-4">Requested</th>
-                    <th className="p-4">Transaction ID</th>
-                    <th className="p-4">Actions</th>
+                    <th className="px-4 py-3 text-xs font-black">Creator</th>
+                    <th className="px-4 py-3 text-right text-xs font-black">Amount</th>
+                    <th className="px-4 py-3 text-xs font-black">Status</th>
+                    <th className="px-4 py-3 text-xs font-black">Payment method</th>
+                    <th className="px-4 py-3 text-xs font-black">Requested</th>
+                    <th className="px-4 py-3 text-xs font-black">Transaction ID</th>
+                    <th className="px-4 py-3 text-xs font-black">Actions</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-slate-200 text-slate-900 dark:divide-white/10 dark:text-white">
                   {filtered.map((withdrawal) => (
-                    <tr key={withdrawal.id} className="border-t border-slate-200 transition hover:bg-slate-50/80 dark:border-white/10 dark:hover:bg-white/[0.04]">
-                      <td className="p-4"><b>{withdrawal.user.name}</b><br /><span className="text-xs text-slate-500">{withdrawal.user.email}</span></td>
-                      <td className="p-4 font-black">{currency(withdrawal.amount)}<br /><span className="text-xs font-semibold text-slate-500">{withdrawal.eligibleLikes} likes</span></td>
-                      <td className="p-4"><span className={`rounded-full border px-2.5 py-1 text-xs font-black ${statusClass(withdrawal.status)}`}>{withdrawal.status}</span></td>
-                      <td className="p-4">{withdrawal.payoutMethod || withdrawal.payoutDetailsMasked}<br /><span className="text-xs text-slate-500">{withdrawal.payoutDetailsMasked}</span></td>
-                      <td className="p-4">{withdrawal.createdAt ? new Date(withdrawal.createdAt).toLocaleString("en-IN") : "-"}</td>
-                      <td className="p-4 text-xs text-slate-500">{withdrawal.providerPayoutId || withdrawal.withdrawalId || withdrawal.id}</td>
-                      <td className="p-4">
-                        <div className="flex flex-wrap gap-2">
-                          <button onClick={() => setSelected(withdrawal)} className="rounded-xl border border-slate-200 p-2 dark:border-white/10" aria-label="View withdrawal details"><Eye size={15} /></button>
+                    <tr key={withdrawal.id} className="transition hover:bg-slate-50/80 dark:hover:bg-white/[0.04]">
+                      <td className="px-4 py-4 align-top">
+                        <p className="font-black leading-snug">{withdrawal.user.name}</p>
+                        {withdrawal.user.email ? (
+                          <p className="mt-1 max-w-[240px] break-all text-[11px] leading-snug text-slate-500">{withdrawal.user.email}</p>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-4 text-right align-top">
+                        <p className="whitespace-nowrap font-black tabular-nums">{currency(withdrawal.amount)}</p>
+                        <p className="mt-1 whitespace-nowrap text-[11px] font-semibold text-slate-500">{withdrawal.eligibleLikes} eligible likes</p>
+                      </td>
+                      <td className="px-4 py-4 align-top">
+                        <span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-black ${statusClass(withdrawal.status)}`}>{withdrawal.status}</span>
+                      </td>
+                      <td className="px-4 py-4 align-top">
+                        <p className="text-xs font-bold uppercase tracking-wide">{withdrawal.payoutMethod || "—"}</p>
+                        {withdrawal.payoutDetailsMasked ? (
+                          <p className="mt-1 max-w-[220px] break-all text-[11px] leading-snug text-slate-500">{withdrawal.payoutDetailsMasked}</p>
+                        ) : null}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-4 align-top text-xs">{withdrawal.createdAt ? formatRequested(withdrawal.createdAt) : "-"}</td>
+                      <td className="px-4 py-4 align-top">
+                        <p className="max-w-[220px] break-all font-mono text-[11px] leading-snug text-slate-600 dark:text-slate-300">{withdrawal.providerPayoutId || withdrawal.withdrawalId || withdrawal.id}</p>
+                      </td>
+                      <td className="px-4 py-4 align-top">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <button onClick={() => setSelected(withdrawal)} className="grid h-8 w-8 place-items-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white" aria-label="View withdrawal details" title="View details">
+                            <Eye size={15} />
+                          </button>
                           {actions.map((action) => (
-                            <button key={action} onClick={() => act(withdrawal.id, action)} disabled={Boolean(actingId)} className="rounded-xl bg-slate-950 px-3 py-2 text-xs font-black text-white disabled:opacity-60 dark:bg-white dark:text-slate-950">
+                            <button key={action} onClick={() => act(withdrawal.id, action)} disabled={Boolean(actingId)} className="rounded-xl bg-slate-950 px-2.5 py-2 text-[11px] font-black text-white capitalize transition hover:bg-slate-800 disabled:opacity-60 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200">
                               {actingId === `${withdrawal.id}:${action}` ? <Loader2 className="animate-spin" size={14} /> : action}
                             </button>
                           ))}
@@ -209,14 +250,17 @@ export default function AdminWithdrawalsPage() {
                     <span className={`rounded-full border px-2.5 py-1 text-xs font-black ${statusClass(withdrawal.status)}`}>{withdrawal.status}</span>
                   </div>
                   <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                    <p><span className="text-slate-500">Amount</span><br /><b>{currency(withdrawal.amount)}</b></p>
+                    <p><span className="text-slate-500">Amount</span><br /><b className="tabular-nums">{currency(withdrawal.amount)}</b></p>
                     <p><span className="text-slate-500">Likes</span><br /><b>{withdrawal.eligibleLikes}</b></p>
-                    <p className="col-span-2"><span className="text-slate-500">Payout</span><br /><b>{withdrawal.payoutDetailsMasked}</b></p>
+                    <p><span className="text-slate-500">Payment method</span><br /><b>{withdrawal.payoutMethod || "—"}</b></p>
+                    <p><span className="text-slate-500">Requested</span><br /><b>{withdrawal.createdAt ? formatRequested(withdrawal.createdAt) : "-"}</b></p>
+                    <p className="col-span-2"><span className="text-slate-500">Payout</span><br /><b className="break-all">{withdrawal.payoutDetailsMasked}</b></p>
+                    <p className="col-span-2"><span className="text-slate-500">Transaction ID</span><br /><b className="break-all font-mono text-xs">{withdrawal.providerPayoutId || withdrawal.withdrawalId || withdrawal.id}</b></p>
                   </div>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <button onClick={() => setSelected(withdrawal)} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-black dark:border-white/10"><Eye size={14} /> Details</button>
-                    {actions.slice(0, 4).map((action) => (
-                      <button key={action} onClick={() => act(withdrawal.id, action)} disabled={Boolean(actingId)} className="rounded-xl bg-slate-950 px-3 py-2 text-xs font-black text-white disabled:opacity-60 dark:bg-white dark:text-slate-950">{action}</button>
+                  <div className="mt-4 flex flex-wrap gap-1.5">
+                    <button onClick={() => setSelected(withdrawal)} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-2.5 py-2 text-[11px] font-black dark:border-white/10"><Eye size={14} /> Details</button>
+                    {actions.map((action) => (
+                      <button key={action} onClick={() => act(withdrawal.id, action)} disabled={Boolean(actingId)} className="rounded-xl bg-slate-950 px-2.5 py-2 text-[11px] font-black capitalize text-white disabled:opacity-60 dark:bg-white dark:text-slate-950">{actingId === `${withdrawal.id}:${action}` ? <Loader2 className="animate-spin" size={14} /> : action}</button>
                     ))}
                   </div>
                 </motion.article>
@@ -242,7 +286,7 @@ export default function AdminWithdrawalsPage() {
               <p><span className="text-slate-500">Amount</span><br /><b>{currency(selected.amount)}</b></p>
               <p><span className="text-slate-500">Status</span><br /><b>{selected.status}</b></p>
               <p><span className="text-slate-500">Payment method</span><br /><b>{selected.payoutMethod || "-"}</b></p>
-              <p><span className="text-slate-500">Requested date</span><br /><b>{selected.createdAt ? new Date(selected.createdAt).toLocaleString("en-IN") : "-"}</b></p>
+              <p><span className="text-slate-500">Requested date</span><br /><b>{selected.createdAt ? formatRequested(selected.createdAt) : "-"}</b></p>
               <p className="sm:col-span-2"><span className="text-slate-500">Transaction ID</span><br /><b className="break-all">{selected.providerPayoutId || selected.withdrawalId || selected.id}</b></p>
               <p className="sm:col-span-2"><span className="text-slate-500">Payout</span><br /><b>{selected.payoutDetailsMasked}</b></p>
             </div>

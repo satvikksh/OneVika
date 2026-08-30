@@ -5,6 +5,7 @@ import { dbConnect } from "@/app/lib/mongodb";
 import mongoose from "mongoose";
 import Notification from "@/app/models/Notification";
 import { emitRealtimeNotification } from "@/app/lib/socketServerEmitter";
+import { recordActivity } from "@/app/lib/creator-revenue/service";
 
 
 const { ObjectId } = mongoose.Types;
@@ -97,6 +98,16 @@ export async function POST(
     const followersCount = await db.collection("follows").countDocuments({
       followingId: targetUserObjectId,
       status: "active",
+    });
+
+    await recordActivity({
+      viewerId: currentUserObjectId,
+      events: [
+        {
+          eventType: "follow",
+          creatorId: targetUserId,
+        },
+      ],
     });
 
     const followingCount = await db.collection("follows").countDocuments({

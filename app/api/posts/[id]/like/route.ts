@@ -7,7 +7,7 @@ import { isPremiumActive } from "@/app/lib/premium";
 import Post from "@/app/models/Post";
 import User from "@/app/models/User";
 import { Types } from "mongoose";
-import { creditLikeEarning } from "@/app/lib/earnings";
+import { recordActivity } from "@/app/lib/creator-revenue/service";
 
 function getObjectId(value: unknown) {
   if (value instanceof Types.ObjectId) return value;
@@ -121,7 +121,16 @@ export async function POST(
       );
 
       if (updateResult.modifiedCount === 1) {
-        await creditLikeEarning({ creatorId, likerId: userId, contentId });
+        await recordActivity({
+          viewerId: userId,
+          events: [
+            {
+              eventType: "like",
+              contentId: id,
+              creatorId: creatorId.toString(),
+            },
+          ],
+        });
       }
     }
 

@@ -21,7 +21,8 @@ export interface IWithdrawal extends Document {
   payoutProvider: "manual" | "razorpayx";
   providerPayoutId?: string | null;
   idempotencyKey: string;
-  earningCycleId: Types.ObjectId;
+  earningCycleId?: Types.ObjectId | null;
+  creatorAllocationIds?: Types.ObjectId[] | null;
   eligibleLikes: number;
   payoutDetailsEncrypted: string;
   payoutDetailsMasked: string;
@@ -90,7 +91,13 @@ const WithdrawalSchema = new Schema<IWithdrawal>(
     earningCycleId: {
       type: Schema.Types.ObjectId,
       ref: "EarningCycle",
-      required: true,
+      default: null,
+      index: true,
+    },
+    creatorAllocationIds: {
+      type: [Schema.Types.ObjectId],
+      ref: "CreatorRevenueAllocation",
+      default: null,
       index: true,
     },
     eligibleLikes: {

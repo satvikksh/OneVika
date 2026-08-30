@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { ImageIcon, PlusCircle, Video, X, Loader2, ChevronLeft, ChevronRight, Upload } from "lucide-react";
 import { useSession } from "next-auth/react";
+import { BackButton } from "@/app/components/MobileBackBar";
 
 interface FileWithPreview {
   file: File;
@@ -211,6 +212,7 @@ async function handleCreatePost() {
         
         {/* User Info */}
         <div className="flex items-center gap-3 mb-4">
+          <BackButton className="lg:hidden -ml-2" />
           <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-blue-500 flex items-center justify-center overflow-hidden flex-shrink-0">
             {session?.user?.image ? (
               <Image src={session.user.image} alt="User" width={40} height={40} className="object-cover" />

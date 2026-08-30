@@ -45,6 +45,10 @@ export interface IPost extends Document {
   userId: Types.ObjectId | IUser;
   likes: Types.ObjectId[];
   comments: IComment[];
+  status: "active" | "removed";
+  removedBy?: Types.ObjectId;
+  removedAt?: Date;
+  removalReason?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -167,6 +171,26 @@ const PostSchema = new Schema<IPost>(
     comments: {
       type: [CommentSchema],
       default: [],
+    },
+    status: {
+      type: String,
+      enum: ["active", "removed"],
+      default: "active",
+      index: true,
+    },
+    removedBy: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    removedAt: {
+      type: Date,
+      default: null,
+    },
+    removalReason: {
+      type: String,
+      trim: true,
+      default: "",
     },
   },
   { 

@@ -28,6 +28,11 @@ export interface IUser extends Document {
   fcmTokens?: string[];
   role: "USER" | "ADMIN";
 
+  // 🚨 MODERATION
+  accountStatus: "active" | "warned" | "restricted" | "banned";
+  accountStatusReason?: string;
+  accountStatusAt?: Date;
+
   isPrivate: boolean;
   cover?: string;
   avatar?: string;
@@ -227,6 +232,23 @@ const UserSchema = new Schema<IUser>(
       enum: ["USER", "ADMIN"],
       default: "USER",
       index: true,
+    },
+
+    // 🚨 MODERATION
+    accountStatus: {
+      type: String,
+      enum: ["active", "warned", "restricted", "banned"],
+      default: "active",
+      index: true,
+    },
+    accountStatusReason: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    accountStatusAt: {
+      type: Date,
+      default: null,
     },
   },
   { timestamps: true }
