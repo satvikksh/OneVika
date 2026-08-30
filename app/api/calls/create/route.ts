@@ -11,6 +11,7 @@ import {
   buildCallRoomName,
 } from "@/app/lib/livekit";
 import { resolveCallConversation, toObjectId } from "@/app/lib/calls";
+import { rejectIfInactive } from "@/app/lib/user-status";
 
 export async function POST(req: NextRequest) {
   try {
@@ -19,6 +20,11 @@ export async function POST(req: NextRequest) {
 
     if (!callerId || !session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const inactiveReason = await rejectIfInactive(session.user.id);
+    if (inactiveReason) {
+      return NextResponse.json({ error: inactiveReason }, { status: 403 });
     }
 
     const body = await req.json().catch(() => ({}));

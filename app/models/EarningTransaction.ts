@@ -108,6 +108,8 @@ EarningTransactionSchema.index(
   }
 );
 
+EarningTransactionSchema.index({ type: 1, status: 1, createdAt: -1 });
+
 const EarningTransaction: Model<IEarningTransaction> =
   mongoose.models.EarningTransaction ||
   mongoose.model<IEarningTransaction>(

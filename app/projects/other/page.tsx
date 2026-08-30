@@ -55,8 +55,8 @@ export default function OtherProjectsPage() {
 
   if (status === "loading" || loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950">
-        <Loader2 className="h-8 w-8 animate-spin text-cyan-300" />
+      <div className="flex min-h-screen items-center justify-center bg-neutral-50 dark:bg-neutral-950">
+        <Loader2 className="h-8 w-8 animate-spin text-neutral-500 dark:text-neutral-300" />
       </div>
     );
   }
@@ -64,8 +64,8 @@ export default function OtherProjectsPage() {
   return (
     <ProjectsShell
       eyebrow="Other Projects"
-      title="Browse other users' projects"
-      description="Search by user name and explore projects based on your access level."
+      title="Explore what others are building"
+      description="Search by creator name and explore projects based on your access level."
     >
       {!session ? (
         <EmptyProjects
@@ -76,32 +76,38 @@ export default function OtherProjectsPage() {
         <EmptyProjects title="Unable to load projects" description={error} />
       ) : (
         <>
-          <section className="mb-8 grid gap-6 lg:grid-cols-[1fr_auto]">
-            <div className="rounded-[2rem] border border-white/10 bg-white/5 p-6 backdrop-blur-2xl">
-              <label className="mb-3 block text-sm font-medium text-slate-300">
-                Search by user name
+          <section className="mb-8 grid gap-5 lg:grid-cols-[1fr_auto]">
+            <div className="rounded-3xl border border-neutral-200 bg-white p-6 text-neutral-900 shadow-sm dark:border-neutral-800 dark:bg-neutral-900 dark:text-white">
+              <label className="mb-3 block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                Search by creator name
               </label>
               <div className="relative">
-                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400 dark:text-neutral-500" />
                 <input
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search creator name"
-                  className="w-full rounded-2xl border border-white/10 bg-slate-950/40 py-3 pl-11 pr-4 text-white outline-none focus:border-cyan-400/40"
+                  className="w-full rounded-xl border border-neutral-300 bg-white py-3 pl-11 pr-4 text-neutral-900 placeholder:text-neutral-400 outline-none focus:border-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white dark:placeholder:text-neutral-500 dark:focus:border-white"
                 />
               </div>
             </div>
 
-            <div className="rounded-[2rem] border border-white/10 bg-white/5 p-6 backdrop-blur-2xl">
+            <div className="rounded-3xl border border-neutral-200 bg-white p-6 text-neutral-900 shadow-sm dark:border-neutral-800 dark:bg-neutral-900 dark:text-white">
               <div className="flex items-center gap-3">
-                <div className={`rounded-2xl p-3 ${isPremium ? "bg-amber-400/10 text-amber-300" : "bg-slate-500/10 text-slate-300"}`}>
+                <div
+                  className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl ${
+                    isPremium
+                      ? "bg-neutral-900 text-amber-300 dark:bg-white dark:text-amber-500"
+                      : "bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
+                  }`}
+                >
                   <Crown className="h-5 w-5" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-white">
+                  <p className="text-sm font-bold">
                     {isPremium ? "Premium access" : "Standard access"}
                   </p>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">
                     {isPremium
                       ? "You can see every other user's projects."
                       : "You can only see mutual-follow projects."}

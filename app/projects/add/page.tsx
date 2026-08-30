@@ -99,8 +99,8 @@ export default function AddProjectPage() {
 
   if (status === "loading") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950">
-        <Loader2 className="h-8 w-8 animate-spin text-cyan-300" />
+      <div className="flex min-h-screen items-center justify-center bg-neutral-50 dark:bg-neutral-950">
+        <Loader2 className="h-8 w-8 animate-spin text-neutral-500 dark:text-neutral-300" />
       </div>
     );
   }
@@ -108,11 +108,11 @@ export default function AddProjectPage() {
   if (!session) {
     return (
       <ProjectsShell
-        eyebrow="Projects Space"
+        eyebrow="Add Project"
         title="Sign in to add projects"
         description="Project creation is available after login."
       >
-        <div className="rounded-[2rem] border border-dashed border-white/10 bg-white/5 p-10 text-center text-slate-400">
+        <div className="rounded-3xl border border-dashed border-neutral-300 bg-neutral-100/70 p-10 text-center text-neutral-500 dark:border-neutral-800 dark:bg-neutral-900/40 dark:text-neutral-400">
           Sign in first, then create a project from this page.
         </div>
       </ProjectsShell>
@@ -125,56 +125,57 @@ export default function AddProjectPage() {
       title="Publish a new project"
       description="Add your own project here. It will appear in your own projects page immediately."
     >
-      <section className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr]">
-        <div className="rounded-[2rem] border border-white/10 bg-white/5 p-8 backdrop-blur-2xl">
+      <section className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+        <div className="rounded-3xl border border-neutral-200 bg-white p-8 text-neutral-900 shadow-sm dark:border-neutral-800 dark:bg-neutral-900 dark:text-white">
           <div className="mb-6 flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-bold text-white">Project Details</h2>
-              <p className="mt-1 text-sm text-slate-400">
+              <h2 className="text-2xl font-bold tracking-tight">Project Details</h2>
+              <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
                 Fill the fields below and submit.
               </p>
             </div>
-            <div className="rounded-2xl bg-cyan-400/10 p-3 text-cyan-200">
+            <div className="grid h-11 w-11 place-items-center rounded-2xl bg-neutral-900 text-white dark:bg-white dark:text-neutral-950">
               <Plus className="h-5 w-5" />
             </div>
           </div>
 
           <form onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              <label className="mb-2 block text-sm font-medium text-slate-300">Title</label>
+              <label className="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300">Title</label>
               <input
                 name="title"
                 value={form.title}
                 onChange={handleChange}
                 required
-                className="w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-white outline-none focus:border-cyan-400/40"
+                className="w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-neutral-900 placeholder:text-neutral-400 outline-none focus:border-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white dark:placeholder:text-neutral-500 dark:focus:border-white"
               />
             </div>
             <div className="sm:col-span-2">
-              <label className="mb-2 block text-sm font-medium text-slate-300">Tagline</label>
+              <label className="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300">Tagline</label>
               <input
                 name="tagline"
                 value={form.tagline}
                 onChange={handleChange}
-                className="w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-white outline-none focus:border-cyan-400/40"
+                placeholder="A one-line summary of the project"
+                className="w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-neutral-900 placeholder:text-neutral-400 outline-none focus:border-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white dark:placeholder:text-neutral-500 dark:focus:border-white"
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-300">Category</label>
+              <label className="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300">Category</label>
               <input
                 name="category"
                 value={form.category}
                 onChange={handleChange}
-                className="w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-white outline-none focus:border-cyan-400/40"
+                className="w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-neutral-900 placeholder:text-neutral-400 outline-none focus:border-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white dark:placeholder:text-neutral-500 dark:focus:border-white"
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-300">Status</label>
+              <label className="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300">Status</label>
               <select
                 name="status"
                 value={form.status}
                 onChange={handleChange}
-                className="w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-white outline-none focus:border-cyan-400/40"
+                className="w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-neutral-900 outline-none focus:border-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white dark:focus:border-white"
               >
                 {selectableProjectStatuses.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -184,95 +185,104 @@ export default function AddProjectPage() {
               </select>
             </div>
             <div className="sm:col-span-2">
-              <label className="mb-2 block text-sm font-medium text-slate-300">Description</label>
+              <label className="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300">Description</label>
               <textarea
                 name="description"
                 value={form.description}
                 onChange={handleChange}
                 rows={5}
+                placeholder="What does this project do?"
                 required
-                className="w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-white outline-none focus:border-cyan-400/40"
+                className="w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-neutral-900 placeholder:text-neutral-400 outline-none focus:border-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white dark:placeholder:text-neutral-500 dark:focus:border-white"
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-300">Progress</label>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                name="progress"
-                value={form.progress}
-                onChange={handleChange}
-                className="w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-white outline-none focus:border-cyan-400/40"
-              />
+              <label className="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300">Progress</label>
+              <div className="relative">
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  name="progress"
+                  value={form.progress}
+                  onChange={handleChange}
+                  className="w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 pr-10 text-neutral-900 placeholder:text-neutral-400 outline-none focus:border-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white dark:placeholder:text-neutral-500 dark:focus:border-white"
+                />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm font-medium text-neutral-400 dark:text-neutral-500">
+                  %
+                </span>
+              </div>
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-300">Team Size</label>
+              <label className="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300">Team Size</label>
               <input
                 type="number"
                 min="1"
                 name="teamSize"
                 value={form.teamSize}
                 onChange={handleChange}
-                className="w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-white outline-none focus:border-cyan-400/40"
+                className="w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-neutral-900 placeholder:text-neutral-400 outline-none focus:border-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white dark:placeholder:text-neutral-500 dark:focus:border-white"
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-300">Duration</label>
+              <label className="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300">Duration</label>
               <input
                 name="duration"
                 value={form.duration}
                 onChange={handleChange}
-                className="w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-white outline-none focus:border-cyan-400/40"
+                placeholder="e.g. 6 months"
+                className="w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-neutral-900 placeholder:text-neutral-400 outline-none focus:border-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white dark:placeholder:text-neutral-500 dark:focus:border-white"
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-300">GitHub URL</label>
+              <label className="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300">GitHub URL</label>
               <input
                 name="githubUrl"
                 value={form.githubUrl}
                 onChange={handleChange}
-                className="w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-white outline-none focus:border-cyan-400/40"
+                placeholder="https://github.com/user/repo"
+                className="w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-neutral-900 placeholder:text-neutral-400 outline-none focus:border-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white dark:placeholder:text-neutral-500 dark:focus:border-white"
               />
             </div>
             <div className="sm:col-span-2">
-              <label className="mb-2 block text-sm font-medium text-slate-300">Live URL</label>
+              <label className="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300">Live URL</label>
               <input
                 name="liveUrl"
                 value={form.liveUrl}
                 onChange={handleChange}
-                className="w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-white outline-none focus:border-cyan-400/40"
+                placeholder="https://your-project.com"
+                className="w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-neutral-900 placeholder:text-neutral-400 outline-none focus:border-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white dark:placeholder:text-neutral-500 dark:focus:border-white"
               />
             </div>
             <div className="sm:col-span-2">
-              <label className="mb-2 block text-sm font-medium text-slate-300">Tech Stack</label>
+              <label className="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300">Tech Stack</label>
               <input
                 name="techStack"
                 value={form.techStack}
                 onChange={handleChange}
                 placeholder="Next.js, MongoDB, Tailwind CSS"
-                className="w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-white outline-none focus:border-cyan-400/40"
+                className="w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-neutral-900 placeholder:text-neutral-400 outline-none focus:border-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white dark:placeholder:text-neutral-500 dark:focus:border-white"
               />
             </div>
             <div className="sm:col-span-2">
-              <label className="mb-2 block text-sm font-medium text-slate-300">Highlights</label>
+              <label className="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300">Highlights</label>
               <input
                 name="highlights"
                 value={form.highlights}
                 onChange={handleChange}
                 placeholder="Beta launched, 10k users"
-                className="w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-white outline-none focus:border-cyan-400/40"
+                className="w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-neutral-900 placeholder:text-neutral-400 outline-none focus:border-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white dark:placeholder:text-neutral-500 dark:focus:border-white"
               />
             </div>
             <div className="sm:col-span-2 flex items-center justify-between gap-4 pt-2">
               <div className="min-h-6 text-sm">
-                {error && <span className="text-rose-400">{error}</span>}
-                {!error && success && <span className="text-emerald-300">{success}</span>}
+                {error && <span className="text-rose-600 dark:text-rose-400">{error}</span>}
+                {!error && success && <span className="text-emerald-600 dark:text-emerald-400">{success}</span>}
               </div>
               <button
                 type="submit"
                 disabled={submitting}
-                className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-blue-500 via-cyan-400 to-emerald-400 px-5 py-3 font-semibold text-slate-950 transition-opacity hover:opacity-90 disabled:opacity-60"
+                className="inline-flex items-center gap-2 rounded-xl bg-neutral-900 px-6 py-3 font-semibold text-white transition-colors hover:bg-neutral-800 disabled:opacity-60 dark:bg-white dark:text-neutral-950 dark:hover:bg-neutral-200"
               >
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                 Add Project
@@ -281,16 +291,18 @@ export default function AddProjectPage() {
           </form>
         </div>
 
-        <div className="rounded-[2rem] border border-white/10 bg-white/5 p-8 backdrop-blur-2xl">
-          <h2 className="text-2xl font-bold text-white">Visibility</h2>
-          <div className="mt-6 space-y-4 text-sm leading-7 text-slate-300">
-            <p>Projects you create appear on your own projects page.</p>
+        <div className="rounded-3xl border border-neutral-200 bg-white p-8 text-neutral-900 shadow-sm dark:border-neutral-800 dark:bg-neutral-900 dark:text-white">
+          <h2 className="text-2xl font-bold tracking-tight">Visibility</h2>
+          <div className="mt-6 space-y-4 text-sm leading-7 text-neutral-600">
+            <p>Projects you create appear instantly on your My Projects board.</p>
             <p>
-              Other users can see your project depending on their access:
-              premium users can browse all projects, while non-premium users only see mutual-follow projects.
+              Other users can see your project depending on their access: premium
+              users can browse all projects, while non-premium users only see
+              mutual-follow projects.
             </p>
             <p>
-              Use clear titles, clean descriptions, and comma-separated tech stack and highlights for the best result.
+              Use clear titles, clean descriptions, and comma-separated tech stack
+              and highlights for the best result.
             </p>
           </div>
         </div>

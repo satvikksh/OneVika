@@ -85,6 +85,10 @@ providers.push(
           throw new Error("Password not set (Google user?)");
         }
 
+        if (user.accountStatus === "banned") {
+          throw new Error("Account is banned");
+        }
+
         const isValid = await bcrypt.compare(credentials.password, user.password);
 
         if (!isValid) {
@@ -177,6 +181,10 @@ export const authOptions: NextAuthOptions = {
         }
 
         if (!dbUser) return false;
+
+        if (dbUser.accountStatus === "banned") {
+          return false;
+        }
 
         user.id = dbUser._id.toString();
         user.name = dbUser.name;

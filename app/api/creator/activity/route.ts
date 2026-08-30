@@ -9,6 +9,7 @@ import {
   IngestEvent,
   IngestEventType,
 } from "@/app/lib/creator-revenue/service";
+import { rejectIfInactive } from "@/app/lib/user-status";
 
 const ALLOWED_EVENT_TYPES: IngestEventType[] = [
   "view_start",
@@ -97,6 +98,11 @@ export async function POST(req: Request) {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const inactiveReason = await rejectIfInactive(session.user.id);
+    if (inactiveReason) {
+      return NextResponse.json({ error: inactiveReason }, { status: 403 });
     }
 
     const body = await req.json().catch(() => null);

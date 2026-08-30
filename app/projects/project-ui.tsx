@@ -3,15 +3,18 @@
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   Briefcase,
   CheckCircle,
   Clock,
   ExternalLink,
+  FolderKanban,
   Github,
+  LayoutGrid,
   Loader2,
   Pencil,
-  Sparkles,
+  PlusCircle,
   Users,
   X,
 } from "lucide-react";
@@ -52,45 +55,21 @@ export type ProjectItem = {
 
 export const statusConfig: Record<
   ProjectStatus,
-  { label: string; className: string }
+  { label: string; dotClass: string }
 > = {
-  planning: {
-    label: "Planning",
-    className: "border-violet-500/30 bg-violet-500/15 text-violet-300",
-  },
-  "in-progress": {
-    label: "In Progress",
-    className: "border-cyan-500/30 bg-cyan-500/15 text-cyan-300",
-  },
-  "on-hold": {
-    label: "On Hold",
-    className: "border-orange-500/30 bg-orange-500/15 text-orange-300",
-  },
-  completed: {
-    label: "Completed",
-    className: "border-blue-500/30 bg-blue-500/15 text-blue-300",
-  },
-  cancelled: {
-    label: "Cancelled",
-    className: "border-rose-500/30 bg-rose-500/15 text-rose-300",
-  },
-  active: {
-    label: "Active",
-    className: "border-emerald-500/30 bg-emerald-500/15 text-emerald-300",
-  },
-  research: {
-    label: "Research",
-    className: "border-amber-500/30 bg-amber-500/15 text-amber-300",
-  },
-  paused: {
-    label: "Paused",
-    className: "border-slate-500/30 bg-slate-500/15 text-slate-300",
-  },
+  planning: { label: "Planning", dotClass: "bg-violet-500" },
+  "in-progress": { label: "In Progress", dotClass: "bg-emerald-500" },
+  "on-hold": { label: "On Hold", dotClass: "bg-amber-500" },
+  completed: { label: "Completed", dotClass: "bg-emerald-600" },
+  cancelled: { label: "Cancelled", dotClass: "bg-rose-500" },
+  active: { label: "Active", dotClass: "bg-emerald-500" },
+  research: { label: "Research", dotClass: "bg-cyan-500" },
+  paused: { label: "Paused", dotClass: "bg-neutral-400" },
 };
 
 const FALLBACK_STATUS = {
   label: "Unknown",
-  className: "border-slate-500/30 bg-slate-500/15 text-slate-300",
+  dotClass: "bg-neutral-400",
 };
 
 export const selectableProjectStatuses: {
@@ -104,6 +83,49 @@ export const selectableProjectStatuses: {
   { value: "cancelled", label: "Cancelled" },
 ];
 
+const PROJECT_TABS = [
+  { href: "/projects", label: "Overview", icon: LayoutGrid },
+  { href: "/projects/add", label: "Add Project", icon: PlusCircle },
+  { href: "/projects/own", label: "My Projects", icon: FolderKanban },
+  { href: "/projects/other", label: "Other Projects", icon: Users },
+];
+
+function isActiveTab(pathname: string, href: string) {
+  if (href === "/projects") {
+    return pathname === "/projects";
+  }
+  return pathname.startsWith(href);
+}
+
+function OwnerAvatar({
+  name,
+  avatar,
+  size = 40,
+}: {
+  name: string;
+  avatar?: string;
+  size?: number;
+}) {
+  return (
+    <div
+      className="flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-neutral-200 text-neutral-600 dark:bg-neutral-700 dark:text-neutral-200"
+      style={{ width: size, height: size }}
+    >
+      {avatar ? (
+        <Image
+          src={avatar}
+          alt={name}
+          width={size}
+          height={size}
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <span className="text-sm font-bold">{name?.[0]?.toUpperCase() || "U"}</span>
+      )}
+    </div>
+  );
+}
+
 export function ProjectsShell({
   eyebrow,
   title,
@@ -115,50 +137,47 @@ export function ProjectsShell({
   description: string;
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.18),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(14,165,233,0.16),_transparent_24%),linear-gradient(180deg,_#020617_0%,_#0f172a_46%,_#111827_100%)] text-slate-100">
-      <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-        <section className="mb-10 rounded-[2rem] border border-white/10 bg-white/5 p-8 backdrop-blur-2xl">
-          <div className="max-w-4xl">
-            <p className="mb-3 inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-cyan-200">
-              <Sparkles className="h-3.5 w-3.5" />
+    <div className="min-h-screen bg-neutral-50 text-neutral-900 dark:bg-neutral-950 dark:text-white">
+      <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+        <header className="mb-8">
+          <div className="flex items-center gap-3">
+            <span className="h-px w-8 bg-neutral-300 dark:bg-neutral-700" />
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-neutral-500">
               {eyebrow}
             </p>
-            <h1 className="text-4xl font-black tracking-tight text-white sm:text-5xl">
-              {title}
-            </h1>
-            <p className="mt-4 max-w-2xl text-base leading-7 text-slate-300 sm:text-lg">
-              {description}
-            </p>
           </div>
+          <h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">
+            {title}
+          </h1>
+          <p className="mt-3 max-w-2xl text-base leading-7 text-neutral-500 dark:text-neutral-400">
+            {description}
+          </p>
+        </header>
 
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Link
-              href="/projects"
-              className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-200 transition-colors hover:bg-white/10"
-            >
-              Overview
-            </Link>
-            <Link
-              href="/projects/add"
-              className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-200 transition-colors hover:bg-white/10"
-            >
-              Add Project
-            </Link>
-            <Link
-              href="/projects/own"
-              className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-200 transition-colors hover:bg-white/10"
-            >
-              Own Projects
-            </Link>
-            <Link
-              href="/projects/other"
-              className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-200 transition-colors hover:bg-white/10"
-            >
-              Other Projects
-            </Link>
-          </div>
-        </section>
+        <nav className="mb-10 inline-flex flex-wrap gap-1 rounded-2xl border border-neutral-200 bg-neutral-100 p-1 dark:border-neutral-800 dark:bg-neutral-900">
+          {PROJECT_TABS.map((tab) => {
+            const active = isActiveTab(pathname ?? "", tab.href);
+            const Icon = tab.icon;
+            return (
+              <Link
+                key={tab.href}
+                href={tab.href}
+                aria-current={active ? "page" : undefined}
+                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors ${
+                  active
+                    ? "bg-neutral-900 text-white shadow-sm dark:bg-white dark:text-neutral-950"
+                    : "text-neutral-500 hover:bg-neutral-200 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-white"
+                }`}
+              >
+                <Icon size={15} />
+                {tab.label}
+              </Link>
+            );
+          })}
+        </nav>
 
         {children}
       </div>
@@ -174,10 +193,16 @@ export function EmptyProjects({
   description: string;
 }) {
   return (
-    <div className="rounded-[2rem] border border-dashed border-white/10 bg-white/5 p-10 text-center">
-      <Briefcase className="mx-auto mb-4 h-10 w-10 text-slate-500" />
-      <h3 className="text-xl font-bold text-white">{title}</h3>
-      <p className="mt-2 text-sm text-slate-400">{description}</p>
+    <div className="rounded-3xl border border-dashed border-neutral-300 bg-neutral-100/70 px-8 py-16 text-center dark:border-neutral-800 dark:bg-neutral-900/40">
+      <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-neutral-200 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
+        <Briefcase className="h-6 w-6" />
+      </div>
+      <h3 className="text-xl font-semibold text-neutral-900 dark:text-white">
+        {title}
+      </h3>
+      <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-neutral-500 dark:text-neutral-400">
+        {description}
+      </p>
     </div>
   );
 }
@@ -200,155 +225,188 @@ export function ProjectCard({
   const status = statusConfig[project.status] ?? FALLBACK_STATUS;
   const [editorOpen, setEditorOpen] = useState(false);
 
-  return (
-    <article className="relative rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl transition-colors hover:border-white/20">
-      <div className="mb-5 flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-slate-200">
-              {project.category}
-            </span>
-            <span
-              className={`rounded-full border px-3 py-1 text-xs font-medium ${status.className}`}
-            >
-              {status.label}
-            </span>
-            {canEdit && (
-              <button
-                type="button"
-                onClick={() => setEditorOpen(true)}
-                aria-label={`Update status for ${project.title}`}
-                className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-slate-950/40 px-2.5 py-1 text-xs font-medium text-slate-300 transition-colors hover:border-cyan-400/40 hover:text-cyan-200"
-              >
-                <Pencil className="h-3 w-3" />
-                Update Status
-              </button>
-            )}
-          </div>
-          <h3 className="truncate text-2xl font-bold text-white">{project.title}</h3>
-          {project.tagline && (
-            <p className="mt-1 text-sm text-slate-300">{project.tagline}</p>
-          )}
-        </div>
+  const progress = Math.min(100, Math.max(0, Number(project.progress) || 0));
+  const progressFillClass =
+    project.status === "completed"
+      ? "bg-emerald-600 dark:bg-emerald-500"
+      : "bg-neutral-900 dark:bg-white";
+  const updatedLabel = useMemo(() => {
+    const date = new Date(project.updatedAt);
+    if (Number.isNaN(date.getTime())) return "Recently";
+    return date.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  }, [project.updatedAt]);
 
-        {showAuthor && (
-          <div className="flex items-center gap-3 rounded-2xl bg-white/5 px-3 py-2">
-            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-gradient-to-r from-blue-500 to-cyan-500">
-              {project.user.avatar ? (
-                <Image
-                  src="/icons/orbitoai.png"
-                  alt={project.user.name}
-                  width={40}
-                  height={40}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <span className="text-sm font-bold text-white">
-                  {project.user.name?.[0]?.toUpperCase() || "U"}
-                </span>
-              )}
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-white">
-                {project.user.name}
-              </p>
-              <p className="truncate text-xs text-slate-400">{project.user.email}</p>
-            </div>
-          </div>
+  const visibleTech = project.techStack.slice(0, 6);
+  const extraTech = Math.max(0, project.techStack.length - visibleTech.length);
+
+  return (
+    <article className="group relative flex flex-col overflow-hidden rounded-3xl border border-neutral-200 bg-white text-neutral-900 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md dark:border-neutral-800 dark:bg-neutral-900 dark:text-white">
+      <div className="flex items-start justify-between gap-3 p-5 pb-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-neutral-300 bg-white px-2.5 py-1 text-xs font-medium text-neutral-800 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200">
+            <span className={`h-2 w-2 rounded-full ${status.dotClass}`} />
+            {status.label}
+          </span>
+          <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-medium text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400">
+            {project.category}
+          </span>
+        </div>
+        {canEdit && (
+          <button
+            type="button"
+            onClick={() => setEditorOpen(true)}
+            aria-label={`Update status for ${project.title}`}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-700 shadow-sm transition-colors hover:border-neutral-400 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:border-neutral-500 dark:hover:bg-neutral-800"
+          >
+            <Pencil className="h-3 w-3" />
+            Update
+          </button>
         )}
       </div>
 
-      <p className="mb-5 text-sm leading-7 text-slate-300">{project.description}</p>
-
-      <div className="mb-5">
-        <div className="mb-2 flex items-center justify-between text-xs text-slate-400">
-          <span>Progress</span>
-          <span>{project.progress}%</span>
+      <div className="px-5 pt-4">
+        <div className="mb-2 flex items-end justify-between gap-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
+            Progress
+          </p>
+          <p className="text-xl font-black leading-none">{progress}%</p>
         </div>
-        <div className="h-2 rounded-full bg-white/10">
+        <div
+          className="h-2 overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-800"
+          role="progressbar"
+          aria-valuenow={progress}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={`${project.title} progress`}
+        >
           <div
-            className="h-2 rounded-full bg-gradient-to-r from-blue-500 via-cyan-400 to-emerald-400"
-            style={{ width: `${project.progress}%` }}
+            className={`h-2 rounded-full transition-all ${progressFillClass}`}
+            style={{ width: `${progress}%` }}
           />
         </div>
       </div>
 
-      {project.techStack.length > 0 && (
-        <div className="mb-5 flex flex-wrap gap-2">
-          {project.techStack.map((tech) => (
+      <div className="flex-1 px-5 pt-5">
+        <h3 className="text-2xl font-bold tracking-tight">{project.title}</h3>
+        {project.tagline && (
+          <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+            {project.tagline}
+          </p>
+        )}
+
+        {showAuthor && (
+          <div className="mt-4 flex items-center gap-3">
+            <OwnerAvatar name={project.user.name} avatar={project.user.avatar} />
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold">{project.user.name}</p>
+              <p className="truncate text-xs text-neutral-500 dark:text-neutral-400">
+                {project.user.email || "Project owner"}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {project.highlights.length > 0 && (
+          <ul className="mt-4 space-y-1.5">
+            {project.highlights.slice(0, 3).map((highlight) => (
+              <li
+                key={highlight}
+                className="flex items-start gap-2 text-sm text-neutral-600 dark:text-neutral-300"
+              >
+                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-neutral-400 dark:bg-neutral-500" />
+                <span className="line-clamp-2">{highlight}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {project.description && (
+          <p className="mt-4 text-sm leading-6 text-neutral-600 line-clamp-3 dark:text-neutral-300">
+            {project.description}
+          </p>
+        )}
+      </div>
+
+      {visibleTech.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 px-5 pt-5">
+          {visibleTech.map((tech) => (
             <span
               key={tech}
-              className="rounded-full border border-white/10 bg-slate-950/40 px-3 py-1 text-xs text-slate-300"
+              className="rounded-full border border-neutral-200 bg-neutral-50 px-2.5 py-1 text-xs font-medium text-neutral-600 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300"
             >
               {tech}
             </span>
           ))}
+          {extraTech > 0 && (
+            <span className="rounded-full border border-neutral-200 bg-neutral-50 px-2.5 py-1 text-xs font-medium text-neutral-400 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-500">
+              +{extraTech}
+            </span>
+          )}
         </div>
       )}
 
-      {project.highlights.length > 0 && (
-        <div className="mb-5 space-y-2">
-          {project.highlights.slice(0, 3).map((highlight) => (
-            <div key={highlight} className="flex items-start gap-2 text-sm text-slate-300">
-              <Sparkles className="mt-0.5 h-4 w-4 text-cyan-300" />
-              <span>{highlight}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 gap-3 text-sm text-slate-300 sm:grid-cols-3">
-        <div className="rounded-2xl bg-white/5 px-3 py-3">
-          <div className="mb-1 flex items-center gap-2 text-xs uppercase tracking-wide text-slate-500">
-            <Users className="h-3.5 w-3.5" />
+      <div className="grid grid-cols-3 gap-2 px-5 pt-5">
+        <div className="rounded-xl border border-neutral-100 bg-neutral-50 px-3 py-2.5 dark:border-neutral-800 dark:bg-neutral-800/60">
+          <div className="mb-1 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+            <Users className="h-3 w-3" />
             Team
           </div>
-          <div className="font-semibold text-white">{project.teamSize}</div>
+          <div className="text-sm font-bold">{project.teamSize}</div>
         </div>
-        <div className="rounded-2xl bg-white/5 px-3 py-3">
-          <div className="mb-1 flex items-center gap-2 text-xs uppercase tracking-wide text-slate-500">
-            <Clock className="h-3.5 w-3.5" />
+        <div className="rounded-xl border border-neutral-100 bg-neutral-50 px-3 py-2.5 dark:border-neutral-800 dark:bg-neutral-800/60">
+          <div className="mb-1 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+            <Clock className="h-3 w-3" />
             Duration
           </div>
-          <div className="font-semibold text-white">{project.duration || "N/A"}</div>
+          <div className="truncate text-sm font-bold">{project.duration || "—"}</div>
         </div>
-        <div className="col-span-2 rounded-2xl bg-white/5 px-3 py-3 sm:col-span-1">
-          <div className="mb-1 flex items-center gap-2 text-xs uppercase tracking-wide text-slate-500">
-            <CheckCircle className="h-3.5 w-3.5" />
+        <div className="rounded-xl border border-neutral-100 bg-neutral-50 px-3 py-2.5 dark:border-neutral-800 dark:bg-neutral-800/60">
+          <div className="mb-1 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+            <CheckCircle className="h-3 w-3" />
             Updated
           </div>
-          <div className="font-semibold text-white">
-            {new Date(project.updatedAt).toLocaleDateString()}
-          </div>
+          <div className="truncate text-sm font-bold">{updatedLabel}</div>
         </div>
       </div>
 
-      {(project.githubUrl || project.liveUrl) && (
-            <div className="mt-5 flex flex-wrap gap-3">
-              {project.githubUrl && (
-                <a
-                  href={project.githubUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-200 transition-colors hover:bg-white/10"
-                >
-                  <Github className="h-4 w-4" />
-                  GitHub
-                </a>
-              )}
-              {project.liveUrl && (
-                <a
-                  href={project.liveUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                  Live Demo
-                </a>
-              )}
-            </div>
-          )}
+      <div className="mt-5 flex items-center gap-2 border-t border-neutral-100 p-5 dark:border-neutral-800">
+        {project.githubUrl && (
+          <a
+            href={project.githubUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-2 rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-neutral-700 transition-colors hover:border-neutral-400 hover:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:border-neutral-500 dark:hover:bg-neutral-800"
+          >
+            <Github className="h-4 w-4" />
+            GitHub
+          </a>
+        )}
+        {project.liveUrl && (
+          <a
+            href={project.liveUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-2 rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-neutral-800 dark:bg-white dark:text-neutral-950 dark:hover:bg-neutral-200"
+          >
+            <ExternalLink className="h-4 w-4" />
+            Live Demo
+          </a>
+        )}
+        {canEdit && !editorOpen && (
+          <button
+            type="button"
+            onClick={() => setEditorOpen(true)}
+            className="ml-auto inline-flex items-center gap-1.5 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-semibold text-neutral-600 transition-colors hover:border-neutral-400 hover:text-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:border-neutral-500 dark:hover:text-white"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+            Update Status
+          </button>
+        )}
+      </div>
 
       {editorOpen && canEdit && (
         <ProjectStatusEditor
@@ -374,8 +432,9 @@ function ProjectStatusEditor({
   onUpdated: (projectId: string, status: ProjectStatus, progress: number) => void;
 }) {
   const currentConfig = statusConfig[project.status] ?? FALLBACK_STATUS;
+  const currentProgress = Number(project.progress) || 0;
   const [status, setStatus] = useState<ProjectStatus>(project.status);
-  const [progressInput, setProgressInput] = useState(String(project.progress));
+  const [progressInput, setProgressInput] = useState(String(currentProgress));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -391,7 +450,6 @@ function ProjectStatusEditor({
   }, [project.status, currentConfig.label]);
 
   const parsedProgress = Number(progressInput);
-  const currentProgress = Number(project.progress) || 0;
   const unchanged =
     status === project.status &&
     Number.isFinite(parsedProgress) &&
@@ -453,39 +511,42 @@ function ProjectStatusEditor({
       />
       <form
         onSubmit={handleSave}
-        className="relative w-full max-w-md rounded-3xl border border-white/10 bg-slate-900/95 p-6 shadow-2xl backdrop-blur-xl"
+        className="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl border border-neutral-200 bg-white p-6 text-neutral-900 shadow-2xl dark:border-neutral-800 dark:bg-neutral-900 dark:text-white"
       >
         <div className="mb-5 flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <h3 className="text-xl font-bold text-white">Update status &amp; progress</h3>
-            <p className="mt-1 truncate text-sm text-slate-400">{project.title}</p>
+            <h3 className="text-xl font-bold tracking-tight">
+              Update status &amp; progress
+            </h3>
+            <p className="mt-1 truncate text-sm text-neutral-500 dark:text-neutral-400">
+              {project.title}
+            </p>
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="rounded-xl border border-white/10 bg-white/5 p-2 text-slate-300 transition-colors hover:bg-white/10"
+            className="rounded-xl border border-neutral-200 bg-white p-2 text-neutral-500 transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
         <div className="mb-5 grid grid-cols-2 gap-3">
-          <div>
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+          <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-800/60">
+            <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
               Current status
             </p>
-            <span
-              className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium ${currentConfig.className}`}
-            >
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-neutral-300 bg-white px-3 py-1 text-xs font-medium text-neutral-800 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200">
+              <span className={`h-2 w-2 rounded-full ${currentConfig.dotClass}`} />
               {currentConfig.label}
             </span>
           </div>
-          <div>
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+          <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-800/60">
+            <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
               Current progress
             </p>
-            <span className="inline-flex items-center rounded-full border border-slate-500/30 bg-slate-500/15 px-3 py-1 text-xs font-medium text-slate-300">
+            <span className="inline-flex items-center rounded-full border border-neutral-300 bg-white px-3 py-1 text-xs font-medium text-neutral-800 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200">
               {currentProgress}%
             </span>
           </div>
@@ -495,7 +556,7 @@ function ProjectStatusEditor({
           <div>
             <label
               htmlFor="project-status-select"
-              className="mb-2 block text-sm font-medium text-slate-300"
+              className="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300"
             >
               Status
             </label>
@@ -503,7 +564,7 @@ function ProjectStatusEditor({
               id="project-status-select"
               value={status}
               onChange={(event) => setStatus(event.target.value as ProjectStatus)}
-              className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-white outline-none focus:border-cyan-400/40"
+              className="w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-neutral-900 outline-none focus:border-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white dark:focus:border-white"
             >
               {options.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -516,40 +577,64 @@ function ProjectStatusEditor({
           <div>
             <label
               htmlFor="project-progress-input"
-              className="mb-2 block text-sm font-medium text-slate-300"
+              className="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300"
             >
               Progress (0–100)
             </label>
-            <input
-              id="project-progress-input"
-              type="number"
-              min="0"
-              max="100"
-              step="1"
-              value={progressInput}
-              onChange={(event) => setProgressInput(event.target.value)}
-              className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-white outline-none focus:border-cyan-400/40"
-            />
+            <div className="relative">
+              <input
+                id="project-progress-input"
+                type="number"
+                min="0"
+                max="100"
+                step="1"
+                value={progressInput}
+                onChange={(event) => setProgressInput(event.target.value)}
+                className="w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 pr-10 text-neutral-900 outline-none focus:border-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white dark:focus:border-white"
+              />
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm font-medium text-neutral-400 dark:text-neutral-500">
+                %
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <input
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            value={Number.isFinite(parsedProgress) && parsedProgress >= 0 && parsedProgress <= 100 ? parsedProgress : 0}
+            onChange={(event) => setProgressInput(event.target.value)}
+            className="w-full accent-neutral-900 dark:accent-white"
+            aria-label="Progress slider"
+          />
+          <div className="mt-1 flex justify-between text-[11px] font-medium text-neutral-400 dark:text-neutral-500">
+            <span>0%</span>
+            <span>100%</span>
           </div>
         </div>
 
         <div className="mt-5 flex items-center justify-between gap-4">
           <div className="min-h-5 flex-1 text-sm">
-            {error && <span className="text-rose-400">{error}</span>}
+            {error && (
+              <span className="text-rose-600 dark:text-rose-400">{error}</span>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={onClose}
               disabled={submitting}
-              className="rounded-2xl border border-white/10 bg-white/5 px-5 py-2.5 text-sm font-medium text-slate-200 transition-colors hover:bg-white/10 disabled:opacity-60"
+              className="rounded-xl border border-neutral-300 bg-white px-5 py-2.5 text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-100 disabled:opacity-60 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={submitting || unchanged}
-              className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-blue-500 via-cyan-400 to-emerald-400 px-5 py-2.5 text-sm font-semibold text-slate-950 transition-opacity hover:opacity-90 disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-xl bg-neutral-900 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-neutral-800 disabled:opacity-60 dark:bg-white dark:text-neutral-950 dark:hover:bg-neutral-200"
             >
               {submitting ? (
                 <Loader2 className="h-4 w-4 animate-spin" />

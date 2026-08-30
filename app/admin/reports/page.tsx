@@ -142,6 +142,7 @@ export default function AdminReportsPage() {
   const [confirmArmed, setConfirmArmed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState("");
+  const [actionNote, setActionNote] = useState<{ tone: "success" | "warn"; text: string } | null>(null);
 
   async function load(nextStatus = status) {
     setLoading(true);
@@ -195,6 +196,7 @@ export default function AdminReportsPage() {
     setReason("");
     setConfirmArmed(false);
     setActionError("");
+    setActionNote(null);
   }
 
   async function submitDecision() {
@@ -218,6 +220,14 @@ export default function AdminReportsPage() {
       });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(payload.error || "Unable to apply action");
+      const email = payload.email;
+      if (email && !email.delivered) {
+        setActionNote({ tone: "warn", text: `Action applied. Notification email could not be sent (${email.error || "delivery failed"}).` });
+      } else if (email && email.delivered) {
+        setActionNote({ tone: "success", text: "Action applied. Notification email sent to the affected user." });
+      } else {
+        setActionNote(null);
+      }
       setSelected(null);
       setDecision(null);
       await load();
@@ -615,6 +625,18 @@ export default function AdminReportsPage() {
               </div>
             </div>
           </div>
+        </div>
+      ) : null}
+
+      {actionNote ? (
+        <div className={`fixed bottom-4 right-4 z-[60] flex items-center gap-2.5 rounded-2xl border px-4 py-3 text-sm font-bold shadow-2xl sm:bottom-6 sm:right-6 ${
+          actionNote.tone === "success"
+            ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-400/20 dark:bg-emerald-950/90 dark:text-emerald-200"
+            : "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-400/20 dark:bg-amber-950/90 dark:text-amber-200"
+        }`}>
+          {actionNote.tone === "success" ? <Check size={16} className="shrink-0" /> : <ShieldAlert size={16} className="shrink-0" />}
+          <span className="max-w-xs">{actionNote.text}</span>
+          <button onClick={() => setActionNote(null)} className="ml-1 text-slate-500 hover:text-slate-900 dark:hover:text-white"><X size={15} /></button>
         </div>
       ) : null}
     </div>

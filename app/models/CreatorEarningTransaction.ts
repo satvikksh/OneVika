@@ -86,6 +86,7 @@ CreatorEarningTransactionSchema.index(
   }
 );
 CreatorEarningTransactionSchema.index({ withdrawalId: 1, type: 1 });
+CreatorEarningTransactionSchema.index({ type: 1, status: 1, createdAt: -1 });
 
 const CreatorEarningTransaction: Model<ICreatorEarningTransaction> =
   mongoose.models.CreatorEarningTransaction ||

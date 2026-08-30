@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import mongoose from "mongoose";
 import { authOptions } from "@/app/lib/authOptions";
 import { getNativeDb } from "@/app/lib/mongodb";
+import { rejectIfInactive } from "@/app/lib/user-status";
 
 const { ObjectId } = mongoose.Types;
 
@@ -17,6 +18,11 @@ export async function POST(req: NextRequest) {
 
     if (!session?.user?.id || !ObjectId.isValid(session.user.id)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const inactiveReason = await rejectIfInactive(session.user.id);
+    if (inactiveReason) {
+      return NextResponse.json({ error: inactiveReason }, { status: 403 });
     }
 
     const body = (await req.json().catch(() => null)) as CreateGroupRequestBody | null;

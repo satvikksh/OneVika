@@ -8,6 +8,7 @@ import mongoose from "mongoose";
 import { encryptChatText } from "@/app/lib/chatCrypto";
 import cloudinary from "@/app/lib/cloudinary";
 import { isPremiumActive } from "@/app/lib/premium";
+import { rejectIfInactive } from "@/app/lib/user-status";
 const { Types } = mongoose;
 const { ObjectId } = Types;
 
@@ -175,6 +176,11 @@ export async function POST(req: NextRequest) {
 
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const inactiveReason = await rejectIfInactive(session.user.id);
+    if (inactiveReason) {
+      return NextResponse.json({ error: inactiveReason }, { status: 403 });
     }
 
     const contentType = req.headers.get("content-type") || "";

@@ -30,11 +30,12 @@ import {
 import { useEffect, useMemo, useState } from "react";
 
 import { useTheme } from "@/app/theme-provider";
+import { QuickActionsDropdown } from "./QuickActions";
 
 const navItems = [
   { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
   { label: "Users", href: "/admin/users", icon: Users },
-  { label: "Posts", href: "/admin/posts", icon: FileText },
+  { label: "Posts & Videos", href: "/admin/posts", icon: FileText },
   { label: "Reports", href: "/admin/reports", icon: Flag },
   { label: "Withdrawals", href: "/admin/withdrawals", icon: CircleDollarSign },
   { label: "Earnings", href: "/admin/earnings", icon: Activity },
@@ -195,9 +196,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
               <Search size={17} />
               <input className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400" placeholder="Search admin workspace" />
             </div>
-            <button className="hidden rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 shadow-sm hover:-translate-y-0.5 hover:shadow-md dark:border-white/10 dark:bg-white/10 dark:text-white sm:inline-flex">
-              Quick actions
-            </button>
+            <QuickActionsDropdown />
             <button className="relative rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-white/10 dark:bg-white/10" aria-label="Admin notifications">
               <Bell size={18} />
               <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-cyan-400" />

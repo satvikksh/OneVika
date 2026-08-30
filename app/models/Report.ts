@@ -114,6 +114,7 @@ const ReportSchema = new Schema<IReport>(
 ReportSchema.index({ reporterId: 1, contentId: 1 }, { unique: true });
 ReportSchema.index({ contentId: 1, status: 1 });
 ReportSchema.index({ reportedUserId: 1, createdAt: -1 });
+ReportSchema.index({ createdAt: -1 });
 
 const Report: Model<IReport> =
   mongoose.models.Report || mongoose.model<IReport>("Report", ReportSchema);

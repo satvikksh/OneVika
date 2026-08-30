@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import mongoose from "mongoose";
 import cloudinary from "@/app/lib/cloudinary";
 import { authOptions } from "@/app/lib/authOptions";
+import { rejectIfInactive } from "@/app/lib/user-status";
 
 const { ObjectId } = mongoose.Types;
 const VALID_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/avif"]);
@@ -43,6 +44,11 @@ export async function POST(
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const inactiveReason = await rejectIfInactive(session.user.id);
+    if (inactiveReason) {
+      return NextResponse.json({ error: inactiveReason }, { status: 403 });
     }
 
     const { userId } = await context.params;

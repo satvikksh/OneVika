@@ -49,8 +49,8 @@ export default function OwnProjectsPage() {
 
   if (status === "loading" || loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950">
-        <Loader2 className="h-8 w-8 animate-spin text-cyan-300" />
+      <div className="flex min-h-screen items-center justify-center bg-neutral-50 dark:bg-neutral-950">
+        <Loader2 className="h-8 w-8 animate-spin text-neutral-500 dark:text-neutral-300" />
       </div>
     );
   }
@@ -71,9 +71,9 @@ export default function OwnProjectsPage() {
 
   return (
     <ProjectsShell
-      eyebrow="Own Projects"
+      eyebrow="My Projects"
       title="Your personal project board"
-      description="Everything created by your account appears here."
+      description="Everything created by your account appears here. Click Update on any card to change its status and progress."
     >
       {!session ? (
         <EmptyProjects

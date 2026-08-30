@@ -1,7 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { Crown, FolderKanban, Plus, Users } from "lucide-react";
+import { ArrowRight, Crown, FolderKanban, Plus, Users } from "lucide-react";
 import { ProjectsShell } from "./project-ui";
 
 const sections = [
@@ -10,58 +12,110 @@ const sections = [
     title: "Add Project",
     description: "Create a new project entry with title, description, status, links, tech stack, and highlights.",
     icon: Plus,
-    accent: "from-cyan-400 to-blue-500",
+    count: null as number | null,
   },
   {
     href: "/projects/own",
-    title: "Own Projects",
-    description: "See every project created by your account in one dedicated page.",
+    title: "My Projects",
+    description: "Every project created by your account in one dedicated board.",
     icon: FolderKanban,
-    accent: "from-emerald-400 to-cyan-500",
+    count: null as number | null,
   },
   {
     href: "/projects/other",
     title: "Other Projects",
-    description: "Browse other users' projects. Premium users can see all other users. Non-premium users only see mutual-follow projects.",
+    description: "Browse other users' projects. Premium users see all, others only see mutual-follow projects.",
     icon: Users,
-    accent: "from-fuchsia-400 to-cyan-500",
+    count: null as number | null,
   },
 ];
 
 export default function ProjectsPage() {
+  const { status } = useSession();
+  const [counts, setCounts] = useState<{ own: number; other: number } | null>(null);
+
+  useEffect(() => {
+    if (status !== "authenticated") return;
+
+    let active = true;
+
+    fetch("/api/projects", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload) => {
+        if (!active) return;
+        setCounts({
+          own: Array.isArray(payload?.ownProjects) ? payload.ownProjects.length : 0,
+          other: Array.isArray(payload?.otherProjects) ? payload.otherProjects.length : 0,
+        });
+      })
+      .catch(() => {
+        if (active) setCounts(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [status]);
+
+  const withCounts = sections.map((section) => ({
+    ...section,
+    count:
+      status !== "authenticated"
+        ? null
+        : section.href === "/projects/own"
+          ? counts?.own
+          : section.href === "/projects/other"
+            ? counts?.other
+            : null,
+  }));
+
   return (
     <ProjectsShell
-      eyebrow="Projects Space"
-      title="Choose a project workspace"
-      description="Create, manage, and showcase your projects in one place. Browse others' projects for inspiration and collaboration.">
-      <section className="grid gap-6 md:grid-cols-3">
-        {sections.map((section) => (
-          <Link
-            key={section.href}
-            href={section.href}
-            className="group rounded-[2rem] border border-white/10 bg-white/5 p-7 backdrop-blur-2xl transition-all hover:-translate-y-1 hover:border-white/20"
-          >
-            <div
-              className={`mb-6 inline-flex rounded-2xl bg-gradient-to-r ${section.accent} p-4 text-slate-950`}
+      eyebrow="Project Workspace"
+      title="Build, manage and showcase your work"
+      description="Create and keep track of your projects, update status and progress, and explore what others are building on OrbitByte.">
+      <section className="grid gap-5 md:grid-cols-3">
+        {withCounts.map((section) => {
+          const Icon = section.icon;
+          return (
+            <Link
+              key={section.href}
+              href={section.href}
+              className="group flex flex-col rounded-3xl border border-neutral-200 bg-white p-7 text-neutral-900 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md dark:border-neutral-800 dark:bg-neutral-900 dark:text-white"
             >
-              <section.icon className="h-6 w-6" />
-            </div>
-            <h2 className="text-2xl font-bold text-white">{section.title}</h2>
-            <p className="mt-3 text-sm leading-7 text-slate-300">{section.description}</p>
-          </Link>
-        ))}
+              <div className="mb-6 flex items-start justify-between">
+                <div className="grid h-12 w-12 place-items-center rounded-2xl bg-neutral-900 text-white transition-colors group-hover:bg-neutral-800 dark:bg-white dark:text-neutral-950 dark:group-hover:bg-neutral-200">
+                  <Icon className="h-5 w-5" />
+                </div>
+                <ArrowRight className="h-4 w-4 text-neutral-300 transition-all group-hover:translate-x-1 group-hover:text-neutral-500 dark:text-neutral-600 dark:group-hover:text-neutral-400" />
+              </div>
+              <h2 className="text-xl font-bold tracking-tight">{section.title}</h2>
+              <p className="mt-2 flex-1 text-sm leading-6 text-neutral-600 dark:text-neutral-400">
+                {section.description}
+              </p>
+              <p className="mt-5 text-xs font-medium uppercase tracking-wide text-neutral-500">
+                {section.count === null
+                  ? "Sign in to see activity"
+                  : `${section.count} ${section.count === 1 ? "project" : "projects"}`}
+              </p>
+            </Link>
+          );
+        })}
       </section>
 
-      <section className="mt-8 rounded-[2rem] border border-white/10 bg-white/5 p-8 backdrop-blur-2xl">
+      <section className="mt-8 rounded-3xl border border-neutral-200 bg-neutral-100 p-8 text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-400">
         <div className="flex items-start gap-4">
-          <div className="rounded-2xl bg-amber-400/10 p-3 text-amber-300">
+          <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-neutral-200 text-amber-500 dark:bg-neutral-800 dark:text-amber-300">
             <Crown className="h-5 w-5" />
           </div>
           <div>
-            <h3 className="text-xl font-bold text-white">Premium visibility rule</h3>
-            <p className="mt-2 text-sm leading-7 text-slate-300">
-              Premium users can browse all other users&apos; projects. Users without premium
-              only see projects from people who mutually follow each other with them.
+            <h3 className="text-lg font-bold text-neutral-900 dark:text-white">
+              Premium visibility rule
+            </h3>
+            <p className="mt-2 max-w-2xl text-sm leading-7 text-neutral-400">
+              Premium users can browse all other users&apos; projects. Users without
+              premium only see projects from people who mutually follow each other with
+              them.
             </p>
           </div>
         </div>

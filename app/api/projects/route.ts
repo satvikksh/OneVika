@@ -6,6 +6,7 @@ import mongoose from "mongoose";
 import { authOptions } from "@/app/lib/authOptions";
 import { dbConnect } from "@/app/lib/mongodb";
 import Project, { PROJECT_STATUSES, ProjectStatus } from "@/app/models/Project";
+import { rejectIfInactive } from "@/app/lib/user-status";
 
 type FollowRow = {
   followerId?: mongoose.Types.ObjectId;
@@ -212,6 +213,11 @@ export async function POST(req: Request) {
 
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const inactiveReason = await rejectIfInactive(session.user.id);
+    if (inactiveReason) {
+      return NextResponse.json({ error: inactiveReason }, { status: 403 });
     }
 
     const body = await req.json();

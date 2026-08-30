@@ -145,6 +145,8 @@ WithdrawalSchema.index(
     },
   }
 );
+WithdrawalSchema.index({ createdAt: -1 });
+WithdrawalSchema.index({ status: 1, completedAt: -1 });
 
 const Withdrawal: Model<IWithdrawal> =
   mongoose.models.Withdrawal ||

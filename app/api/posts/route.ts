@@ -118,6 +118,13 @@ export async function POST(req: Request) {
       );
     }
 
+    if (author.accountStatus === "suspended") {
+      return NextResponse.json(
+        { error: "Your account is suspended. Posting is unavailable until the suspension is lifted." },
+        { status: 403 }
+      );
+    }
+
     if (author.accountStatus === "restricted") {
       return NextResponse.json(
         { error: "Your account is restricted. Posting is temporarily disabled." },

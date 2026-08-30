@@ -1926,6 +1926,19 @@ io.on("connection", (socket) => {
     socket.join(`user_${resolvedUserId}`);
     socketUserIds.add(resolvedUserId);
     addSocketToActiveUser(resolvedUserId, socket.id);
+
+    // Stamp the user's last-active timestamp (best indicator of activity).
+    try {
+      void mongoose.connection.db
+        ?.collection("users")
+        .updateOne(
+          { _id: new mongoose.Types.ObjectId(resolvedUserId) },
+          { $set: { lastSeen: new Date() } }
+        )
+        .catch(() => {});
+    } catch {
+      /* non-fatal presence write */
+    }
   };
 
   const handshakeUserId = socket.handshake.auth?.userId as string | undefined;
@@ -1940,6 +1953,27 @@ io.on("connection", (socket) => {
   socket.on("send_message", async (message: SocketMessagePayload) => {
     try {
       if (!message.senderId) {
+        return;
+      }
+
+      // Enforcement for accounts that cannot send messages (suspended,
+      // restricted, or banned) so the socket channel cannot bypass the API.
+      const senderUser = await mongoose.connection.db
+        ?.collection("users")
+        .findOne(
+          { _id: new mongoose.Types.ObjectId(message.senderId) },
+          { projection: { accountStatus: 1 } }
+        );
+      if (
+        senderUser &&
+        ["restricted", "suspended", "banned"].includes(
+          String(senderUser.accountStatus ?? "active")
+        )
+      ) {
+        console.warn("[Socket] Blocked message from non-active sender.", {
+          senderId: message.senderId,
+          accountStatus: senderUser.accountStatus,
+        });
         return;
       }
 

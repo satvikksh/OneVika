@@ -218,6 +218,7 @@ PostSchema.virtual('likeCount').get(function() {
 
 // Indexes for better performance
 PostSchema.index({ userId: 1, createdAt: -1 });
+PostSchema.index({ createdAt: -1 });
 PostSchema.index({ "comments.user": 1 });
 PostSchema.index({ "comments.createdAt": -1 });
 PostSchema.index({ likes: 1 });

@@ -6,6 +6,7 @@ import { dbConnect } from "@/app/lib/mongodb";
 import { Types } from "mongoose";
 import Post, { IComment } from "@/app/models/Post"; // Import IComment if needed
 import { recordActivity } from "@/app/lib/creator-revenue/service";
+import { rejectIfInactive } from "@/app/lib/user-status";
 
 export async function POST(
   req: Request,
@@ -17,6 +18,11 @@ export async function POST(
 
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const inactiveReason = await rejectIfInactive(session.user.id);
+    if (inactiveReason) {
+      return NextResponse.json({ error: inactiveReason }, { status: 403 });
     }
 
     const { content } = await req.json();

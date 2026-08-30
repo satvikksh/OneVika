@@ -6,6 +6,7 @@ import Thought from "../../../../models/Thought";
 import Notification from "../../../../models/Notification";
 import mongoose from "mongoose";
 import { emitRealtimeNotification } from "../../../../lib/socketServerEmitter";
+import { rejectIfInactive } from "../../../../lib/user-status";
 
 type FollowRow = {
   followerId?: { toString?: () => string } | string;
@@ -15,6 +16,11 @@ export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const inactiveReason = await rejectIfInactive(session.user.id);
+  if (inactiveReason) {
+    return NextResponse.json({ error: inactiveReason }, { status: 403 });
+  }
 
   const body = await req.json();
   await dbConnect();

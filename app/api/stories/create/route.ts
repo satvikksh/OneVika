@@ -7,6 +7,7 @@ import { authOptions } from '../../../lib/authOptions';
 import cloudinary from '../../../lib/cloudinary';
 import mongoose from "mongoose";
 import { emitRealtimeNotification } from '../../../lib/socketServerEmitter';
+import { rejectIfInactive } from '../../../lib/user-status';
 
 export async function POST(req: Request) {
   try {
@@ -18,6 +19,14 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
+      );
+    }
+
+    const inactiveReason = await rejectIfInactive(session.user.id);
+    if (inactiveReason) {
+      return NextResponse.json(
+        { error: inactiveReason },
+        { status: 403 }
       );
     }
 

@@ -6,6 +6,7 @@ import mongoose from "mongoose";
 import Notification from "@/app/models/Notification";
 import { emitRealtimeNotification } from "@/app/lib/socketServerEmitter";
 import { recordActivity } from "@/app/lib/creator-revenue/service";
+import { rejectIfInactive } from "@/app/lib/user-status";
 
 
 const { ObjectId } = mongoose.Types;
@@ -18,6 +19,11 @@ export async function POST(
 
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const inactiveReason = await rejectIfInactive(session.user.id);
+    if (inactiveReason) {
+      return NextResponse.json({ error: inactiveReason }, { status: 403 });
     }
 
     const { userId: targetUserId } = await context.params;
@@ -154,6 +160,11 @@ export async function DELETE(
 
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const inactiveReason = await rejectIfInactive(session.user.id);
+    if (inactiveReason) {
+      return NextResponse.json({ error: inactiveReason }, { status: 403 });
     }
 
     const { userId: targetUserId } = await context.params;

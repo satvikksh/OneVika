@@ -8,6 +8,7 @@ import Post from "@/app/models/Post";
 import User from "@/app/models/User";
 import { Types } from "mongoose";
 import { recordActivity } from "@/app/lib/creator-revenue/service";
+import { rejectIfInactive } from "@/app/lib/user-status";
 
 function getObjectId(value: unknown) {
   if (value instanceof Types.ObjectId) return value;
@@ -91,6 +92,11 @@ export async function POST(
 
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const inactiveReason = await rejectIfInactive(session.user.id);
+    if (inactiveReason) {
+      return NextResponse.json({ error: inactiveReason }, { status: 403 });
     }
 
     await dbConnect();

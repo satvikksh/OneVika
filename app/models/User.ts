@@ -29,9 +29,13 @@ export interface IUser extends Document {
   role: "USER" | "ADMIN";
 
   // 🚨 MODERATION
-  accountStatus: "active" | "warned" | "restricted" | "banned";
+  accountStatus: "active" | "warned" | "restricted" | "suspended" | "banned";
   accountStatusReason?: string;
   accountStatusAt?: Date;
+
+  // ✅ ACCOUNT VERIFICATION
+  verified: boolean;
+  verifiedAt?: Date;
 
   isPrivate: boolean;
   cover?: string;
@@ -67,6 +71,7 @@ export interface IUser extends Document {
 
   createdAt: Date;
   updatedAt: Date;
+  lastSeen?: Date;
 }
 
 /* =======================
@@ -237,7 +242,7 @@ const UserSchema = new Schema<IUser>(
     // 🚨 MODERATION
     accountStatus: {
       type: String,
-      enum: ["active", "warned", "restricted", "banned"],
+      enum: ["active", "warned", "restricted", "suspended", "banned"],
       default: "active",
       index: true,
     },
@@ -250,9 +255,28 @@ const UserSchema = new Schema<IUser>(
       type: Date,
       default: null,
     },
+
+    // ✅ ACCOUNT VERIFICATION
+    verified: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    verifiedAt: {
+      type: Date,
+      default: null,
+    },
+
+    lastSeen: {
+      type: Date,
+      default: null,
+      index: true,
+    },
   },
   { timestamps: true }
 );
+
+UserSchema.index({ createdAt: -1 });
 
 
 

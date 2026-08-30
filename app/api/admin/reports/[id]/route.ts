@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { Types } from "mongoose";
 
 import { requireAdmin, logAdminAction } from "@/app/lib/earnings";
+import { sendModerationEmail } from "@/app/lib/moderation-email";
 import { dbConnect } from "@/app/lib/mongodb";
 import Post from "@/app/models/Post";
 import Report, {
@@ -15,7 +16,8 @@ const USER_STATUS_SEVERITY: Record<string, number> = {
   active: 0,
   warned: 1,
   restricted: 2,
-  banned: 3,
+  suspended: 3,
+  banned: 4,
 };
 
 function userStatusForAction(action: ReportAction, currentStatus: string): string {
@@ -74,6 +76,7 @@ export async function PATCH(
     let actionTaken = "";
     let auditTargetId = id;
     let auditDescription = "";
+    let emailResult: Awaited<ReturnType<typeof sendModerationEmail>> | null = null;
 
     if (action === "review") {
       Object.assign(report, decided, { actionTaken: "review" });
@@ -117,6 +120,18 @@ export async function PATCH(
       actionTaken = "removed";
       auditTargetId = contentId.toString();
       auditDescription = `Removed content ${contentId} due to report ${id}. Reason: ${reason}`;
+
+      const contentOwner = await User.findById(report.reportedUserId)
+        .select("email name")
+        .lean();
+      emailResult = await sendModerationEmail({
+        email: contentOwner?.email,
+        name: contentOwner?.name,
+        action: "remove",
+        contentType: report.contentType,
+        reason,
+        referenceId: id,
+      });
     } else {
       const reportedUserId = report.reportedUserId;
       const user = await User.findById(reportedUserId);
@@ -151,6 +166,15 @@ export async function PATCH(
       actionTaken = action;
       auditTargetId = reportedUserId.toString();
       auditDescription = `Applied '${action}' to user ${reportedUserId} for report ${id}. Reason: ${reason}`;
+
+      emailResult = await sendModerationEmail({
+        email: user.email,
+        name: user.name,
+        action: action as "warn" | "restrict" | "ban",
+        contentType: report.contentType,
+        reason,
+        referenceId: id,
+      });
     }
 
     await logAdminAction({
@@ -167,6 +191,7 @@ export async function PATCH(
     return NextResponse.json({
       success: true,
       actionTaken,
+      email: emailResult,
       report: {
         id: fresh?._id.toString() ?? report._id.toString(),
         status: fresh?.status ?? report.status,
