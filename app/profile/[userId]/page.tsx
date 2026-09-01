@@ -219,32 +219,23 @@ interface PremiumStatus {
   } | null;
 }
 
-interface RazorpayPaymentResponse {
-  razorpay_payment_id: string;
-  razorpay_order_id: string;
-  razorpay_signature: string;
+interface GenericPaymentResponse {
+  transactionId: string;
+  amount: number;
+  currency: string;
+  status: string;
+  provider: string;
 }
 
-interface RazorpayCheckoutOptions {
-  key: string;
+interface GenericPaymentOptions {
+  transactionId: string;
   amount: number;
   currency: string;
   name: string;
   description: string;
-  order_id: string;
-  prefill?: Record<string, string>;
-  handler: (response: RazorpayPaymentResponse) => Promise<void>;
-  modal?: {
-    ondismiss?: () => void;
-  };
-}
-
-declare global {
-  interface Window {
-    Razorpay?: new (options: RazorpayCheckoutOptions) => {
-      open: () => void;
-    };
-  }
+  provider: "orbitbyte" | "manual" | "upi";
+  onComplete?: (response: GenericPaymentResponse) => void;
+  onCancel?: () => void;
 }
 
 const activityTabs = ["Posts", "Reels", "Media", "Articles", "Likes", "Comments", "Bookmarks"] as const;
@@ -386,6 +377,7 @@ export default function UserProfilePage() {
   const [premiumLoading, setPremiumLoading] = useState(false);
   const [premiumActionLoading, setPremiumActionLoading] = useState(false);
   const [premiumError, setPremiumError] = useState<string | null>(null);
+  const [premiumMessage, setPremiumMessage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<(typeof activityTabs)[number]>("Posts");
   const [contactOpen, setContactOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -743,58 +735,101 @@ export default function UserProfilePage() {
   const handleActivatePremium = async () => {
     setPremiumActionLoading(true);
     setPremiumError(null);
+    setPremiumMessage(null);
 
     try {
+      // 1) Start the real Paytm checkout session (server-side).
       const res = await fetch("/api/premium/create-checkout-session", { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Unable to start premium checkout");
 
-      if (!window.Razorpay) {
+      const checkout = data.checkout;
+      if (!checkout || !checkout.mid || !checkout.txnToken) {
+        throw new Error(data.error || "Payment provider could not start a checkout session");
+      }
+
+      // 2) Load the Paytm checkout JS for the merchant.
+      const mid = checkout.mid;
+      const isStaging = String(checkout.environment || "").includes("stage");
+      const host = isStaging
+        ? "https://securegw-stage.paytm.in"
+        : "https://securegw.paytm.in";
+      const scripts = Array.from(
+        document.querySelectorAll<HTMLScriptElement>('script[data-paytm-checkout]')
+      );
+      if (scripts.length === 0) {
         await new Promise<void>((resolve, reject) => {
           const script = document.createElement("script");
-          script.src = "https://checkout.razorpay.com/v1/checkout.js";
-          script.async = true;
+          script.src = `${host}/merchantpgpui/checkoutjs/merchants/${mid}.js`;
+          script.setAttribute("data-paytm-checkout", "1");
           script.onload = () => resolve();
-          script.onerror = () => reject(new Error("Failed to load Razorpay SDK"));
+          script.onerror = () => reject(new Error("Failed to load payment checkout"));
           document.body.appendChild(script);
         });
       }
 
-      const RazorpayCheckout = window.Razorpay;
-      if (!RazorpayCheckout) throw new Error("Razorpay SDK unavailable");
+      // 3) Render the Paytm checkout. Premium is NOT activated here — it is only
+      //    activated after the server verifies the payment.
+      const paytm: any = (window as any).Paytm;
+      if (!paytm || !paytm.CheckoutJS) {
+        throw new Error("Payment checkout is unavailable. Please try again.");
+      }
 
-      new RazorpayCheckout({
-        key: data.keyId,
-        amount: data.amount,
-        currency: data.currency,
-        name: data.name,
-        description: data.description,
-        order_id: data.orderId,
-        prefill: data.prefill,
-        handler: async (response: RazorpayPaymentResponse) => {
-          const activateRes = await fetch("/api/premium/activate", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              razorpayOrderId: response.razorpay_order_id,
-              razorpayPaymentId: response.razorpay_payment_id,
-              razorpaySignature: response.razorpay_signature,
-            }),
-          });
+      const env: any = {
+        mid,
+        orderId: checkout.orderId,
+        amount: checkout.amount,
+        currency: checkout.currency || "INR",
+        callbackUrl: checkout.callbackUrl,
+        txnToken: checkout.txnToken,
+      };
 
-          if (!activateRes.ok) throw new Error("Payment verification failed");
-
-          await fetchPremiumStatus();
-          window.dispatchEvent(new Event("orbitbyte:premium-status-changed"));
-          setPremiumActionLoading(false);
-        },
-        modal: {
-          ondismiss: () => {
-            setPremiumActionLoading(false);
-            setPremiumError("Payment was canceled.");
+      await new Promise<void>((resolve) => {
+        paytm.CheckoutJS.init({ env, merchant: { mid } }, {
+          onTransactionSuccess: async () => {
+            // Verify + activate server-side (Paytm callback also runs, but this
+            // guarantees a return-path confirmation through our own API).
+            try {
+              const activateRes = await fetch("/api/premium/activate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  transactionId: data.transactionId,
+                }),
+              });
+              const activateData = await activateRes.json();
+              if (!activateRes.ok) {
+                setPremiumError(activateData.error || "Payment confirmation failed");
+              } else {
+                setPremiumMessage(
+                  activateData.alreadyProcessed
+                    ? "Premium membership was already active."
+                    : "Premium activated successfully."
+                );
+              }
+            } catch {
+              setPremiumError("Payment confirmed, but activation could not be verified right now.");
+            } finally {
+              await fetchPremiumStatus();
+              window.dispatchEvent(new Event("orbitbyte:premium-status-changed"));
+              setPremiumActionLoading(false);
+            }
+            resolve();
           },
-        },
-      }).open();
+          onPaymentFailure: () => {
+            setPremiumError(
+              "Payment was not completed. Your payment has not been verified and premium has not been activated."
+            );
+            setPremiumActionLoading(false);
+            resolve();
+          },
+          onTransactionPending: () => {
+            setPremiumMessage("Waiting for payment confirmation...");
+            setPremiumActionLoading(false);
+            resolve();
+          },
+        });
+      });
     } catch (err) {
       setPremiumError(err instanceof Error ? err.message : "Unable to start premium checkout");
       setPremiumActionLoading(false);
@@ -1410,6 +1445,7 @@ export default function UserProfilePage() {
                 canRenewPremium={canRenewPremium}
                 premiumActionLoading={premiumActionLoading}
                 premiumError={premiumError}
+                premiumMessage={premiumMessage}
                 onActivatePremium={handleActivatePremium}
               />
             </div>
@@ -1436,6 +1472,7 @@ export default function UserProfilePage() {
                   </button>
                 )}
                 {premiumError && <p className="mt-3 text-xs text-red-500">{premiumError}</p>}
+                {premiumMessage && <p className="mt-3 text-xs text-gray-500">{premiumMessage}</p>}
               </SidebarCard>
             )}
 
@@ -2081,6 +2118,7 @@ function MobileInsightSections({
   canRenewPremium,
   premiumActionLoading,
   premiumError,
+  premiumMessage,
   onActivatePremium,
 }: {
   theme: Theme;
@@ -2092,6 +2130,7 @@ function MobileInsightSections({
   canRenewPremium: boolean;
   premiumActionLoading: boolean;
   premiumError: string | null;
+  premiumMessage: string | null;
   onActivatePremium: () => void;
 }) {
   return (
@@ -2133,6 +2172,7 @@ function MobileInsightSections({
             )}
 
             {premiumError && <p className="text-sm text-red-500">{premiumError}</p>}
+            {premiumMessage && <p className="text-sm text-gray-500">{premiumMessage}</p>}
           </div>
         </SidebarCard>
       )}

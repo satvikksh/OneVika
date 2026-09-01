@@ -1,6 +1,8 @@
 "use client";
 
 import {
+  Check,
+  ChevronUp,
   Maximize2,
   Mic,
   MicOff,
@@ -108,6 +110,15 @@ export default function CallModal() {
     mode: "move" | "resize";
     direction?: ResizeDirection;
   } | null>(null);
+  const [swipeProgress, setSwipeProgress] = useState(0);
+  const [isSwiping, setIsSwiping] = useState(false);
+  const swipeStartRef = useRef<{ y: number; progress: number } | null>(null);
+  const swipeThumbRef = useRef<HTMLButtonElement | null>(null);
+  const computeSwipeProgress = (clientY: number, start: { y: number; progress: number }) => {
+    const distance = 170;
+    const delta = start.y - clientY;
+    return Math.min(1, Math.max(0, start.progress + delta / distance));
+  };
 
   useEffect(() => {
     if (activeCall?.status !== "connected") {
@@ -235,50 +246,182 @@ export default function CallModal() {
 
   // Incoming call, not yet accepted/rejected, and not already on a call.
   if (incomingCall && !activeCall) {
-    return (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 px-4 text-white backdrop-blur-xl">
-        <div className="relative flex min-h-[520px] w-full max-w-sm flex-col items-center justify-center overflow-hidden rounded-[2rem] bg-gradient-to-b from-gray-900 via-gray-950 to-black p-6 text-center shadow-2xl sm:min-h-[580px]">
-          <div className="absolute top-20 h-32 w-32 animate-ping rounded-full bg-emerald-500/20" />
-          <div className="relative mx-auto mb-5 flex h-28 w-28 items-center justify-center overflow-hidden rounded-full bg-blue-600/20 ring-4 ring-white/10">
-            {incomingCall.fromAvatar && !incomingCall.isGroup ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={incomingCall.fromAvatar} alt="" className="h-full w-full object-cover" />
-            ) : incomingCall.isGroup ? (
-              <Users size={32} className="text-blue-400" />
-            ) : incomingCall.video ? (
-              <Video size={32} className="text-blue-400" />
-            ) : (
-              <Phone size={32} className="text-blue-400" />
-            )}
-          </div>
-          <p className="text-lg font-semibold">
-            {incomingCall.isGroup
-              ? incomingCall.groupName || "Group call"
-              : incomingCall.fromUserName || "Someone"}
-          </p>
-          <p className="mt-2 text-sm text-gray-300">
-            Incoming {incomingCall.video ? "Video" : "Audio"} Call
-            {incomingCall.isGroup ? ` from ${incomingCall.fromUserName || "a member"}` : ""}
-          </p>
+    if (isDesktopViewport) {
+      return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 px-4 text-white backdrop-blur-xl">
+          <div className="relative flex min-h-[520px] w-full max-w-sm flex-col items-center justify-center overflow-hidden rounded-[2rem] bg-gradient-to-b from-gray-900 via-gray-950 to-black p-6 text-center shadow-2xl sm:min-h-[580px]">
+            <div className="absolute top-20 h-32 w-32 animate-ping rounded-full bg-emerald-500/20" />
+            <div className="relative mx-auto mb-5 flex h-28 w-28 items-center justify-center overflow-hidden rounded-full bg-blue-600/20 ring-4 ring-white/10">
+              {incomingCall.fromAvatar && !incomingCall.isGroup ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={incomingCall.fromAvatar} alt="" className="h-full w-full object-cover" />
+              ) : incomingCall.isGroup ? (
+                <Users size={32} className="text-blue-400" />
+              ) : incomingCall.video ? (
+                <Video size={32} className="text-blue-400" />
+              ) : (
+                <Phone size={32} className="text-blue-400" />
+              )}
+            </div>
+            <p className="text-lg font-semibold">
+              {incomingCall.isGroup
+                ? incomingCall.groupName || "Group call"
+                : incomingCall.fromUserName || "Someone"}
+            </p>
+            <p className="mt-2 text-sm text-gray-300">
+              Incoming {incomingCall.video ? "Video" : "Audio"} Call
+              {incomingCall.isGroup ? ` from ${incomingCall.fromUserName || "a member"}` : ""}
+            </p>
 
-          <div className="mt-12 flex items-center justify-center gap-10">
-            <button
-              onClick={rejectIncomingCall}
-              className="flex h-16 w-16 items-center justify-center rounded-full bg-red-600 shadow-lg shadow-red-950/40 transition hover:bg-red-500"
-              aria-label="Decline call"
-            >
-              <PhoneOff size={22} />
-            </button>
-            <button
-              onClick={acceptIncomingCall}
-              className="flex h-16 w-16 items-center justify-center rounded-full bg-green-600 shadow-lg shadow-green-950/40 transition hover:bg-green-500"
-              aria-label="Accept call"
-            >
-              <Phone size={22} />
-            </button>
+            <div className="mt-12 flex items-center justify-center gap-10">
+              <button
+                onClick={rejectIncomingCall}
+                className="flex h-16 w-16 items-center justify-center rounded-full bg-red-600 shadow-lg shadow-red-950/40 transition hover:bg-red-500"
+                aria-label="Decline call"
+              >
+                <PhoneOff size={22} />
+              </button>
+              <button
+                onClick={acceptIncomingCall}
+                className="flex h-16 w-16 items-center justify-center rounded-full bg-green-600 shadow-lg shadow-green-950/40 transition hover:bg-green-500"
+                aria-label="Accept call"
+              >
+                <Phone size={22} />
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      );
+    }
+
+    const callerName = incomingCall.isGroup
+      ? incomingCall.groupName || "Group call"
+      : incomingCall.fromUserName || "Someone";
+    const swipeHeld = swipeProgress >= 0.85;
+    const thumbTravel = 148;
+
+    const handleSwipeStart = (e: React.PointerEvent) => {
+      e.preventDefault();
+      (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+      swipeStartRef.current = { y: e.clientY, progress: swipeProgress };
+      setIsSwiping(true);
+    };
+    const handleSwipeMove = (e: React.PointerEvent) => {
+      if (!swipeStartRef.current || !isSwiping) return;
+      setSwipeProgress(computeSwipeProgress(e.clientY, swipeStartRef.current));
+    };
+    const handleSwipeEnd = () => {
+      swipeStartRef.current = null;
+      setIsSwiping(false);
+      if (swipeProgress >= 0.85) {
+        acceptIncomingCall();
+      } else {
+        setSwipeProgress(0);
+      }
+    };
+    const handleSwipeCancel = () => {
+      swipeStartRef.current = null;
+      setIsSwiping(false);
+      setSwipeProgress(0);
+    };
+
+    return (
+      <>
+        <style>{`
+          @keyframes call-enter { from { opacity: 0; transform: translateY(24px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+          @keyframes ring-pulse { 0% { transform: scale(1); opacity: 0.55; } 100% { transform: scale(1.55); opacity: 0; } }
+          @keyframes arrow-bob { 0%, 100% { transform: translateY(0); opacity: 0.9; } 50% { transform: translateY(-4px); opacity: 0.5; } }
+          @keyframes glow-drift { 0%, 100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-18px,12px) scale(1.15); } }
+          .call-enter { animation: call-enter 420ms cubic-bezier(0.22,1,0.36,1) both; }
+          .ring-pulse-a { animation: ring-pulse 2.2s cubic-bezier(0.22,1,0.36,1) infinite; }
+          .ring-pulse-b { animation: ring-pulse 2.2s cubic-bezier(0.22,1,0.36,1) 1.1s infinite; }
+          .call-arrow-bob { animation: arrow-bob 1.3s ease-in-out infinite; }
+          .call-glow-drift { animation: glow-drift 8s ease-in-out infinite; }
+        `}</style>
+        <div className="call-enter fixed inset-0 z-[100] touch-none select-none overflow-hidden bg-black text-white">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(16,185,129,0.18),transparent_55%)]" />
+          <div className="call-glow-drift pointer-events-none absolute -left-24 top-1/4 h-72 w-72 rounded-full bg-emerald-500/10 blur-3xl" />
+          <div className="call-glow-drift pointer-events-none absolute -right-24 top-1/2 h-72 w-72 rounded-full bg-blue-500/10 blur-3xl" />
+
+          <div className="relative flex h-full flex-col items-center px-6 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(3rem,env(safe-area-inset-top))]">
+            <div className="flex flex-1 flex-col items-center justify-center">
+              <div className="relative flex h-40 w-40 items-center justify-center">
+                <span className="ring-pulse-a absolute inset-0 rounded-full bg-white/15" />
+                <span className="ring-pulse-b absolute inset-0 rounded-full bg-emerald-400/25" />
+                <div className="relative h-32 w-32 overflow-hidden rounded-full border-4 border-white/20 bg-emerald-500/20 shadow-[0_0_50px_rgba(16,185,129,0.35)]">
+                  {incomingCall.fromAvatar && !incomingCall.isGroup ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={incomingCall.fromAvatar} alt="" className="h-full w-full object-cover" />
+                  ) : incomingCall.isGroup ? (
+                    <div className="flex h-full w-full items-center justify-center">
+                      <Users size={48} className="text-white/90" />
+                    </div>
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center">
+                      <Phone size={48} className="text-white/90" />
+                    </div>
+                  )}
+                </div>
+              </div>
+              <p className="mt-8 max-w-[16rem] truncate text-center text-2xl font-bold">{callerName}</p>
+              <p className="mt-2 text-sm font-medium tracking-wide text-white/60">
+                Incoming {incomingCall.video ? "Video" : "Audio"} Call
+              </p>
+            </div>
+
+            <div className="flex w-full items-end justify-between gap-5">
+              <div className="flex flex-col items-center gap-3 pb-1">
+                <button
+                  onClick={rejectIncomingCall}
+                  className="flex h-16 w-16 items-center justify-center rounded-full bg-red-600 text-white shadow-[0_8px_30px_rgba(239,68,68,0.35)] transition active:scale-95"
+                  aria-label="Decline call"
+                >
+                  <PhoneOff size={26} />
+                </button>
+                <span className="text-xs font-medium text-white/60">Decline</span>
+              </div>
+
+              <div className="flex flex-1 items-end justify-center pb-1">
+                <div className="flex flex-col items-center gap-2">
+                  <div className="flex items-center gap-1.5 overflow-hidden">
+                    <ChevronUp className="call-arrow-bob h-4 w-4 text-emerald-300" style={{ animationDelay: "0ms" }} />
+                    <ChevronUp className="call-arrow-bob h-5 w-5 text-emerald-200" style={{ animationDelay: "150ms" }} />
+                    <ChevronUp className="call-arrow-bob h-7 w-7 text-white" style={{ animationDelay: "300ms" }} />
+                  </div>
+                  <p className="text-[13px] font-semibold tracking-wide text-white/80">Swipe up to accept</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="relative mt-4 flex h-[232px] w-28 items-end justify-center rounded-[2.5rem] border border-white/10 bg-white/5 backdrop-blur-sm">
+              <div
+                className="absolute bottom-2 left-1/2 w-6 -translate-x-1/2 overflow-hidden rounded-full bg-emerald-500/25"
+                style={{ height: `${Math.max(8, swipeProgress * 216)}px`, transition: isSwiping ? "none" : "height 300ms ease" }}
+              >
+                <div className="h-full w-full bg-gradient-to-t from-emerald-600 to-emerald-300" />
+              </div>
+              <button
+                ref={swipeThumbRef}
+                type="button"
+                aria-label="Swipe up to accept call"
+                onPointerDown={handleSwipeStart}
+                onPointerMove={handleSwipeMove}
+                onPointerUp={handleSwipeEnd}
+                onPointerCancel={handleSwipeCancel}
+                className={`relative z-10 flex h-[74px] w-[74px] items-center justify-center rounded-full text-white shadow-[0_8px_30px_rgba(16,185,129,0.5)] transition-colors ${
+                  swipeHeld ? "bg-emerald-400 active:scale-95" : "bg-gradient-to-b from-emerald-500 to-emerald-600"
+                }`}
+                style={{
+                  transform: `translateY(-${swipeProgress * thumbTravel}px)`,
+                  transition: isSwiping ? "none" : "transform 350ms cubic-bezier(0.22,1,0.36,1)",
+                }}
+              >
+                {swipeHeld ? <Check size={32} /> : <Phone size={28} />}
+              </button>
+            </div>
+          </div>
+        </div>
+      </>
     );
   }
 

@@ -1,5 +1,8 @@
 import type { IUser } from "@/app/models/User";
 import { generateAITheme } from "@/app/lib/theme-generator";
+import { paiseToRupees, rupeesToPaise } from "@/app/lib/earnings";
+
+export { paiseToRupees, rupeesToPaise };
 
 const DEFAULT_PREMIUM_THEME = {
   background: "#000000",
@@ -48,7 +51,7 @@ export async function applyPremiumToUser(
   payment: {
     paymentIntentId?: string | null;
     checkoutSessionId?: string | null;
-    provider?: "stripe" | "razorpay";
+    provider?: "stripe" | "orbitbyte";
     paymentMethod?: {
       type?: string;
       brand?: string;
@@ -78,7 +81,7 @@ export async function applyPremiumToUser(
   user.premiumActivatedAt = now;
   user.premiumExpiresAt = premiumExpiryFrom(extensionStart);
   user.premiumPlan = "monthly";
-  user.premiumPaymentProvider = payment.provider || "razorpay";
+  user.premiumPaymentProvider = payment.provider || "orbitbyte";
   user.premiumLastPaymentAt = now;
   user.premiumLastPaymentIntentId = payment.paymentIntentId || null;
   user.premiumLastCheckoutSessionId = payment.checkoutSessionId || null;

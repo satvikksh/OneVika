@@ -1,16 +1,27 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import User from "../../../models/User";
-import { dbConnect } from "../../../lib/mongodb";
+
 import { authOptions } from "@/app/lib/authOptions";
-import { applyPremiumToUser } from "@/app/lib/premium";
-import {
-  fetchRazorpayPayment,
-  verifyRazorpayPaymentSignature,
-} from "@/app/lib/razorpay";
+import { dbConnect } from "@/app/lib/mongodb";
+import PaymentTransaction from "@/app/models/PaymentTransaction";
+import Order from "@/app/models/Order";
+import User from "@/app/models/User";
+import { verifyAndCompletePremiumPayment } from "@/app/services/premium-payment";
+import { sendPaymentEmail } from "@/app/lib/payment-email";
 
 export const runtime = "nodejs";
 
+/**
+ * Premium activation.
+ *
+ * Premium is NEVER activated based on the client returning from checkout, a
+ * "success" redirect, or an unverified status. This handler always verifies the
+ * payment server-side with Paytm and only activates once Paytm confirms
+ * TXN_SUCCESS for the exact expected amount.
+ *
+ * If the payment has not been verified, activation is rejected and premium
+ * stays INACTIVE.
+ */
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
@@ -20,80 +31,68 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json().catch(() => ({}));
-    const razorpayOrderId = body?.razorpayOrderId as string | undefined;
-    const razorpayPaymentId = body?.razorpayPaymentId as string | undefined;
-    const razorpaySignature = body?.razorpaySignature as string | undefined;
+    const transactionId = body?.transactionId;
 
-    if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature) {
-      return NextResponse.json(
-        {
-          error:
-            "razorpayOrderId, razorpayPaymentId and razorpaySignature are required",
-        },
-        { status: 400 },
-      );
-    }
-    const signatureOk = verifyRazorpayPaymentSignature({
-      orderId: razorpayOrderId,
-      paymentId: razorpayPaymentId,
-      signature: razorpaySignature,
-    });
-    if (!signatureOk) {
-      return NextResponse.json({ error: "Invalid payment signature" }, { status: 400 });
-    }
-
-    let paymentMethod: {
-      type?: string;
-      brand?: string;
-      last4?: string;
-      expMonth?: number;
-      expYear?: number;
-      vpa?: string;
-    } | null = null;
-
-    const payment = await fetchRazorpayPayment(razorpayPaymentId);
-    const card = payment.card;
-    if (payment.method) {
-      paymentMethod = {
-        type: payment.method,
-        brand: card?.network,
-        last4: card?.last4,
-        expMonth: card?.expiry_month,
-        expYear: card?.expiry_year,
-        vpa: payment.vpa,
-      };
+    if (!transactionId || typeof transactionId !== "string") {
+      return NextResponse.json({ error: "transactionId is required" }, { status: 400 });
     }
 
     await dbConnect();
+    const userId = session.user.id;
 
-    const user = await User.findById(session.user.id);
+    const result = await verifyAndCompletePremiumPayment({ transactionId, userId });
 
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    if (!result.ok) {
+      if (result.code === "NOT_VERIFIED") {
+        return NextResponse.json(
+          { success: false, error: result.reason, code: result.code },
+          { status: 402 }
+        );
+      }
+      const status =
+        result.code === "TX_NOT_FOUND" || result.code === "ORDER_NOT_FOUND"
+          ? 404
+          : result.code === "ACCESS_DENIED"
+            ? 403
+            : 400;
+      return NextResponse.json(
+        { success: false, error: result.reason, code: result.code },
+        { status }
+      );
     }
-    if (
-      user.premiumLastCheckoutSessionId &&
-      user.premiumLastCheckoutSessionId !== razorpayOrderId
-    ) {
-      return NextResponse.json({ error: "Order mismatch" }, { status: 403 });
+
+    const transaction = await PaymentTransaction.findOne({
+      transactionId,
+      userId: userId,
+    }).lean();
+    const order = transaction?.orderId
+      ? await Order.findById(transaction.orderId).lean()
+      : null;
+    const user = await User.findById(userId).lean();
+
+    // Send confirmation email (fire-and-forget; email failure must not roll
+    // back the already-persisted DB changes).
+    if (!result.alreadyProcessed) {
+      sendPaymentEmail({
+        email: session.user.email,
+        name: user?.name || session.user.name || undefined,
+        type: "purchase_confirmation",
+        amountPaise: transaction?.amountPaise || 0,
+        transactionId,
+        orderId: order?.orderId,
+      }).catch(() => {});
     }
 
-    await applyPremiumToUser(user, {
-      provider: "razorpay",
-      paymentIntentId: razorpayPaymentId,
-      checkoutSessionId: razorpayOrderId,
-      paymentMethod,
+    return NextResponse.json({
+      success: true,
+      alreadyProcessed: result.alreadyProcessed,
+      premiumExpiresAt: result.premiumExpiresAt?.toISOString?.() || result.premiumExpiresAt || null,
+      message: result.alreadyProcessed
+        ? "Premium membership was already activated for this transaction."
+        : "Premium membership activated successfully.",
     });
-
-    await user.save();
-
-    return NextResponse.json({ success: true, premiumExpiresAt: user.premiumExpiresAt });
-
   } catch (error) {
     console.error("Premium Activation Error:", error);
-    return NextResponse.json(
-      { error: "Something went wrong" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Something went wrong" }, { status: 500 });
   }
 }

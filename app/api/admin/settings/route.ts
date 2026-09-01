@@ -69,7 +69,7 @@ export async function PATCH(req: Request) {
     if (typeof body.withdrawalsEnabled === "boolean") {
       settings.withdrawalsEnabled = body.withdrawalsEnabled;
     }
-    if (body.payoutProvider === "manual" || body.payoutProvider === "razorpayx") {
+    if (body.payoutProvider === "manual") {
       settings.payoutProvider = body.payoutProvider;
     }
     if (typeof body.maintenanceMode === "boolean") {

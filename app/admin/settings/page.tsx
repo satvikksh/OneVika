@@ -8,7 +8,7 @@ type AdminSettings = {
   minimumWithdrawal: number;
   maximumWithdrawal: number | null;
   withdrawalsEnabled: boolean;
-  payoutProvider: "manual" | "razorpayx";
+  payoutProvider: "manual";
   maintenanceMode: boolean;
 };
 
@@ -141,7 +141,7 @@ export default function AdminSettingsPage() {
           ) : active === "withdrawals" ? (
             <div className="mt-5 grid gap-4">
               <label className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm font-black dark:border-white/10 dark:bg-white/10">Withdrawals enabled<input type="checkbox" checked={settings.withdrawalsEnabled} onChange={(event) => setSettings({ ...settings, withdrawalsEnabled: event.target.checked })} /></label>
-              <label className="grid gap-2 text-sm font-black">Payout Provider<select value={settings.payoutProvider} onChange={(event) => setSettings({ ...settings, payoutProvider: event.target.value as AdminSettings["payoutProvider"] })} className="h-12 rounded-2xl border border-slate-200 bg-slate-50 px-4 outline-none dark:border-white/10 dark:bg-slate-900"><option value="manual">Manual</option><option value="razorpayx">RazorpayX</option></select></label>
+              <label className="grid gap-2 text-sm font-black">Payout Provider<select value={settings.payoutProvider} onChange={(event) => setSettings({ ...settings, payoutProvider: event.target.value as AdminSettings["payoutProvider"] })} className="h-12 rounded-2xl border border-slate-200 bg-slate-50 px-4 outline-none dark:border-white/10 dark:bg-slate-900"><option value="manual">Manual</option></select></label>
             </div>
           ) : active === "maintenance" ? (
             <div className="mt-5">

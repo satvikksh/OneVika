@@ -18,7 +18,7 @@ export interface IWithdrawal extends Document {
   currency: "INR";
   status: WithdrawalStatus;
   payoutMethod: PayoutMethodType;
-  payoutProvider: "manual" | "razorpayx";
+  payoutProvider: "manual";
   providerPayoutId?: string | null;
   idempotencyKey: string;
   earningCycleId?: Types.ObjectId | null;
@@ -74,7 +74,7 @@ const WithdrawalSchema = new Schema<IWithdrawal>(
     },
     payoutProvider: {
       type: String,
-      enum: ["manual", "razorpayx"],
+      enum: ["manual"],
       default: "manual",
     },
     providerPayoutId: {

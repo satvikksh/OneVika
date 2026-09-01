@@ -1,132 +1,91 @@
-import crypto from "crypto";
+/**
+ * OrbitByte Payment Service - Provider-Agnostic Payment Library
+ * 
+ * This module replaces Razorpay with a provider-independent payment abstraction.
+ * All payment processing goes through the PaymentMethod and PaymentTransaction
+ * models, with adapters for specific payment providers.
+ * 
+ * To add a new payment provider, configure via PaymentMethod or implement
+ * a payment adapter following the architecture in app/lib/payment-adapter.ts.
+ */
 
-const RAZORPAY_API_BASE = "https://api.razorpay.com/v1";
-
-function getRazorpayKeyId() {
-  const keyId = process.env.RAZORPAY_KEY_ID;
-  if (!keyId) throw new Error("Missing RAZORPAY_KEY_ID");
-  return keyId;
+// Provider configuration interfaces
+export interface PaymentProviderConfig {
+  name: string;
+  type: "upi" | "bank_transfer" | "card" | "wallet" | "manual";
+  enabled: boolean;
+  currency: "INR";
+  minAmountPaise?: number;
+  maxAmountPaise?: number;
+  configuration?: Record<string, unknown>;
 }
 
-function getRazorpayKeySecret() {
-  const keySecret = process.env.RAZORPAY_KEY_SECRET;
-  if (!keySecret) throw new Error("Missing RAZORPAY_KEY_SECRET");
-  return keySecret;
-}
+// Default OrbitByte payment configuration (UPI/manual focused)
+export const ORBITBYTE_PAYMENT_CONFIG: PaymentProviderConfig = {
+  name: "orbitbyte",
+  type: "manual",
+  enabled: true,
+  currency: "INR",
+  minAmountPaise: 100,
+  maxAmountPaise: 10000000,
+};
 
-function getRazorpayWebhookSecret() {
-  const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
-  if (!webhookSecret) throw new Error("Missing RAZORPAY_WEBHOOK_SECRET");
-  return webhookSecret;
-}
-
-function getRazorpayBasicAuth() {
-  return Buffer.from(`${getRazorpayKeyId()}:${getRazorpayKeySecret()}`).toString(
-    "base64",
-  );
-}
-
-async function razorpayRequest<T = unknown>(
-  path: string,
-  options?: {
-    method?: "GET" | "POST";
-    body?: Record<string, unknown>;
+// Provider lookup by type
+export const PAYMENT_PROVIDERS: Record<string, PaymentProviderConfig> = {
+  orbitbyte: ORBITBYTE_PAYMENT_CONFIG,
+  upi: {
+    name: "UPI",
+    type: "upi",
+    enabled: true,
+    currency: "INR",
+    minAmountPaise: 1,
+    maxAmountPaise: 10000000,
   },
-) {
-  const method = options?.method || "GET";
-  const response = await fetch(`${RAZORPAY_API_BASE}${path}`, {
-    method,
-    headers: {
-      Authorization: `Basic ${getRazorpayBasicAuth()}`,
-      "Content-Type": "application/json",
-    },
-    body: method === "POST" ? JSON.stringify(options?.body || {}) : undefined,
-  });
+  bank_transfer: {
+    name: "Bank Transfer",
+    type: "bank_transfer",
+    enabled: true,
+    currency: "INR",
+    minAmountPaise: 1000,
+    maxAmountPaise: 10000000,
+  },
+  card: {
+    name: "Card",
+    type: "card",
+    enabled: false, // Disabled by default - requires authorized payment/acquiring integration
+    currency: "INR",
+    minAmountPaise: 100,
+    maxAmountPaise: 10000000,
+  },
+  wallet: {
+    name: "Wallet",
+    type: "wallet",
+    enabled: true,
+    currency: "INR",
+    minAmountPaise: 1,
+    maxAmountPaise: 10000000,
+  },
+  manual: {
+    name: "Manual",
+    type: "manual",
+    enabled: true,
+    currency: "INR",
+    minAmountPaise: 100,
+    maxAmountPaise: 10000000,
+  },
+};
 
-  const json = await response.json();
-  if (!response.ok) {
-    const message =
-      (json as { error?: { description?: string } })?.error?.description ||
-      "Razorpay request failed";
-    throw new Error(message);
-  }
-
-  return json as T;
+/**
+ * Get provider configuration by type
+ */
+export function getProviderConfig(type: string): PaymentProviderConfig {
+  return PAYMENT_PROVIDERS[type] || PAYMENT_PROVIDERS.manual;
 }
 
-export function getRazorpayPublicKey() {
-  return getRazorpayKeyId();
-}
-
-export async function createRazorpayOrder(input: {
-  amountPaise: number;
-  currency: string;
-  receipt: string;
-  userId: string;
-}) {
-  return razorpayRequest<{
-    id: string;
-    amount: number;
-    currency: string;
-    receipt: string;
-    notes?: { userId?: string };
-  }>("/orders", {
-    method: "POST",
-    body: {
-      amount: input.amountPaise,
-      currency: input.currency.toUpperCase(),
-      receipt: input.receipt,
-      notes: {
-        userId: input.userId,
-      },
-      payment_capture: 1,
-    },
-  });
-}
-
-export async function fetchRazorpayPayment(paymentId: string) {
-  return razorpayRequest<{
-    id: string;
-    method?: string;
-    card?: {
-      network?: string;
-      last4?: string;
-      expiry_month?: number;
-      expiry_year?: number;
-    };
-    vpa?: string;
-    order_id?: string;
-  }>(`/payments/${paymentId}`);
-}
-
-export function verifyRazorpayPaymentSignature(input: {
-  orderId: string;
-  paymentId: string;
-  signature: string;
-}) {
-  const body = `${input.orderId}|${input.paymentId}`;
-  const expected = crypto
-    .createHmac("sha256", getRazorpayKeySecret())
-    .update(body, "utf8")
-    .digest("hex");
-
-  const expectedBuf = Buffer.from(expected, "hex");
-  const providedBuf = Buffer.from(input.signature, "hex");
-  if (expectedBuf.length !== providedBuf.length) return false;
-
-  return crypto.timingSafeEqual(expectedBuf, providedBuf);
-}
-
-export function verifyRazorpayWebhookSignature(payload: string, signature?: string | null) {
-  if (!signature) return false;
-  const expected = crypto
-    .createHmac("sha256", getRazorpayWebhookSecret())
-    .update(payload, "utf8")
-    .digest("hex");
-
-  const expectedBuf = Buffer.from(expected, "hex");
-  const providedBuf = Buffer.from(signature, "hex");
-  if (expectedBuf.length !== providedBuf.length) return false;
-
-  return crypto.timingSafeEqual(expectedBuf, providedBuf);
+/**
+ * Check if a provider type is enabled
+ */
+export function isProviderEnabled(type: string): boolean {
+  const config = getProviderConfig(type);
+  return config.enabled;
 }

@@ -25,6 +25,7 @@ import {
   MessageSquare,
   BarChart,
   PenSquare, // Added post icon
+  Receipt,
 } from "lucide-react";
 import Image from "next/image";
 import { useSession, signOut } from "next-auth/react";
@@ -882,6 +883,12 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                         className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-sm font-medium text-gray-700 dark:text-gray-300"
                       >
                         <Settings size={16} /> Settings
+                      </Link>
+                      <Link
+                        href="/payments"
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-sm font-medium text-gray-700 dark:text-gray-300"
+                      >
+                        <Receipt size={16} /> Payment History
                       </Link>
                       <Link
                         href="/chat"

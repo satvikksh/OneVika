@@ -3,6 +3,10 @@ import mongoose, { Document, Model, Schema, Types } from "mongoose";
 export interface IWallet extends Document {
   userId: Types.ObjectId;
   availableBalancePaise: number;
+  pendingBalancePaise: number;
+  withdrawableBalancePaise: number;
+  totalCreditsPaise: number;
+  totalDebitsPaise: number;
   totalEarnedPaise: number;
   totalWithdrawnPaise: number;
   currency: "INR";
@@ -20,6 +24,26 @@ const WalletSchema = new Schema<IWallet>(
       index: true,
     },
     availableBalancePaise: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    pendingBalancePaise: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    withdrawableBalancePaise: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    totalCreditsPaise: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    totalDebitsPaise: {
       type: Number,
       default: 0,
       min: 0,

@@ -5,6 +5,12 @@ export interface IAdminAuditLog extends Document {
   action: string;
   targetId?: string;
   description: string;
+  userId?: Types.ObjectId;
+  membershipId?: string;
+  transactionId?: string;
+  reason?: string;
+  previousStatus?: string;
+  newStatus?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -33,6 +39,33 @@ const AdminAuditLogSchema = new Schema<IAdminAuditLog>(
       type: String,
       trim: true,
       default: "",
+    },
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      index: true,
+    },
+    membershipId: {
+      type: String,
+      trim: true,
+      index: true,
+    },
+    transactionId: {
+      type: String,
+      trim: true,
+      index: true,
+    },
+    reason: {
+      type: String,
+      trim: true,
+    },
+    previousStatus: {
+      type: String,
+      trim: true,
+    },
+    newStatus: {
+      type: String,
+      trim: true,
     },
   },
   { timestamps: true }

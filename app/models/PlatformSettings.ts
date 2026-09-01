@@ -6,7 +6,7 @@ export interface IPlatformSettings extends Document {
   minimumWithdrawalPaise: number;
   maximumWithdrawalPaise?: number | null;
   withdrawalsEnabled: boolean;
-  payoutProvider: "manual" | "razorpayx";
+  payoutProvider: "manual";
   maintenanceMode: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -42,7 +42,7 @@ const PlatformSettingsSchema = new Schema<IPlatformSettings>(
     },
     payoutProvider: {
       type: String,
-      enum: ["manual", "razorpayx"],
+      enum: ["manual"],
       default: "manual",
     },
     maintenanceMode: {

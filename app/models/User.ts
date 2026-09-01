@@ -53,7 +53,7 @@ export interface IUser extends Document {
   premiumExpiresAt?: Date;
   premiumActivatedAt?: Date;
   premiumPlan?: "monthly";
-  premiumPaymentProvider?: "stripe" | "razorpay";
+  premiumPaymentProvider?: string;
   premiumLastPaymentAt?: Date;
   premiumLastPaymentIntentId?: string;
   premiumLastCheckoutSessionId?: string;
@@ -194,7 +194,6 @@ const UserSchema = new Schema<IUser>(
     },
     premiumPaymentProvider: {
       type: String,
-      enum: ["stripe", "razorpay"],
     },
     premiumLastPaymentAt: {
       type: Date,
@@ -216,7 +215,8 @@ const UserSchema = new Schema<IUser>(
       default: null,
     },
     premiumPaymentMethod: {
-      type: Object,
+      type: Map,
+      of: Schema.Types.Mixed,
       default: null,
     },
 

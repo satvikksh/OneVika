@@ -10,7 +10,7 @@ import EarningCycle from "@/app/models/EarningCycle";
 import EarningTransaction from "@/app/models/EarningTransaction";
 import PlatformSettings from "@/app/models/PlatformSettings";
 import User from "@/app/models/User";
-import Wallet from "@/app/models/Wallet";
+import Wallet, { IWallet } from "@/app/models/Wallet";
 import Withdrawal, { PayoutMethodType, WithdrawalStatus } from "@/app/models/Withdrawal";
 
 export const INR_CURRENCY = "INR" as const;
@@ -72,11 +72,11 @@ export async function getOrCreateWallet(
   const wallet = await Wallet.findOne({ userId }).session(session ?? null);
   if (wallet) return wallet;
 
-  const [created] = await Wallet.create(
-    [{ userId, availableBalancePaise: 0, totalEarnedPaise: 0, totalWithdrawnPaise: 0 }],
+  const created = await Wallet.create(
+    [{ userId, availableBalancePaise: 0, totalCreditsPaise: 0, totalDebitsPaise: 0 }],
     { session: session ?? undefined }
   );
-  return created;
+  return (created as IWallet[])?.[0] || wallet;
 }
 
 export async function getOpenCycle(
@@ -143,7 +143,7 @@ export async function creditLikeEarning({
       if (result.upsertedCount !== 1) return;
 
       wallet.availableBalancePaise += settings.likeRatePaise;
-      wallet.totalEarnedPaise += settings.likeRatePaise;
+      wallet.totalCreditsPaise += settings.likeRatePaise;
       await wallet.save({ session: dbSession });
 
       cycle.eligibleLikes += 1;
@@ -412,7 +412,7 @@ export async function transitionWithdrawal({
         }
         withdrawal.status = "COMPLETED";
         withdrawal.completedAt = new Date();
-        wallet.totalWithdrawnPaise += withdrawal.amountPaise;
+        wallet.totalDebitsPaise += withdrawal.amountPaise;
         if (cycle) cycle.status = "PAID";
         await markAllocationWithdrawalTxn("COMPLETED");
         if (!isCreatorAllocation) {
@@ -450,9 +450,9 @@ export async function transitionWithdrawal({
         if (isCreatorAllocation) {
           wallet.availableBalancePaise += withdrawal.amountPaise;
           if (withdrawal.status === "COMPLETED") {
-            wallet.totalWithdrawnPaise = Math.max(
+            wallet.totalDebitsPaise = Math.max(
               0,
-              wallet.totalWithdrawnPaise - withdrawal.amountPaise
+              wallet.totalDebitsPaise - withdrawal.amountPaise
             );
           }
           await markAllocationWithdrawalTxn("REVERSED");
@@ -465,9 +465,9 @@ export async function transitionWithdrawal({
           if (!existingRefund) {
             wallet.availableBalancePaise += withdrawal.amountPaise;
             if (withdrawal.status === "COMPLETED") {
-              wallet.totalWithdrawnPaise = Math.max(
+              wallet.totalDebitsPaise = Math.max(
                 0,
-                wallet.totalWithdrawnPaise - withdrawal.amountPaise
+                wallet.totalDebitsPaise - withdrawal.amountPaise
               );
             }
             await EarningTransaction.create(
