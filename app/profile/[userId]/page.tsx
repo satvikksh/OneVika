@@ -738,98 +738,86 @@ export default function UserProfilePage() {
     setPremiumMessage(null);
 
     try {
-      // 1) Start the real Paytm checkout session (server-side).
+      // 1) Start the real Cashfree checkout session (server-side).
       const res = await fetch("/api/premium/create-checkout-session", { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Unable to start premium checkout");
 
       const checkout = data.checkout;
-      if (!checkout || !checkout.mid || !checkout.txnToken) {
+      if (!checkout || !checkout.paymentSessionId) {
         throw new Error(data.error || "Payment provider could not start a checkout session");
       }
 
-      // 2) Load the Paytm checkout JS for the merchant.
-      const mid = checkout.mid;
-      const isStaging = String(checkout.environment || "").includes("stage");
-      const host = isStaging
-        ? "https://securegw-stage.paytm.in"
-        : "https://securegw.paytm.in";
+      // 2) Load the Cashfree hosted-checkout JS SDK.
       const scripts = Array.from(
-        document.querySelectorAll<HTMLScriptElement>('script[data-paytm-checkout]')
+        document.querySelectorAll<HTMLScriptElement>('script[data-cashfree-checkout]')
       );
       if (scripts.length === 0) {
         await new Promise<void>((resolve, reject) => {
           const script = document.createElement("script");
-          script.src = `${host}/merchantpgpui/checkoutjs/merchants/${mid}.js`;
-          script.setAttribute("data-paytm-checkout", "1");
+          script.src = "https://sdk.cashfree.com/js/v3/cashfree.js";
+          script.async = true;
+          script.setAttribute("data-cashfree-checkout", "1");
           script.onload = () => resolve();
           script.onerror = () => reject(new Error("Failed to load payment checkout"));
           document.body.appendChild(script);
         });
       }
 
-      // 3) Render the Paytm checkout. Premium is NOT activated here — it is only
-      //    activated after the server verifies the payment.
-      const paytm: any = (window as any).Paytm;
-      if (!paytm || !paytm.CheckoutJS) {
+      // 3) Open the Cashfree hosted checkout. Premium is NOT activated here —
+      //    it is only activated after the server verifies the payment.
+      interface CashfreeInstance {
+        checkout: (opts: { paymentSessionId: string; redirectTarget: string }) => Promise<unknown>;
+      }
+      interface CashfreeSdkConstructor {
+        new (opts: { mode: "production" | "sandbox" }): CashfreeInstance;
+      }
+      const CashfreeSdk = (window as unknown as { Cashfree?: CashfreeSdkConstructor }).Cashfree;
+      if (!CashfreeSdk) {
         throw new Error("Payment checkout is unavailable. Please try again.");
       }
 
-      const env: any = {
-        mid,
-        orderId: checkout.orderId,
-        amount: checkout.amount,
-        currency: checkout.currency || "INR",
-        callbackUrl: checkout.callbackUrl,
-        txnToken: checkout.txnToken,
-      };
-
-      await new Promise<void>((resolve) => {
-        paytm.CheckoutJS.init({ env, merchant: { mid } }, {
-          onTransactionSuccess: async () => {
-            // Verify + activate server-side (Paytm callback also runs, but this
-            // guarantees a return-path confirmation through our own API).
-            try {
-              const activateRes = await fetch("/api/premium/activate", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  transactionId: data.transactionId,
-                }),
-              });
-              const activateData = await activateRes.json();
-              if (!activateRes.ok) {
-                setPremiumError(activateData.error || "Payment confirmation failed");
-              } else {
-                setPremiumMessage(
-                  activateData.alreadyProcessed
-                    ? "Premium membership was already active."
-                    : "Premium activated successfully."
-                );
-              }
-            } catch {
-              setPremiumError("Payment confirmed, but activation could not be verified right now.");
-            } finally {
-              await fetchPremiumStatus();
-              window.dispatchEvent(new Event("orbitbyte:premium-status-changed"));
-              setPremiumActionLoading(false);
-            }
-            resolve();
-          },
-          onPaymentFailure: () => {
-            setPremiumError(
-              "Payment was not completed. Your payment has not been verified and premium has not been activated."
-            );
-            setPremiumActionLoading(false);
-            resolve();
-          },
-          onTransactionPending: () => {
-            setPremiumMessage("Waiting for payment confirmation...");
-            setPremiumActionLoading(false);
-            resolve();
-          },
-        });
+      const isProduction = String(checkout.environment || "").includes("production");
+      const cashfree = new CashfreeSdk({
+        mode: isProduction ? "production" : "sandbox",
       });
+      await cashfree.checkout({
+        paymentSessionId: checkout.paymentSessionId,
+        redirectTarget: "_modal",
+      });
+
+      // 4) Always verify + activate server-side. The payment status is never
+      //    trusted from the client — /api/premium/activate re-fetches the
+      //    authoritative Cashfree status and only activates on PAID.
+      try {
+        const activateRes = await fetch("/api/premium/activate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            transactionId: data.transactionId,
+          }),
+        });
+        const activateData = await activateRes.json();
+        if (!activateRes.ok) {
+          if (String(activateData.code || "").toUpperCase() === "PENDING") {
+            setPremiumMessage("Waiting for payment confirmation...");
+          } else {
+            setPremiumError(activateData.error || "Payment confirmation failed");
+          }
+        } else {
+          setPremiumMessage(
+            activateData.alreadyProcessed
+              ? "Premium membership was already active."
+              : "Premium activated successfully."
+          );
+        }
+      } catch {
+        setPremiumError("Payment confirmed, but activation could not be verified right now.");
+      } finally {
+        await fetchPremiumStatus();
+        window.dispatchEvent(new Event("orbitbyte:premium-status-changed"));
+        setPremiumActionLoading(false);
+      }
     } catch (err) {
       setPremiumError(err instanceof Error ? err.message : "Unable to start premium checkout");
       setPremiumActionLoading(false);

@@ -10,14 +10,20 @@ export type PaymentStatus =
   | "FAILED"
   | "CANCELLED"
   | "EXPIRED"
+  | "USER_DROPPED"
   | "REFUNDED"
   | "PARTIALLY_REFUNDED";
+
+export type PaymentProvider = "cashfree" | "paytm";
 
 export interface IPaymentTransaction extends Document {
   transactionId: string;
   userId: mongoose.Types.ObjectId;
   orderId?: mongoose.Types.ObjectId;
   providerOrderId?: string;
+  providerPaymentId?: string;
+  provider?: PaymentProvider;
+  planId?: mongoose.Types.ObjectId;
   amountPaise: number;
   currency: "INR";
   paymentMethod: mongoose.Types.ObjectId | IPaymentMethod;
@@ -30,6 +36,7 @@ export interface IPaymentTransaction extends Document {
   updatedAt: Date;
   completedAt?: Date;
   failedAt?: Date;
+  paidAt?: Date;
 }
 
 const PaymentTransactionSchema = new Schema<IPaymentTransaction>(
@@ -53,6 +60,20 @@ const PaymentTransactionSchema = new Schema<IPaymentTransaction>(
       type: String,
       index: true,
       sparse: true,
+    },
+    providerPaymentId: {
+      type: String,
+      index: true,
+      sparse: true,
+    },
+    provider: {
+      type: String,
+      enum: ["cashfree", "paytm"],
+      index: true,
+    },
+    planId: {
+      type: Schema.Types.ObjectId,
+      ref: "PremiumPlan",
     },
     amountPaise: {
       type: Number,
@@ -79,6 +100,7 @@ const PaymentTransactionSchema = new Schema<IPaymentTransaction>(
         "FAILED",
         "CANCELLED",
         "EXPIRED",
+        "USER_DROPPED",
         "REFUNDED",
         "PARTIALLY_REFUNDED",
       ],
@@ -95,6 +117,15 @@ const PaymentTransactionSchema = new Schema<IPaymentTransaction>(
     },
     providerTxnId: {
       type: String,
+    },
+    completedAt: {
+      type: Date,
+    },
+    failedAt: {
+      type: Date,
+    },
+    paidAt: {
+      type: Date,
     },
     metadata: {
       type: Map,

@@ -16,8 +16,8 @@ export const runtime = "nodejs";
  *
  * Premium is NEVER activated based on the client returning from checkout, a
  * "success" redirect, or an unverified status. This handler always verifies the
- * payment server-side with Paytm and only activates once Paytm confirms
- * TXN_SUCCESS for the exact expected amount.
+ * payment server-side with Cashfree and only activates once Cashfree confirms
+ * PAID for the exact expected amount.
  *
  * If the payment has not been verified, activation is rejected and premium
  * stays INACTIVE.

@@ -4,7 +4,7 @@ export type PaymentMethodStatus = "active" | "inactive" | "disabled";
 
 export interface IPaymentMethod extends Document {
   name: string;
-  type: "upi" | "bank_transfer" | "card" | "wallet" | "manual" | "paytm";
+  type: "upi" | "bank_transfer" | "card" | "wallet" | "manual" | "cashfree";
   status: PaymentMethodStatus;
   currency: "INR";
   configuration?: Record<string, unknown>;
@@ -20,7 +20,7 @@ const PaymentMethodSchema = new Schema<IPaymentMethod>(
     },
     type: {
       type: String,
-      enum: ["upi", "bank_transfer", "card", "wallet", "manual", "paytm"],
+      enum: ["upi", "bank_transfer", "card", "wallet", "manual", "cashfree"],
       required: true,
     },
     status: {

@@ -10,24 +10,25 @@ import PremiumMembership from "@/app/models/PremiumMembership";
 import { applyPremiumToUser, isPremiumActive } from "@/app/lib/premium";
 import { PaymentService } from "@/app/services/payment-service";
 import {
-  getPaytmTransactionStatus,
-  PaytmPaymentStatus,
-} from "@/app/lib/paytm";
+  getCashfreePayment,
+  rupeesToPaise,
+  type CashfreePaymentInfo,
+} from "@/app/lib/cashfree";
 
 /**
- * Server-side secure completion of a Paytm-backed premium membership payment.
+ * Server-side secure completion of a Cashfree-backed premium membership payment.
  *
- * The Paytm status passed in MUST come from a server-side Paytm API call (never
- * from the client). This function:
+ * The Cashfree payment info passed in MUST come from a server-side Cashfree API
+ * call (never from the client). This function:
  *   - verifies the amount and currency match the stored order/transaction
- *   - atomically flips the payment INITIATED/PENDING -> COMPLETED (idempotent)
+ *   - atomically flips the payment PENDING -> COMPLETED (idempotent)
  *   - marks the order PAID
  *   - creates a PremiumMembership (unique per transaction)
  *   - activates premium on the user (extending if renewal)
  *   - credits the wallet ledger
  *
  * A single atomic conditional update is the idempotency semaphore: only one
- * callback/activate request can win; repeats return alreadyProcessed and never
+ * webhook/verify request can win; repeats return alreadyProcessed and never
  * duplicate ledger entries or memberships.
  */
 export type PremiumCompletionResult = {
@@ -40,7 +41,9 @@ export type PremiumCompletionResult = {
   reason?: string;
 };
 
-async function getPlanForOrder(order: any) {
+async function getPlanForOrder(order: {
+  membershipPlan?: string | null;
+}) {
   const planKey = order.membershipPlan;
   if (!planKey) return null;
   try {
@@ -50,28 +53,43 @@ async function getPlanForOrder(order: any) {
   }
 }
 
+async function getDefaultPlanId() {
+  const plan = await PremiumPlan.findOne({ isActive: true }).sort({ displayOrder: 1 }).lean();
+  return plan?._id || new Types.ObjectId();
+}
+
+/**
+ * Authoritative verification + completion. cashfreePayment MUST come from a
+ * server-side Cashfree call (getCashfreePayment).
+ */
 async function runCompletion({
   transaction,
-  paytmStatus,
+  cashfreePayment,
 }: {
   transaction: IPaymentTransaction & { _id: Types.ObjectId };
-  paytmStatus: PaytmPaymentStatus;
+  cashfreePayment: CashfreePaymentInfo;
 }): Promise<PremiumCompletionResult> {
-  // --- Verify amount + currency against the stored order/transaction ---
   if (transaction.currency !== "INR") {
     return { ok: false, code: "CURRENCY_MISMATCH", reason: "Payment currency is not INR" };
   }
 
-  if (paytmStatus.amountPaise !== transaction.amountPaise) {
-    return {
-      ok: false,
-      code: "AMOUNT_MISMATCH",
-      reason: `Verified amount ${paytmStatus.amountPaise} paise does not match order amount ${transaction.amountPaise} paise`,
-    };
+  // Cashfree returns amounts in rupees; verify they match the stored paise amount.
+  if (cashfreePayment.orderAmount != null) {
+    const verifiedPaise = rupeesToPaise(cashfreePayment.orderAmount);
+    if (Math.abs(verifiedPaise - transaction.amountPaise) > 1) {
+      return {
+        ok: false,
+        code: "AMOUNT_MISMATCH",
+        reason: `Verified amount ${verifiedPaise} paise does not match order amount ${transaction.amountPaise} paise`,
+      };
+    }
   }
 
-  if (paytmStatus.status !== "TXN_SUCCESS") {
-    const pending = String(paytmStatus.status).toUpperCase() === "PENDING";
+  if (cashfreePayment.status !== "PAID") {
+    const pending =
+      String(cashfreePayment.status).toUpperCase() === "PENDING" ||
+      String(cashfreePayment.status).toUpperCase() === "ACTIVE" ||
+      !cashfreePayment.status;
     return {
       ok: false,
       code: pending ? "PENDING" : "NOT_VERIFIED",
@@ -86,7 +104,6 @@ async function runCompletion({
     return { ok: false, code: "ORDER_NOT_FOUND", reason: "Order not found" };
   }
 
-  // Atomic idempotency semaphore: only a non-completed transaction flips to COMPLETED.
   const session: ClientSession = await mongoose.startSession();
   session.startTransaction();
 
@@ -100,8 +117,10 @@ async function runCompletion({
         $set: {
           status: "COMPLETED",
           completedAt: new Date(),
-          providerReference: paytmStatus.bankTxnId || paytmStatus.txnId,
-          providerTxnId: paytmStatus.txnId,
+          paidAt: new Date(),
+          providerPaymentId: cashfreePayment.cfPaymentId,
+          providerTxnId: cashfreePayment.cfPaymentId,
+          providerReference: cashfreePayment.cfPaymentId,
         },
       },
       { new: true, session }
@@ -110,9 +129,6 @@ async function runCompletion({
     const alreadyProcessed = !updated;
 
     if (alreadyProcessed) {
-      // This transaction was already completed by a prior callback/activate.
-      // Commit (no-op writes) and report idempotent success — no duplicate
-      // membership, premium renewal, or wallet credit is applied.
       await session.commitTransaction();
       session.endSession();
       return {
@@ -123,16 +139,12 @@ async function runCompletion({
       };
     }
 
-    // --- First successful completion: apply all side effects atomically ---
-
-    // Mark order PAID (atomically, same precondition).
     await Order.updateOne(
       { _id: order._id, status: { $nin: ["PAID", "REFUNDED"] } },
       { $set: { status: "PAID", completedAt: new Date() } },
       { session }
     );
 
-    // Activate premium on the user and persist inside the transaction.
     const user = await User.findById(transaction.userId).session(session);
     let premiumExpiresAt: Date | undefined;
     if (user) {
@@ -140,14 +152,12 @@ async function runCompletion({
         provider: "orbitbyte",
         paymentIntentId: transaction.transactionId,
         checkoutSessionId: transaction.providerOrderId,
-        paymentMethod: { type: "paytm" },
+        paymentMethod: { type: "cashfree" },
       });
       await user.save({ session });
       premiumExpiresAt = user.premiumExpiresAt;
     }
 
-    // Idempotency for membership: the unique index on transactionId ensures a
-    // membership is created at most once per transaction.
     const existing = await PremiumMembership.findOne({
       transactionId: transaction._id,
     }).session(session);
@@ -182,7 +192,6 @@ async function runCompletion({
       }
     }
 
-    // Credit the wallet ledger for the successful payment (CREDIT).
     await PaymentService.creditWallet(
       transaction.userId,
       transaction.amountPaise,
@@ -207,15 +216,10 @@ async function runCompletion({
   }
 }
 
-async function getDefaultPlanId() {
-  const plan = await PremiumPlan.findOne({ isActive: true }).sort({ displayOrder: 1 }).lean();
-  return plan?._id || new Types.ObjectId();
-}
-
 /**
- * Verify a transaction's Paytm payment server-side and, if successful, complete
- * the premium purchase. Used by /api/premium/activate when the client returns
- * from the Paytm checkout asking to confirm.
+ * Verify a transaction's Cashfree payment server-side and, if successful,
+ * complete the premium purchase. Used by /api/premium/activate when the client
+ * returns from the Cashfree checkout asking to confirm.
  */
 export async function verifyAndCompletePremiumPayment(input: {
   transactionId: string;
@@ -234,7 +238,6 @@ export async function verifyAndCompletePremiumPayment(input: {
     return { ok: false, code: "ACCESS_DENIED", reason: "Access denied" };
   }
 
-  // If already completed, report idempotent success without re-verifying Paytm.
   if (transaction.status === "COMPLETED") {
     const order = transaction.orderId ? await Order.findById(transaction.orderId).lean() : null;
     return {
@@ -250,10 +253,9 @@ export async function verifyAndCompletePremiumPayment(input: {
     return { ok: false, code: "NO_PROVIDER_ORDER", reason: "Payment has not been initiated" };
   }
 
-  // Authoritative server-to-server verification.
-  let paytmStatus: PaytmPaymentStatus;
+  let cashfreePayment: CashfreePaymentInfo | null;
   try {
-    paytmStatus = await getPaytmTransactionStatus(providerOrderId);
+    cashfreePayment = await getCashfreePayment(providerOrderId);
   } catch (error) {
     return {
       ok: false,
@@ -262,22 +264,36 @@ export async function verifyAndCompletePremiumPayment(input: {
     };
   }
 
-  return runCompletion({ transaction, paytmStatus });
+  if (!cashfreePayment) {
+    return {
+      ok: false,
+      code: "PENDING",
+      reason: "Waiting for payment confirmation...",
+    };
+  }
+
+  return runCompletion({ transaction, cashfreePayment });
 }
 
 /**
- * Complete a payment from the Paytm callback using the Paytm order id
- * (ORDERID) posted from the gateway. Looks up the Order + transaction, verifies
- * via Paytm, then completes idempotently.
+ * Complete a payment from the Cashfree webhook using the Cashfree order id.
+ * Looks up the Order + transaction, verifies via Cashfree server-side, then
+ * completes idempotently. The caller is responsible for webhook signature
+ * verification.
  */
-export async function completeFromPaytmCallback(input: {
-  paytmOrderId: string;
+export async function completeFromCashfreeWebhook(input: {
+  cashfreeOrderId: string;
+  cashfreePayment: CashfreePaymentInfo;
 }): Promise<PremiumCompletionResult> {
   await dbConnect();
 
-  const order = await Order.findOne({ orderId: input.paytmOrderId }).lean();
+  const order = await Order.findOne({ orderId: input.cashfreeOrderId }).lean();
   if (!order) {
-    return { ok: false, code: "ORDER_NOT_FOUND", reason: "Order not found for Paytm reference" };
+    return {
+      ok: false,
+      code: "ORDER_NOT_FOUND",
+      reason: "Order not found for Cashfree reference",
+    };
   }
 
   const transaction = order.paymentTransactionId
@@ -297,9 +313,7 @@ export async function completeFromPaytmCallback(input: {
     };
   }
 
-  // Authoritative server-to-server verification using the Paytm order id.
-  const paytmStatus = await getPaytmTransactionStatus(input.paytmOrderId);
-  return runCompletion({ transaction, paytmStatus });
+  return runCompletion({ transaction, cashfreePayment: input.cashfreePayment });
 }
 
 export { isPremiumActive };

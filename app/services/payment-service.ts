@@ -9,9 +9,7 @@ import { logAdminAction } from "@/app/lib/earnings";
 
 type OrderDoc = InstanceType<typeof Order>;
 
-type PaymentTransactionDoc =
-  | (IPaymentTransaction & { _id: Types.ObjectId })
-  | InstanceType<typeof PaymentTransaction>;
+type PaymentTransactionDoc = IPaymentTransaction & { _id: Types.ObjectId };
 type PaymentRefundDoc =
   | (IPaymentRefund & { _id: Types.ObjectId })
   | InstanceType<typeof PaymentRefund>;
@@ -28,6 +26,7 @@ export type PaymentStatus =
   | "FAILED"
   | "CANCELLED"
   | "EXPIRED"
+  | "USER_DROPPED"
   | "REFUNDED"
   | "PARTIALLY_REFUNDED";
 
@@ -36,6 +35,9 @@ export interface IPaymentTransaction {
   userId: Types.ObjectId;
   orderId?: Types.ObjectId;
   providerOrderId?: string;
+  providerPaymentId?: string;
+  provider?: "cashfree" | "paytm";
+  planId?: Types.ObjectId;
   amountPaise: number;
   currency: "INR";
   paymentMethod: Types.ObjectId | import("@/app/models/PaymentMethod").IPaymentMethod;
@@ -48,6 +50,7 @@ export interface IPaymentTransaction {
   updatedAt: Date;
   completedAt?: Date;
   failedAt?: Date;
+  paidAt?: Date;
 }
 
 export interface IPaymentRefund {
@@ -153,7 +156,9 @@ export class PaymentService {
       skip?: number;
     } = {}
   ): Promise<PaymentTransactionDoc[]> {
-    const filter: any = { userId };
+    const filter: { userId: Types.ObjectId; status?: PaymentStatus; purpose?: string } = {
+      userId,
+    };
     if (options.status) filter.status = options.status;
     if (options.purpose) filter.purpose = options.purpose;
 

@@ -48,7 +48,10 @@ interface PaymentRow {
   paymentMethodType?: string;
   purpose: string;
   status: string;
+  provider?: string | null;
   providerReference?: string;
+  providerOrderId?: string;
+  providerPaymentId?: string;
   createdAt: Date;
   completedAt?: Date;
   failedAt?: Date;
@@ -189,7 +192,10 @@ export async function GET(req: NextRequest) {
         paymentMethodType: pm?.type || null,
         purpose: t.purpose,
         status: t.status,
+        provider: t.provider || null,
         providerReference: t.providerReference,
+        providerOrderId: t.providerOrderId,
+        providerPaymentId: t.providerPaymentId,
         createdAt: t.createdAt,
         completedAt: t.completedAt,
         failedAt: t.failedAt,

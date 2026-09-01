@@ -26,14 +26,14 @@ import PaymentTransaction from "@/app/models/PaymentTransaction";
 import PaymentRefund from "@/app/models/PaymentRefund";
 import PaymentMethod from "@/app/models/PaymentMethod";
 import {
-  initiatePaytmTransaction,
-  getPaytmTransactionStatus,
-  getPaytmConfig,
-  verifyChecksum,
+  createCashfreeOrder,
+  getCashfreePayment,
+  getCashfreeConfig,
+  verifyCashfreeWebhookSignature,
   rupeesToPaise,
-  paiseToRupeesString,
-  PAYTM_CALLBACK_PATH,
-} from "@/app/lib/paytm";
+  CASHFREE_WEBHOOK_PATH,
+  CASHFREE_RETURN_PATH,
+} from "@/app/lib/cashfree";
 
 /**
  * Payment Adapter Interface
@@ -464,12 +464,12 @@ export class WalletAdapter implements PaymentAdapter {
 }
 
 /**
- * Paytm Adapter
- * Handles Paytm Payment Gateway (UPI / cards / NetBanking / wallet).
- * All communication is server-to-server using PAYTM_* environment variables.
- * The merchant key is NEVER exposed to the client.
+ * Cashfree Adapter
+ * Handles Cashfree Payment Gateway (UPI / cards / NetBanking / wallet).
+ * All communication is server-to-server using CASHFREE_* environment variables.
+ * The secret key is NEVER exposed to the client.
  */
-export class PaytmAdapter implements PaymentAdapter {
+export class CashfreeAdapter implements PaymentAdapter {
   constructor(private config: Record<string, unknown> = {}) {}
 
   async createOrder(input: {
@@ -484,31 +484,35 @@ export class PaytmAdapter implements PaymentAdapter {
     currency: string;
     providerReference?: string;
   }> {
-    const orderId = String(input.receipt || input.metadata?.orderId || `paytm_${Date.now()}`);
-    const config = getPaytmConfig();
+    const orderId = String(input.receipt || input.metadata?.orderId || `cf_${Date.now()}`);
+    getCashfreeConfig();
     const baseUrl =
       (process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "") ||
       "http://localhost:3000";
 
-    const initiated = await initiatePaytmTransaction({
+    const created = await createCashfreeOrder({
       orderId,
-      amount: paiseToRupeesString(input.amountPaise),
-      custId: input.userId,
-      callbackUrl: `${baseUrl}${PAYTM_CALLBACK_PATH}`,
+      orderAmountPaise: input.amountPaise,
+      currency: input.currency,
+      customerId: input.userId,
+      customerEmail: String(input.metadata?.email || "unknown@orbitbyte.in"),
+      customerPhone: input.metadata?.phone ? String(input.metadata.phone) : undefined,
+      returnUrl: `${baseUrl}${CASHFREE_RETURN_PATH}`,
+      notifyUrl: `${baseUrl}${CASHFREE_WEBHOOK_PATH}`,
+      orderNote: String(input.metadata?.note || "OrbitByte payment"),
     });
 
     return {
       id: orderId,
       amount: input.amountPaise,
       currency: input.currency,
-      providerReference: initiated.txnToken,
+      providerReference: created.paymentSessionId,
     };
   }
 
   verifySignature(payload: string, signature: string): boolean {
     try {
-      const params = JSON.parse(payload) as Record<string, string | number | undefined>;
-      return verifyChecksum(params, getPaytmConfig().merchantKey);
+      return verifyCashfreeWebhookSignature({ body: payload, signature });
     } catch {
       return false;
     }
@@ -519,11 +523,14 @@ export class PaytmAdapter implements PaymentAdapter {
     amount?: number;
     providerReference?: string;
   }> {
-    const status = await getPaytmTransactionStatus(paymentId);
+    const payment = await getCashfreePayment(paymentId);
+    if (!payment) {
+      return { status: "PENDING" };
+    }
     return {
-      status: status.status === "TXN_SUCCESS" ? "COMPLETED" : status.status,
-      amount: status.amountPaise,
-      providerReference: status.bankTxnId || status.txnId,
+      status: payment.status === "PAID" ? "COMPLETED" : payment.status,
+      amount: payment.orderAmount != null ? rupeesToPaise(payment.orderAmount) : undefined,
+      providerReference: payment.cfPaymentId,
     };
   }
 
@@ -531,7 +538,7 @@ export class PaytmAdapter implements PaymentAdapter {
     status: string;
     providerReference?: string;
   }> {
-    // Refund approval/settlement is managed via the Paytm refund API in a
+    // Refund approval/settlement is managed via the Cashfree Refunds API in a
     // production settlement backend. Mark as PROCESSING here.
     await PaymentRefund.findOneAndUpdate(
       { refundId },
@@ -541,12 +548,19 @@ export class PaytmAdapter implements PaymentAdapter {
   }
 
   getConfiguration(): Record<string, unknown> {
-    const config = getPaytmConfig();
+    let environment = "sandbox";
+    let appId = "";
+    try {
+      const config = getCashfreeConfig();
+      environment = config.environment;
+      appId = config.appId;
+    } catch {
+      // Not configured — return what we have.
+    }
     return {
-      mid: config.mid,
-      website: config.website,
-      environment: config.environment,
-      callbackPath: PAYTM_CALLBACK_PATH,
+      appId,
+      environment,
+      callbackPath: CASHFREE_WEBHOOK_PATH,
     };
   }
 }
@@ -590,7 +604,7 @@ export function getAdapterForMethod(
     bank_transfer: new BankTransferAdapter(),
     wallet: new WalletAdapter(),
     card: new CardAdapter(),
-    paytm: new PaytmAdapter(),
+    cashfree: new CashfreeAdapter(),
   };
 
   // Use registry if provided, otherwise use defaults

@@ -26,6 +26,7 @@ const STATUS_COLORS: Record<string, string> = {
   PROCESSING: "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
   VERIFICATION_REQUIRED: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
   FAILED: "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300",
+  USER_DROPPED: "bg-slate-200 text-slate-700 dark:bg-white/10 dark:text-slate-300",
   CANCELLED: "bg-slate-200 text-slate-700 dark:bg-white/10 dark:text-slate-300",
   REFUNDED: "bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300",
   PARTIALLY_REFUNDED: "bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300",
@@ -70,6 +71,9 @@ interface PaymentRow {
   purpose?: string;
   paymentMethod?: string | null;
   paymentMethodType?: string | null;
+  provider?: string | null;
+  providerOrderId?: string;
+  providerPaymentId?: string;
   refund?: { status?: string } | null;
   status: string;
   createdAt?: string;
@@ -416,7 +420,7 @@ export default function AdminPaymentsPage() {
             className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-white/5"
           >
             <option value="">All statuses</option>
-            {["COMPLETED", "INITIATED", "PENDING", "PROCESSING", "VERIFICATION_REQUIRED", "FAILED", "CANCELLED", "REFUNDED", "PARTIALLY_REFUNDED"].map((s) => (
+            {["COMPLETED", "INITIATED", "PENDING", "PROCESSING", "VERIFICATION_REQUIRED", "FAILED", "USER_DROPPED", "CANCELLED", "REFUNDED", "PARTIALLY_REFUNDED"].map((s) => (
               <option key={s} value={s}>{s.replace(/_/g, " ")}</option>
             ))}
           </select>
@@ -436,7 +440,7 @@ export default function AdminPaymentsPage() {
             className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-white/5"
           >
             <option value="">All methods</option>
-            {["upi", "bank_transfer", "card", "wallet", "manual"].map((m) => (
+            {["cashfree", "upi", "bank_transfer", "card", "wallet", "manual"].map((m) => (
               <option key={m} value={m}>{m.replace(/_/g, " ")}</option>
             ))}
           </select>
@@ -510,7 +514,14 @@ export default function AdminPaymentsPage() {
                       <p className="text-xs text-slate-500 dark:text-slate-400">{row.email}</p>
                     </td>
                     <td className="px-4 py-3 font-bold">{inr(row.amount)}</td>
-                    <td className="px-4 py-3 text-xs uppercase">{row.paymentMethodType || "—"}</td>
+                    <td className="px-4 py-3 text-xs">
+                      <span className="uppercase">{row.paymentMethodType || "—"}</span>
+                      {(row.providerPaymentId || row.providerOrderId) && (
+                        <p className="mt-0.5 font-mono text-[10px] text-slate-400 dark:text-slate-500">
+                          {row.provider?.toUpperCase?.() || ""} · {row.providerPaymentId || row.providerOrderId}
+                        </p>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-xs capitalize">{row.purpose?.replace(/_/g, " ")}</td>
                     <td className="px-4 py-3">{statusBadge(row.status)}</td>
                     <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">{formatDate(row.createdAt)}</td>

@@ -11,11 +11,13 @@ import User from "@/app/models/User";
 import { isPremiumActive, PREMIUM_DURATION_DAYS } from "@/app/lib/premium";
 import { paiseToRupees } from "@/app/lib/earnings";
 import {
-  getPaytmConfig,
-  initiatePaytmTransaction,
+  createCashfreeOrder,
   paiseToRupeesString,
-  PAYTM_CALLBACK_PATH,
-} from "@/app/lib/paytm";
+  getAppBaseUrl,
+  getCashfreeConfig,
+  CASHFREE_WEBHOOK_PATH,
+  CASHFREE_RETURN_PATH,
+} from "@/app/lib/cashfree";
 
 export const runtime = "nodejs";
 
@@ -65,12 +67,12 @@ export async function POST(req: Request) {
     const planName = plan?.name || "Premium Monthly";
     const durationDays = plan?.durationDays || PREMIUM_DURATION_DAYS;
 
-    // Get or create the Paytm payment method.
-    let paymentMethod = await PaymentMethod.findOne({ type: "paytm", status: "active" });
+    // Get or create the Cashfree payment method.
+    let paymentMethod = await PaymentMethod.findOne({ type: "cashfree", status: "active" });
     if (!paymentMethod) {
       paymentMethod = await PaymentMethod.create({
-        name: "Paytm",
-        type: "paytm",
+        name: "Cashfree",
+        type: "cashfree",
         currency: "INR",
       });
     }
@@ -125,6 +127,8 @@ export async function POST(req: Request) {
           userId: user._id,
           orderId: order._id,
           providerOrderId: order.orderId,
+          provider: "cashfree",
+          planId: plan?._id,
           amountPaise,
           currency,
           paymentMethod: paymentMethod._id,
@@ -163,36 +167,37 @@ export async function POST(req: Request) {
     user.premiumLastCheckoutSessionId = transactionId;
     await user.save();
 
-    // Initiate the real Paytm transaction server-side. This returns a public
-    // TXN_TOKEN used to render the Paytm checkout. The merchant key never
-    // leaves the server.
-    const appBaseUrl =
-      (process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "") ||
-      "http://localhost:3000";
-    const callbackUrl = `${appBaseUrl}${PAYTM_CALLBACK_PATH}`;
+    // Initiate the real Cashfree order server-side. Returns a public
+    // payment_session_id used to open the Cashfree hosted checkout. The secret
+    // key never leaves the server.
+    const appBaseUrl = getAppBaseUrl();
+    const returnUrl = `${appBaseUrl}${CASHFREE_RETURN_PATH}?transactionId=${transactionId}&orderId=${encodeURIComponent(order.orderId)}`;
+    const notifyUrl = `${appBaseUrl}${CASHFREE_WEBHOOK_PATH}`;
 
-    const initiated = await initiatePaytmTransaction({
+    const created = await createCashfreeOrder({
       orderId: order.orderId,
-      amount: paiseToRupeesString(amountPaise),
-      custId: String(user._id),
-      callbackUrl,
+      orderAmountPaise: amountPaise,
+      currency: "INR",
+      customerId: String(user._id),
+      customerEmail: session.user.email,
+      customerName: user.name || session.user.name,
+      returnUrl,
+      notifyUrl,
+      orderNote: `OrbitByte Premium - ${planName}`,
     });
-
-    const paytmConfig = getPaytmConfig();
 
     return NextResponse.json({
       transactionId,
-      orderId: order.orderId,
-      provider: "paytm",
+      orderId: created.orderId,
+      provider: "cashfree",
       checkout: {
-        mid: paytmConfig.mid,
-        orderId: initiated.orderId,
-        txnToken: initiated.txnToken,
+        paymentSessionId: created.paymentSessionId,
+        orderId: created.orderId,
         amount: paiseToRupeesString(amountPaise),
         amountPaise,
         currency: "INR",
-        callbackUrl,
-        environment: paytmConfig.environment,
+        returnUrl,
+        environment: getCashfreeConfig().environment,
       },
       amount: paymentTransaction.amountPaise,
       amountPaise: paymentTransaction.amountPaise,
