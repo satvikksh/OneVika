@@ -233,22 +233,32 @@ export async function getCashfreePayment(
 
   const latest = entries[entries.length - 1] as Record<string, unknown>;
 
+  // The /orders/{order_id}/payments endpoint reports the payment attempt state
+  // via `payment_status` ("SUCCESS" | "PENDING" | "FAILED" | "USER_DROPPED" | ...).
+  // `order_status` may be present on some shapes and uses "PAID" for a settled
+  // order. Prefer `payment_status`; fall back to `order_status`.
+  const paymentStatus = latest.payment_status
+    ? String(latest.payment_status)
+    : latest.order_status
+      ? String(latest.order_status)
+      : "";
+
+  // Amount is returned in rupees (order_amount / payment_amount).
+  const orderAmount =
+    latest.order_amount != null
+      ? Number(latest.order_amount)
+      : latest.payment_amount != null
+        ? Number(latest.payment_amount)
+        : undefined;
+
   return {
-    status: String(latest.payment_status || latest.order_status || ""),
+    status: paymentStatus,
     cfPaymentId: latest.cf_payment_id ? String(latest.cf_payment_id) : undefined,
     orderId: latest.order_id ? String(latest.order_id) : orderId,
-    orderAmount: latest.order_amount != null ? Number(latest.order_amount) : undefined,
+    orderAmount,
     orderCurrency: latest.order_currency ? String(latest.order_currency) : undefined,
-    paymentMessage: latest.payment_message ? String(latest.payment_message) : undefined,
-    paymentMethod: latest.payment_method ? String(latest.payment_method) : undefined,
-    paymentChannel: latest.payment_channel ? String(latest.payment_channel) : undefined,
+    paymentMethod: latest.payment_group ? String(latest.payment_group) : undefined,
     failureReason: latest.failure_reason ? String(latest.failure_reason) : undefined,
-    customerEmail:
-      latest.customer_details && typeof latest.customer_details === "object"
-        ? String(
-            (latest.customer_details as Record<string, unknown>).email || (latest as Record<string, unknown>).customer_email || ""
-          ) || undefined
-        : undefined,
     raw: latest,
   };
 }

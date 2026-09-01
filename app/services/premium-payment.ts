@@ -85,7 +85,7 @@ async function runCompletion({
     }
   }
 
-  if (cashfreePayment.status !== "PAID") {
+  if (cashfreePayment.status !== "SUCCESS" && cashfreePayment.status !== "PAID") {
     const pending =
       String(cashfreePayment.status).toUpperCase() === "PENDING" ||
       String(cashfreePayment.status).toUpperCase() === "ACTIVE" ||
