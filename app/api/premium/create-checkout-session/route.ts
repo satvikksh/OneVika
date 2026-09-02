@@ -10,6 +10,7 @@ import PremiumPlan from "@/app/models/PremiumPlan";
 import User from "@/app/models/User";
 import { isPremiumActive, PREMIUM_DURATION_DAYS } from "@/app/lib/premium";
 import { paiseToRupees } from "@/app/lib/earnings";
+import { validateAndApplyCoupon } from "@/app/lib/coupon";
 import {
   createCashfreeOrder,
   paiseToRupeesString,
@@ -22,9 +23,9 @@ import {
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
-  let body: { planKey?: string } = {};
+  let body: { planKey?: string; couponCode?: string } = {};
   try {
-    body = (await req.json()) as { planKey?: string };
+    body = (await req.json()) as { planKey?: string; couponCode?: string };
   } catch {
     // body optional
   }
@@ -67,6 +68,38 @@ export async function POST(req: Request) {
     const planName = plan?.name || "Premium Monthly";
     const durationDays = plan?.durationDays || PREMIUM_DURATION_DAYS;
 
+    // Validate coupon server-side and compute final price. The authoritative
+    // price is always the server-side plan price; the client can only supply a
+    // couponCode, never a price.
+    let couponApplied: {
+      couponId: string;
+      code: string;
+      discountPaise: number;
+      finalAmountPaise: number;
+    } = { couponId: "", code: "", discountPaise: 0, finalAmountPaise: amountPaise };
+
+    if (body.couponCode) {
+      const result = await validateAndApplyCoupon({
+        couponCode: body.couponCode,
+        userId: String(user._id),
+        plan: { key: planKey, pricePaise: amountPaise },
+      });
+      if (!result.valid) {
+        const reason = (result as { reason?: string }).reason || "Invalid coupon";
+        return NextResponse.json(
+          { error: reason, couponError: reason },
+          { status: 400 }
+        );
+      }
+      couponApplied = result;
+    }
+
+    const finalAmountPaise = couponApplied.finalAmountPaise;
+    const originalAmountPaise = amountPaise;
+    const discountPaise = couponApplied.discountPaise;
+    const couponCode = couponApplied.code || "";
+    const couponId = couponApplied.couponId || undefined;
+
     // Get or create the Cashfree payment method.
     let paymentMethod = await PaymentMethod.findOne({ type: "cashfree", status: "active" });
     if (!paymentMethod) {
@@ -90,14 +123,17 @@ export async function POST(req: Request) {
           userId: user._id,
           productType: "membership",
           membershipPlan: planKey,
-          amountPaise,
+          amountPaise: finalAmountPaise,
           currency,
           status: "PENDING",
           metadata: {
             plan: planKey,
             planName,
-            priceRupees: paiseToRupees(amountPaise),
+            priceRupees: paiseToRupees(finalAmountPaise),
             durationDays,
+            originalAmountPaise,
+            discountPaise,
+            ...(couponCode ? { couponCode } : {}),
           },
         });
         break;
@@ -129,18 +165,24 @@ export async function POST(req: Request) {
           providerOrderId: order.orderId,
           provider: "cashfree",
           planId: plan?._id,
-          amountPaise,
+          amountPaise: finalAmountPaise,
           currency,
           paymentMethod: paymentMethod._id,
           purpose: "membership",
+          revenueType: "premium",
           status: "PENDING",
           metadata: {
             product: "premium_membership",
             plan: planKey,
             planName,
             orderId: order.orderId,
-            priceRupees: paiseToRupees(amountPaise),
+            priceRupees: paiseToRupees(finalAmountPaise),
             durationDays,
+            originalAmountPaise,
+            discountPaise,
+            finalAmountPaise,
+            ...(couponCode ? { couponCode } : {}),
+            ...(couponId ? { couponId: String(couponId) } : {}),
           },
         });
         break;
@@ -156,6 +198,17 @@ export async function POST(req: Request) {
     if (createAttempts >= maxAttempts) {
       throw new Error("Unable to generate unique transaction ID after maximum retries");
     }
+
+    // [DEBUG] Confirm the transaction was persisted (no secrets).
+    console.log(
+      "[DEBUG CHECKOUT] transactionId=", transactionId,
+      "provider=", "cashfree",
+      "amountPaise=", finalAmountPaise,
+      "originalPaise=", originalAmountPaise,
+      "discountPaise=", discountPaise,
+      "couponCode=", couponCode || "(none)",
+      "persisted=", Boolean(paymentTransaction?._id)
+    );
 
     // Link the payment transaction back to the order atomically
     await Order.findByIdAndUpdate(order._id, {
@@ -176,7 +229,7 @@ export async function POST(req: Request) {
 
     const created = await createCashfreeOrder({
       orderId: order.orderId,
-      orderAmountPaise: amountPaise,
+      orderAmountPaise: finalAmountPaise,
       currency: "INR",
       customerId: String(user._id),
       customerEmail: session.user.email,
@@ -193,8 +246,8 @@ export async function POST(req: Request) {
       checkout: {
         paymentSessionId: created.paymentSessionId,
         orderId: created.orderId,
-        amount: paiseToRupeesString(amountPaise),
-        amountPaise,
+        amount: paiseToRupeesString(finalAmountPaise),
+        amountPaise: finalAmountPaise,
         currency: "INR",
         returnUrl,
         environment: getCashfreeConfig().environment,
@@ -207,7 +260,13 @@ export async function POST(req: Request) {
       status: paymentTransaction.status,
       purpose: paymentTransaction.purpose,
       paymentMethod: paymentMethod.name,
-      amountRupees: paiseToRupees(amountPaise),
+      amountRupees: paiseToRupees(finalAmountPaise),
+      pricing: {
+        originalAmountPaise,
+        discountPaise,
+        finalAmountPaise,
+        couponCode: couponCode || null,
+      },
       plan: {
         key: planKey,
         name: planName,

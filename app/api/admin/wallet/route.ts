@@ -55,6 +55,18 @@ export async function GET(req: Request) {
     const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10) || 1);
     const limit = Math.min(50, Math.max(1, parseInt(searchParams.get("limit") ?? "10", 10) || 10));
 
+    // Step 1: determine which users have legitimate creator earnings.
+    // Premium payments must never count as creator earnings, so only users
+    // with COMPLETED EarningTransactions are treated as creators.
+    const earningCreatorIdsRaw: unknown[] = await EarningTransaction.distinct("userId", {
+      type: "EARNING",
+      status: "COMPLETED",
+    });
+    const earningCreatorIds = earningCreatorIdsRaw.map(String);
+
+    // Step 2: aggregate platform-wide totals (from EarningTransaction /
+    // CreatorEarningTransaction, not wallet balances — these are correct
+    // platform-level totals regardless of per-wallet filtering).
     const [
       legacyEarnings,
       creatorReleases,
@@ -62,10 +74,8 @@ export async function GET(req: Request) {
       held,
       refundedLegacy,
       refundedCreator,
-      legacyWallets,
       legacyTxns,
       creatorTxns,
-      earningCreatorIds,
     ] = await Promise.all([
       EarningTransaction.aggregate<{ total: number }>([
         { $match: { type: "EARNING", status: "COMPLETED" } },
@@ -91,12 +101,11 @@ export async function GET(req: Request) {
         { $match: { type: "REFUND", status: "COMPLETED" } },
         { $group: { _id: null, total: { $sum: "$amountPaise" } } },
       ]),
-      Wallet.find({}).lean(),
       EarningTransaction.find({}).sort({ createdAt: -1 }).limit(40).lean(),
       CreatorEarningTransaction.find({}).sort({ createdAt: -1 }).limit(40).lean(),
-      EarningTransaction.distinct("userId", { type: "EARNING", status: "COMPLETED" }),
     ]);
 
+    // Step 3: search — intersect with creator wallets.
     let users: { _id: Types.ObjectId; name: string; email: string }[] = [];
     if (q) {
       const regex = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
@@ -104,11 +113,17 @@ export async function GET(req: Request) {
         .select("name email")
         .lean();
     }
-    const userIds = q ? users.map((user) => (user._id as unknown as { toString(): string }).toString()) : null;
+    const searchUserIds = q ? users.map((user) => idOf(user._id)) : null;
+    const creatorUserIds = searchUserIds
+      ? earningCreatorIds.filter((id) => searchUserIds.includes(id))
+      : earningCreatorIds;
 
-    const match = userIds ? { userId: { $in: userIds } } : {};
-    const total = await Wallet.countDocuments(match);
-    const wallets = await Wallet.find(match)
+    // Step 4: only return wallets belonging to users with legitimate creator
+    // earnings. Premium payment wallets (including orbitbyte@gmail.com) are
+    // excluded by this filter since they have no creator earning transactions.
+    const creatorWalletFilter = { userId: { $in: creatorUserIds.map((id) => new Types.ObjectId(id)) } };
+    const total = await Wallet.countDocuments(creatorWalletFilter);
+    const wallets = await Wallet.find(creatorWalletFilter)
       .sort({ availableBalancePaise: -1, totalEarnedPaise: -1 })
       .skip((page - 1) * limit)
       .limit(limit)
@@ -181,17 +196,20 @@ export async function GET(req: Request) {
     });
     const ledger: LedgerRow[] = mergedTxns.slice(0, 30).map((row) => row.txn);
 
+    // Compute creator-only wallet totals (filtered legacyWallets exclude
+    // Premium payment wallets, non-creator wallets, and orphan wallets).
+    const creatorWallets = await Wallet.find({ userId: { $in: earningCreatorIds.map((id) => new Types.ObjectId(id)) } }).lean();
     const totalEarningsPaise =
       (legacyEarnings[0]?.total || 0) + (creatorReleases[0]?.total || 0);
     const summary = {
       totalEarningsPaise,
       totalWithdrawnPaise: completedWithdrawn[0]?.total || 0,
-      totalAvailablePaise: legacyWallets.reduce((sum, wallet) => sum + (wallet.availableBalancePaise || 0), 0),
+      totalAvailablePaise: creatorWallets.reduce((sum, wallet) => sum + (wallet.availableBalancePaise || 0), 0),
       totalHeldPaise: held[0]?.total || 0,
       totalRefundedPaise: (refundedLegacy[0]?.total || 0) + (refundedCreator[0]?.total || 0),
-      walletsWithBalance: legacyWallets.filter((wallet) => (wallet.availableBalancePaise || 0) > 0).length,
+      walletsWithBalance: creatorWallets.filter((wallet) => (wallet.availableBalancePaise || 0) > 0).length,
       earningCreators: earningCreatorIds.length,
-      totalWallets: legacyWallets.length,
+      totalWallets: creatorWallets.length,
       pendingWithdrawals: await Withdrawal.countDocuments({ status: "PENDING" }),
     };
 

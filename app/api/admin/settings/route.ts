@@ -9,7 +9,7 @@ import {
   rupeesToPaise,
 } from "@/app/lib/earnings";
 import { dbConnect } from "@/app/lib/mongodb";
-import type { IPlatformSettings } from "@/app/models/PlatformSettings";
+import type { IPlatformSettings, PayoutProvider } from "@/app/models/PlatformSettings";
 
 type SettingsBody = {
   likeRate?: unknown;
@@ -19,6 +19,12 @@ type SettingsBody = {
   payoutProvider?: unknown;
   maintenanceMode?: unknown;
 };
+
+// The only supported payout providers. `razorpayx` is intentionally NOT
+// included anywhere and is rejected outright.
+function isPayoutProvider(value: unknown): value is PayoutProvider {
+  return value === "manual" || value === "cashfree";
+}
 
 function publicSettings(settings: IPlatformSettings) {
   return {
@@ -69,7 +75,12 @@ export async function PATCH(req: Request) {
     if (typeof body.withdrawalsEnabled === "boolean") {
       settings.withdrawalsEnabled = body.withdrawalsEnabled;
     }
-    if (body.payoutProvider === "manual") {
+    if (body.payoutProvider !== undefined && body.payoutProvider !== null) {
+      // Only allow manual or cashfree. Any other value (e.g. razorpayx) is
+      // rejected.
+      if (!isPayoutProvider(body.payoutProvider)) {
+        throw new Error('Invalid payout provider. Supported values: "manual", "cashfree"');
+      }
       settings.payoutProvider = body.payoutProvider;
     }
     if (typeof body.maintenanceMode === "boolean") {

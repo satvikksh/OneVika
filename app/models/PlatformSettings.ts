@@ -1,12 +1,14 @@
 import mongoose, { Document, Model, Schema } from "mongoose";
 
+export type PayoutProvider = "manual" | "cashfree";
+
 export interface IPlatformSettings extends Document {
   key: "earnings";
   likeRatePaise: number;
   minimumWithdrawalPaise: number;
   maximumWithdrawalPaise?: number | null;
   withdrawalsEnabled: boolean;
-  payoutProvider: "manual";
+  payoutProvider: PayoutProvider;
   maintenanceMode: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -42,7 +44,7 @@ const PlatformSettingsSchema = new Schema<IPlatformSettings>(
     },
     payoutProvider: {
       type: String,
-      enum: ["manual"],
+      enum: ["manual", "cashfree"],
       default: "manual",
     },
     maintenanceMode: {

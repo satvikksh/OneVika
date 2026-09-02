@@ -9,6 +9,7 @@ import CreatorEarningTransaction from "@/app/models/CreatorEarningTransaction";
 import CreatorMetricSnapshot from "@/app/models/CreatorMetricSnapshot";
 import CreatorRevenueAllocation from "@/app/models/CreatorRevenueAllocation";
 import EarningTransaction from "@/app/models/EarningTransaction";
+import PaymentTransaction from "@/app/models/PaymentTransaction";
 import Post from "@/app/models/Post";
 import Project from "@/app/models/Project";
 import Report from "@/app/models/Report";
@@ -30,6 +31,13 @@ const WITHDRAWAL_STATUSES = [
   "CANCELLED",
   "REVERSED",
 ];
+
+// Platform-level premium revenue. Only server-verified premium (membership)
+// PaymentTransactions count as Platform Revenue. Premium is platform money and
+// must never be sourced from creator wallets or earnings ledgers.
+const PREMIUM_MATCH = {
+  $or: [{ revenueType: "premium" }, { purpose: "membership" }],
+};
 
 type Granule = "hour" | "day" | "week" | "month";
 
@@ -182,7 +190,7 @@ export async function GET(req: Request) {
     const dateExpr = (field: string) =>
       ({ $dateToString: { format: fmt, date: `$${field}` } }) as unknown;
 
-    const [userFacet, postFacet, projectFacet, reportFacet, earningFacet, releaseFacet, viewerFacet, withdrawalFacet, allocationTotals, walletTotals, cycles, auditLogs] =
+    const [userFacet, postFacet, projectFacet, reportFacet, earningFacet, releaseFacet, viewerFacet, withdrawalFacet, allocationTotals, premiumFacet, cycles, auditLogs] =
       await Promise.all([
         User.aggregate([
           {
@@ -427,13 +435,25 @@ export async function GET(req: Request) {
         CreatorRevenueAllocation.aggregate([
           { $group: { _id: null, paise: { $sum: { $ifNull: ["$finalRevenuePaise", 0] } } } },
         ]),
-        Wallet.aggregate([
+        PaymentTransaction.aggregate([
           {
-            $group: {
-              _id: null,
-              available: { $sum: { $ifNull: ["$availableBalancePaise", 0] } },
-              earned: { $sum: { $ifNull: ["$totalEarnedPaise", 0] } },
-              withdrawn: { $sum: { $ifNull: ["$totalWithdrawnPaise", 0] } },
+            $match: PREMIUM_MATCH,
+          },
+          {
+            $facet: {
+              totals: [
+                { $match: { status: "COMPLETED" } },
+                { $group: { _id: null, paise: { $sum: "$amountPaise" }, count: { $sum: 1 } } },
+              ],
+              series: [
+                { $match: { status: "COMPLETED", createdAt: { $gte: prevStart } } },
+                {
+                  $group: {
+                    _id: dateExpr("createdAt"),
+                    paise: { $sum: "$amountPaise" },
+                  },
+                },
+              ],
             },
           },
         ]),
@@ -517,11 +537,33 @@ export async function GET(req: Request) {
     const earningTotalPaise = earningTotals.paise ?? 0;
     const releaseTotalPaise = releaseTotals.paise ?? 0;
     const allocatedTotalPaise = facetDoc<{ paise: number }>(allocationTotals)?.paise ?? 0;
-    const walletTotalsDoc = facetDoc<{ available: number; earned: number; withdrawn: number }>(walletTotals) ?? {
-      available: 0,
-      earned: 0,
-      withdrawn: 0,
-    };
+    const premiumDoc = facetDoc(premiumFacet);
+    const premiumTotals = facetDoc<{ paise: number; count: number }>(premiumDoc?.totals) ?? { paise: 0, count: 0 };
+    const premiumSeries = (premiumDoc?.series ?? []) as Array<{ _id: string; paise: number }>;
+
+    // Only wallets belonging to users with legitimate creator earnings count
+    // toward creator balances. Premium-only wallets (e.g. orbitbyte@gmail.com,
+    // created from incorrectly-credited premium revenue) and orphan wallets are
+    // excluded so Available Balance never reflects Platform/Premium revenue.
+    const earningCreatorIdsRaw = await EarningTransaction.distinct("userId", {
+      type: "EARNING",
+      status: "COMPLETED",
+    });
+    const earningCreatorIds = earningCreatorIdsRaw.map(String);
+    const creatorWalletObjectIds = earningCreatorIds
+      .filter((id) => Types.ObjectId.isValid(id))
+      .map((id) => new Types.ObjectId(id));
+    const creatorWallets = creatorWalletObjectIds.length
+      ? await Wallet.find({ userId: { $in: creatorWalletObjectIds } }).lean()
+      : [];
+    const creatorWalletAvailablePaise = creatorWallets.reduce(
+      (sum, wallet) => sum + (wallet.availableBalancePaise || 0),
+      0
+    );
+    const creatorWalletEarnedPaise = creatorWallets.reduce(
+      (sum, wallet) => sum + (wallet.totalEarnedPaise || 0),
+      0
+    );
 
     // ---------- creator-cycle status ----------
     const cyclesDoc = cycles as unknown as Array<Record<string, unknown>>;
@@ -542,9 +584,11 @@ export async function GET(req: Request) {
     const reportsWindow = windowSums(reportMap, seriesBuckets, granule, curKey);
 
     const likesMap = new Map(earningSeries.map((row) => [row._id, row.count ?? 0]));
+    // Platform Revenue time series comes from verified premium payments, NOT
+    // creator earnings/releases. Premium is kept entirely separate from creator
+    // revenue in the ledger and in the dashboard series.
     const revenueMap = new Map<string, number>();
-    for (const row of earningSeries) revenueMap.set(row._id, (revenueMap.get(row._id) ?? 0) + (row.paise ?? 0));
-    for (const row of releaseSeries) revenueMap.set(row._id, (revenueMap.get(row._id) ?? 0) + (row.paise ?? 0));
+    for (const row of premiumSeries) revenueMap.set(row._id, (revenueMap.get(row._id) ?? 0) + (row.paise ?? 0));
     const likesWindow = windowSums(likesMap, seriesBuckets, granule, curKey);
     const revenueWindow = windowSums(revenueMap, seriesBuckets, granule, curKey);
     const withdrawalsWindow = windowSums(withdrawalCompletedMap, seriesBuckets, granule, curKey);
@@ -584,10 +628,12 @@ export async function GET(req: Request) {
     const completedWithdrawnCount = withdrawStatus("COMPLETED")?.count ?? 0;
     const pendingPayoutPaise = pendingPayoutStatuses.reduce((sum, status) => sum + (withdrawStatus(status)?.paise ?? 0), 0);
 
-    const platformRevenue = paiseToRupees(earningTotalPaise + releaseTotalPaise);
+    // Platform Revenue = verified premium payments only (never creator-ledger).
+    const platformRevenue = paiseToRupees(premiumTotals.paise ?? 0);
     const creatorPool = paiseToRupees(poolPaise);
     const creatorEarningsTotal = paiseToRupees(allocatedTotalPaise);
-    const availableBalance = paiseToRupees(walletTotalsDoc.available);
+    // Available Balance = legitimate creator wallets only (₹0.00 if none).
+    const availableBalance = paiseToRupees(creatorWalletAvailablePaise);
     const withdrawnTotal = paiseToRupees(completedWithdrawnPaise);
     const pendingPayouts = paiseToRupees(pendingPayoutPaise);
 
@@ -818,7 +864,7 @@ export async function GET(req: Request) {
         platformRevenue,
         creatorPool,
         creatorEarnings: creatorEarningsTotal,
-        walletEarned: paiseToRupees(walletTotalsDoc.earned),
+        walletEarned: paiseToRupees(creatorWalletEarnedPaise),
         withdrawn: withdrawnTotal,
         withdrawnCount: completedWithdrawnCount,
         pending: pendingPayouts,

@@ -42,6 +42,12 @@ function fmt(value?: number | null) {
   return new Intl.NumberFormat("en-IN").format(value || 0);
 }
 
+function paiseInr(value?: number | null) {
+  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(
+    (value || 0) / 100
+  );
+}
+
 function formatDate(d?: string | null) {
   if (!d) return "—";
   const date = new Date(d);
@@ -74,6 +80,7 @@ interface PaymentRow {
   provider?: string | null;
   providerOrderId?: string;
   providerPaymentId?: string;
+  plan?: { key: string; name?: string } | null;
   refund?: { status?: string } | null;
   status: string;
   createdAt?: string;
@@ -321,7 +328,7 @@ export default function AdminPaymentsPage() {
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="rounded-3xl border border-slate-200 bg-white/80 p-5 shadow-sm dark:border-white/10 dark:bg-white/[0.06]">
             <p className="mb-4 text-sm font-bold">Premium Revenue</p>
-            {renderBarChart(analytics.labels, analytics.series.premiumRevenuePaise, "bg-violet-400", inr)}
+            {renderBarChart(analytics.labels, analytics.series.premiumRevenuePaise, "bg-violet-400", paiseInr)}
           </div>
           <div className="rounded-3xl border border-slate-200 bg-white/80 p-5 shadow-sm dark:border-white/10 dark:bg-white/[0.06]">
             <p className="mb-4 text-sm font-bold">Purchases</p>
@@ -485,7 +492,7 @@ export default function AdminPaymentsPage() {
           <table className="w-full text-left text-sm">
             <thead className="border-b border-slate-200 bg-slate-50/70 dark:border-white/10 dark:bg-white/[0.03]">
               <tr>
-                {[["transactionId", "Transaction"], ["orderId", "Order"], ["name", "User"], ["amount", "Amount"], ["paymentMethodType", "Method"], ["purpose", "Purpose"], ["status", "Status"], ["createdAt", "Created"], ["completedAt", "Completed"], ["", "Actions"]].map(([key, label]) => (
+                {[["transactionId", "Transaction"], ["orderId", "Order"], ["name", "User"], ["", "Plan"], ["amount", "Amount"], ["paymentMethodType", "Provider / Method"], ["purpose", "Purpose"], ["status", "Status"], ["createdAt", "Created"], ["completedAt", "Completed"], ["", "Actions"]].map(([key, label]) => (
                   <th
                     key={key || label}
                     onClick={key ? () => handleSort(key) : undefined}
@@ -501,9 +508,9 @@ export default function AdminPaymentsPage() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={10} className="px-4 py-10 text-center text-slate-500 dark:text-slate-400">Loading payments…</td></tr>
+                <tr><td colSpan={11} className="px-4 py-10 text-center text-slate-500 dark:text-slate-400">Loading payments…</td></tr>
               ) : table.data.length === 0 ? (
-                <tr><td colSpan={10} className="px-4 py-10 text-center text-slate-500 dark:text-slate-400">No payments found</td></tr>
+                <tr><td colSpan={11} className="px-4 py-10 text-center text-slate-500 dark:text-slate-400">No payments found</td></tr>
               ) : (
                 table.data.map((row) => (
                   <tr key={row._id} className="border-b border-slate-100 last:border-0 dark:border-white/5 hover:bg-slate-50/60 dark:hover:bg-white/[0.03]">
@@ -513,14 +520,37 @@ export default function AdminPaymentsPage() {
                       <p className="font-semibold">{row.name || "Unknown"}</p>
                       <p className="text-xs text-slate-500 dark:text-slate-400">{row.email}</p>
                     </td>
+                    <td className="px-4 py-3 text-xs">
+                      {row.plan ? (
+                        <>
+                          <p className="font-semibold capitalize">{row.plan.name || row.plan.key}</p>
+                          {row.plan.key && row.plan.name !== row.plan.key ? (
+                            <p className="font-mono text-[10px] text-slate-400 dark:text-slate-500">{row.plan.key}</p>
+                          ) : null}
+                        </>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 font-bold">{inr(row.amount)}</td>
                     <td className="px-4 py-3 text-xs">
-                      <span className="uppercase">{row.paymentMethodType || "—"}</span>
-                      {(row.providerPaymentId || row.providerOrderId) && (
-                        <p className="mt-0.5 font-mono text-[10px] text-slate-400 dark:text-slate-500">
-                          {row.provider?.toUpperCase?.() || ""} · {row.providerPaymentId || row.providerOrderId}
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                        row.provider?.toLowerCase() === "cashfree"
+                          ? "bg-cyan-100 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300"
+                          : "bg-slate-100 text-slate-600 dark:bg-white/10 dark:text-slate-300"
+                      }`}>
+                        {row.provider === "cashfree" ? "Cashfree" : row.provider?.toUpperCase?.() || "—"}
+                        {row.paymentMethodType && row.provider?.toLowerCase() !== row.paymentMethodType?.toLowerCase()
+                          ? ` · ${row.paymentMethodType}`
+                          : ""}
+                      </span>
+                      {(row.providerOrderId || row.providerPaymentId) ? (
+                        <p className="mt-1 font-mono text-[10px] text-slate-400 dark:text-slate-500">
+                          {row.providerOrderId ? `ord: ${row.providerOrderId}` : ""}
+                          {row.providerOrderId && row.providerPaymentId ? " · " : ""}
+                          {row.providerPaymentId ? `ref: ${row.providerPaymentId}` : ""}
                         </p>
-                      )}
+                      ) : null}
                     </td>
                     <td className="px-4 py-3 text-xs capitalize">{row.purpose?.replace(/_/g, " ")}</td>
                     <td className="px-4 py-3">{statusBadge(row.status)}</td>

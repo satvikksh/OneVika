@@ -6,6 +6,7 @@ import { dbConnect } from "@/app/lib/mongodb";
 import PaymentTransaction from "@/app/models/PaymentTransaction";
 import Order from "@/app/models/Order";
 import PaymentMethod from "@/app/models/PaymentMethod";
+import PremiumPlan from "@/app/models/PremiumPlan";
 import User from "@/app/models/User";
 import PaymentRefund from "@/app/models/PaymentRefund";
 import { paiseToRupees } from "@/app/lib/earnings";
@@ -52,6 +53,8 @@ interface PaymentRow {
   providerReference?: string;
   providerOrderId?: string;
   providerPaymentId?: string;
+  planId?: string | null;
+  plan?: { key: string; name?: string } | null;
   createdAt: Date;
   completedAt?: Date;
   failedAt?: Date;
@@ -155,6 +158,12 @@ export async function GET(req: NextRequest) {
       .populate("paymentMethod", "name type")
       .lean();
 
+    // [DEBUG] Admin payments query audit — no credentials, ids, or secrets.
+    console.log("[DEBUG ADMIN PAYMENTS] total=", total, "returned=", transactions.length,
+      "statusFilter=", status || "(all)", "providerFilter=", paymentMethodFilter || "(none)",
+      "providerValues=", Array.from(new Set(transactions.map((t) => t.provider ?? null))),
+      "statusValues=", Array.from(new Set(transactions.map((t) => t.status))));
+
     // Collect related order ids and refund ids
     const orderIds = transactions
       .map((t) => t.orderId)
@@ -170,29 +179,78 @@ export async function GET(req: NextRequest) {
     const refundMap = new Map<string, typeof refunds[0]>();
     refunds.forEach((r) => refundMap.set(r.paymentTransactionId.toString(), r));
 
+    // Resolve the premium plan for each transaction (via planId or metadata), so
+    // the admin UI can show which plan generated the payment.
+    const planIds: mongoose.Types.ObjectId[] = [];
+    transactions.forEach((t) => {
+      if (t.planId && mongoose.Types.ObjectId.isValid(String(t.planId))) {
+        planIds.push(new mongoose.Types.ObjectId(String(t.planId)));
+      }
+    });
+    const plans = planIds.length
+      ? await PremiumPlan.find({ _id: { $in: planIds } }).select("key name").lean()
+      : [];
+    const planById = new Map(plans.map((p) => [p._id.toString(), p]));
+
     const tableData: PaymentRow[] = transactions.map((t) => {
-      const user = t.userId ? (t.userId as { _id?: unknown; name?: string; email?: string }) : null;
+      // userId may be a populated user document, a raw ObjectId, a string, or
+      // null when a user is deleted/missing. Never call .toString() on null.
+      const user = t.userId
+        ? (t.userId as { _id?: unknown; name?: string; email?: string } | null)
+        : null;
       const pm = t.paymentMethod
-        ? (t.paymentMethod as { type?: string; name?: string })
+        ? (t.paymentMethod as { _id?: unknown; type?: string; name?: string } | null)
         : null;
       const order = t.orderId ? orderMap.get(t.orderId.toString()) : undefined;
       const refund = t._id ? refundMap.get(t._id.toString()) : undefined;
+      const meta = t.metadata as Record<string, unknown> | null | undefined;
+      const metaPlanKey = typeof meta?.plan === "string" ? meta.plan : undefined;
+      const metaPlanName = typeof meta?.planName === "string" ? meta.planName : undefined;
+      const planDoc = t.planId ? planById.get(t.planId.toString()) : undefined;
+
+      // Whether the populated userId resolved to an actual user document.
+      const hasUserDoc = Boolean(user && user._id);
+
+      // Safe userId string: preferred from the populated user `_id`, then the
+      // raw ObjectId/string, else empty string. Never null/undefined.
+      const userId = user && user._id
+        ? String(user._id)
+        : t.userId
+          ? String(t.userId)
+          : "";
+      const email = hasUserDoc && user ? user.email || "" : "";
+      const name =
+        hasUserDoc && user ? user.name || "" : userId ? "Unknown user" : "";
+
+      // paymentMethod may be a populated object (with `_id`) or a raw
+      // ObjectId/string; prefer the populated `_id`, then the raw value.
+      const paymentMethodId =
+        pm && pm._id
+          ? String(pm._id)
+          : t.paymentMethod
+            ? String(t.paymentMethod)
+            : undefined;
+
       return {
         _id: t._id,
         transactionId: t.transactionId,
         orderId: order?.orderId || (t.orderId ? t.orderId.toString() : ""),
-        userId:
-          user && "_id" in user && user._id ? user._id.toString() : t.userId.toString(),
-        email: user?.email || "",
-        name: user?.name || "",
+        userId,
+        email,
+        name,
         amount: paiseToRupees(t.amountPaise),
         amountPaise: t.amountPaise,
         currency: t.currency,
-        paymentMethodId: t.paymentMethod ? t.paymentMethod.toString() : undefined,
+        paymentMethodId,
         paymentMethodType: pm?.type || null,
         purpose: t.purpose,
         status: t.status,
         provider: t.provider || null,
+        planId: t.planId ? t.planId.toString() : null,
+        plan: {
+          key: planDoc?.key || metaPlanKey || "premium",
+          name: planDoc?.name || metaPlanName || (planDoc?.key as string) || metaPlanKey || "Premium",
+        },
         providerReference: t.providerReference,
         providerOrderId: t.providerOrderId,
         providerPaymentId: t.providerPaymentId,
@@ -339,12 +397,21 @@ export async function POST(req: NextRequest) {
         await PaymentService.markOrderPaid(updated.orderId);
       }
 
-      // Credit wallet
-      await PaymentService.creditWallet(
-        updated.userId,
-        updated.amountPaise,
-        "ADMIN_PAYMENT_VERIFIED"
-      );
+      // Only credit a user wallet for genuine wallet top-ups (purpose wallet_credit).
+      // Premium/membership payments are PLATFORM revenue and must NOT credit any
+      // user wallet or earnings account.
+      if (updated.purpose === "wallet_credit") {
+        await PaymentService.creditWallet(
+          updated.userId,
+          updated.amountPaise,
+          "ADMIN_PAYMENT_VERIFIED"
+        );
+      } else if (updated.purpose === "membership") {
+        await PaymentTransaction.updateOne(
+          { _id: updated._id },
+          { $set: { revenueType: "premium" } }
+        );
+      }
 
       // Activate premium if membership purpose
       if (updated.purpose === "membership") {

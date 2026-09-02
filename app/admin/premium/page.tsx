@@ -103,7 +103,7 @@ function renderStatsCards(stats: any) {
         </div>
       </div>
 
-      <div className={ "rounded-3xl border border-slate-200 bg-white/80 p-4 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.06]" + getToneClass("from-emerald-400 to-teal-500") }>
+      <div className={ "rounded-3xl border border-slate-200 bg-white/80 p-4 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.6]" + getToneClass("from-emerald-400 to-teal-500") }>
         <div className="flex items-start justify-between gap-3">
           <div className="grid h-10 w-10 place-items-center rounded-2xl from-emerald-400 to-teal-500 text-white shadow-lg">
             <BadgeCheck size={20} />

@@ -1,4 +1,5 @@
 import mongoose, { Document, Model, Schema, Types } from "mongoose";
+import type { PayoutProvider } from "./PlatformSettings";
 
 export type WithdrawalStatus =
   | "PENDING"
@@ -18,7 +19,7 @@ export interface IWithdrawal extends Document {
   currency: "INR";
   status: WithdrawalStatus;
   payoutMethod: PayoutMethodType;
-  payoutProvider: "manual";
+  payoutProvider: PayoutProvider;
   providerPayoutId?: string | null;
   idempotencyKey: string;
   earningCycleId?: Types.ObjectId | null;
@@ -74,7 +75,7 @@ const WithdrawalSchema = new Schema<IWithdrawal>(
     },
     payoutProvider: {
       type: String,
-      enum: ["manual"],
+      enum: ["manual", "cashfree"],
       default: "manual",
     },
     providerPayoutId: {

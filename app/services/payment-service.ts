@@ -544,8 +544,11 @@ export class PaymentService {
 
     if (!user) throw new Error("User not found");
 
-    // Credit wallet
-    await this.creditWallet(transaction.userId, transaction.amountPaise, "MEMBERSHIP_PURCHASE");
+    // Premium/membership revenue is platform-level. Never credit a user wallet.
+    await PaymentTransaction.updateOne(
+      { _id: transaction._id },
+      { $set: { revenueType: "premium" } }
+    );
 
     // Log admin action
     if (adminId) {
@@ -553,7 +556,7 @@ export class PaymentService {
         adminId,
         action: "MEMBERSHIP_PURCHASED",
         targetId: transaction._id.toString(),
-        description: "Membership purchased and wallet credited",
+        description: "Premium membership completed (platform revenue, no wallet credit)",
       });
     }
 

@@ -14,7 +14,9 @@ import {
 import { AdminEmptyState } from "../components/AdminEmptyState";
 
 function inr(value: number) {
-  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(value || 0);
+  // value is integer paise; convert to rupees for display exactly once.
+  const rupees = (value || 0) / 100;
+  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(rupees);
 }
 
 function num(value?: number | null) {

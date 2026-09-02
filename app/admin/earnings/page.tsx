@@ -34,6 +34,13 @@ function money(value?: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(value || 0);
 }
 
+function paiseMoney(value?: number) {
+  // wallet ledger amounts are integer paise; convert to rupees for display.
+  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(
+    (value || 0) / 100
+  );
+}
+
 function num(value?: number) {
   return new Intl.NumberFormat("en-IN").format(value || 0);
 }
@@ -118,7 +125,7 @@ export default function AdminEarningsPage() {
                   </div>
                 </div>
                 <p className={`shrink-0 font-black ${debit ? "text-rose-400" : "text-emerald-300"}`}>
-                  {debit ? "−" : "+"}{money(Math.abs(entry.amountPaise))}
+                  {debit ? "−" : "+"}{paiseMoney(Math.abs(entry.amountPaise))}
                 </p>
               </div>
             );

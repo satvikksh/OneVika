@@ -16,6 +16,13 @@ export type PaymentStatus =
 
 export type PaymentProvider = "cashfree" | "paytm";
 
+export type RevenueType =
+  | "premium"
+  | "creator_revenue"
+  | "wallet_credit"
+  | "payout"
+  | "other";
+
 export interface IPaymentTransaction extends Document {
   transactionId: string;
   userId: mongoose.Types.ObjectId;
@@ -29,6 +36,7 @@ export interface IPaymentTransaction extends Document {
   paymentMethod: mongoose.Types.ObjectId | IPaymentMethod;
   status: PaymentStatus;
   purpose: "membership" | "wallet_credit" | "wallet_debit" | "refund" | "payout" | "other";
+  revenueType?: RevenueType;
   providerReference?: string;
   providerTxnId?: string;
   metadata?: Record<string, unknown>;
@@ -111,6 +119,18 @@ const PaymentTransactionSchema = new Schema<IPaymentTransaction>(
       type: String,
       enum: ["membership", "wallet_credit", "wallet_debit", "refund", "payout", "other"],
       required: true,
+    },
+    revenueType: {
+      type: String,
+      enum: [
+        "premium",
+        "creator_revenue",
+        "wallet_credit",
+        "payout",
+        "other",
+      ],
+      default: "other",
+      index: true,
     },
     providerReference: {
       type: String,

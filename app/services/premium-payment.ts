@@ -7,8 +7,8 @@ import Order from "@/app/models/Order";
 import User from "@/app/models/User";
 import PremiumPlan from "@/app/models/PremiumPlan";
 import PremiumMembership from "@/app/models/PremiumMembership";
+import CouponUsage from "@/app/models/CouponUsage";
 import { applyPremiumToUser, isPremiumActive } from "@/app/lib/premium";
-import { PaymentService } from "@/app/services/payment-service";
 import {
   getCashfreePayment,
   rupeesToPaise,
@@ -90,6 +90,12 @@ async function runCompletion({
       String(cashfreePayment.status).toUpperCase() === "PENDING" ||
       String(cashfreePayment.status).toUpperCase() === "ACTIVE" ||
       !cashfreePayment.status;
+    // [DEBUG] Record the verification outcome without sensitive data.
+    console.log(
+      "[DEBUG PREMIUM COMPLETION] tx=", transaction.transactionId,
+      "status=", String(cashfreePayment.status),
+      "outcome=", pending ? "PENDING" : "NOT_VERIFIED"
+    );
     return {
       ok: false,
       code: pending ? "PENDING" : "NOT_VERIFIED",
@@ -131,6 +137,7 @@ async function runCompletion({
     if (alreadyProcessed) {
       await session.commitTransaction();
       session.endSession();
+      console.log("[DEBUG PREMIUM COMPLETION] tx=", transaction.transactionId, "alreadyProcessed=true");
       return {
         ok: true,
         alreadyProcessed: true,
@@ -192,12 +199,28 @@ async function runCompletion({
       }
     }
 
-    await PaymentService.creditWallet(
-      transaction.userId,
-      transaction.amountPaise,
-      "MEMBERSHIP_PURCHASE",
-      session
+    // Platform Premium Revenue: the completed PaymentTransaction is itself the
+    // platform-level revenue record (revenueType "premium"). No user wallet or
+    // creator/earnings account is credited for Premium purchases.
+    await PaymentTransaction.updateOne(
+      { _id: transaction._id },
+      {
+        $set: {
+          revenueType: "premium",
+          completedAt: new Date(),
+          providerPaymentId: cashfreePayment.cfPaymentId || transaction.providerPaymentId,
+        },
+      },
+      { session }
     );
+
+    console.log(
+      "[DEBUG PREMIUM COMPLETION] tx=", transaction.transactionId,
+      "marked COMPLETED, amountPaise=", transaction.amountPaise,
+      "providerPaymentId=", String(cashfreePayment.cfPaymentId || "")
+    );
+
+    await recordCouponUsage({ transaction, order, session });
 
     await session.commitTransaction();
     session.endSession();
@@ -272,6 +295,14 @@ export async function verifyAndCompletePremiumPayment(input: {
     };
   }
 
+  // [DEBUG] Cashfree authoritative verification result (no secrets/ids logged).
+  console.log(
+    "[DEBUG VERIFY] tx=", transaction.transactionId,
+    "providerOrderId=", String(providerOrderId),
+    "cashfreeStatus=", String(cashfreePayment.status),
+    "cfPaymentIdPresent=", Boolean(cashfreePayment.cfPaymentId)
+  );
+
   return runCompletion({ transaction, cashfreePayment });
 }
 
@@ -314,6 +345,75 @@ export async function completeFromCashfreeWebhook(input: {
   }
 
   return runCompletion({ transaction, cashfreePayment: input.cashfreePayment });
+}
+
+interface TxLike {
+  _id: Types.ObjectId;
+  userId: Types.ObjectId;
+  amountPaise: number;
+  metadata?: Record<string, unknown> | null;
+}
+
+function readMeta(
+  metadata: Record<string, unknown> | Map<string, unknown> | null | undefined,
+  key: string
+): unknown {
+  if (!metadata) return undefined;
+  if (metadata instanceof Map) return metadata.get(key);
+  return (metadata as Record<string, unknown>)[key];
+}
+
+/**
+ * Record coupon usage atomically within the completion transaction. This is
+ * guarded by a unique index on transactionId so it can never be double-counted,
+ * even if the webhook and verify race. Safe to call with no coupon present.
+ */
+async function recordCouponUsage({
+  transaction,
+  order,
+  session,
+}: {
+  transaction: TxLike;
+  order: { membershipPlan?: string | null };
+  session: ClientSession;
+}): Promise<void> {
+  const couponCode = readMeta(transaction.metadata, "couponCode");
+  if (!couponCode) return;
+
+  const couponIdRaw = readMeta(transaction.metadata, "couponId");
+  const discountPaise = Number(readMeta(transaction.metadata, "discountPaise") || 0);
+  const originalAmountPaise = Number(
+    readMeta(transaction.metadata, "originalAmountPaise") || transaction.amountPaise
+  );
+
+  const couponId =
+    typeof couponIdRaw === "string" && Types.ObjectId.isValid(couponIdRaw)
+      ? new Types.ObjectId(couponIdRaw)
+      : undefined;
+
+  try {
+    await CouponUsage.create(
+      [
+        {
+          couponId: couponId || new Types.ObjectId(),
+          couponCode: String(couponCode),
+          userId: transaction.userId,
+          transactionId: transaction._id,
+          premiumPlanKey: order.membershipPlan || "monthly",
+          originalAmountPaise,
+          discountPaise,
+          finalAmountPaise: transaction.amountPaise,
+          usedAt: new Date(),
+        },
+      ],
+      { session }
+    );
+  } catch (error) {
+    // Unique index collision with a racing completion: already recorded.
+    if ((error as { code?: number }).code !== 11000) {
+      throw error;
+    }
+  }
 }
 
 export { isPremiumActive };

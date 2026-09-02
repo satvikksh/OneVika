@@ -9,6 +9,7 @@ import CreatorEarningTransaction from "@/app/models/CreatorEarningTransaction";
 import EarningCycle from "@/app/models/EarningCycle";
 import EarningTransaction from "@/app/models/EarningTransaction";
 import PlatformSettings from "@/app/models/PlatformSettings";
+import type { PayoutProvider } from "@/app/models/PlatformSettings";
 import User from "@/app/models/User";
 import Wallet, { IWallet } from "@/app/models/Wallet";
 import Withdrawal, { PayoutMethodType, WithdrawalStatus } from "@/app/models/Withdrawal";
@@ -41,12 +42,27 @@ export function rupeesToPaise(rupees: number) {
   return Math.round(rupees * 100);
 }
 
+// The only supported payout providers. `razorpayx` must never be used.
+function normalizePayoutProvider(value: unknown): PayoutProvider {
+  return value === "cashfree" ? "cashfree" : "manual";
+}
+
 export async function getEarningsSettings(session?: ClientSession | null) {
   const existing = await PlatformSettings.findOne({ key: "earnings" }).session(
     session ?? null
   );
 
-  if (existing) return existing;
+  if (existing) {
+    // Safe migration: if a legacy/unsupported payout provider (e.g.
+    // "razorpayx") is stored, migrate it to "manual". This keeps the document
+    // valid under the ["manual", "cashfree"] enum so save() never throws.
+    const normalized = normalizePayoutProvider(existing.payoutProvider as unknown);
+    if (normalized !== existing.payoutProvider) {
+      existing.payoutProvider = normalized;
+      await existing.save({ session: session ?? undefined });
+    }
+    return existing;
+  }
 
   const [created] = await PlatformSettings.create(
     [

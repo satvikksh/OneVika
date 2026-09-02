@@ -27,7 +27,10 @@ import { AdminEmptyState } from "../components/AdminEmptyState";
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 function inr(value: number) {
-  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(value || 0);
+  // analytics API returns integer paise; convert to rupees for display.
+  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(
+    (value || 0) / 100
+  );
 }
 
 function num(value?: number | null) {

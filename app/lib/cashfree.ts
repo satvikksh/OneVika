@@ -121,7 +121,7 @@ export async function createCashfreeOrder(input: {
     customer_details: {
       customer_id: input.customerId,
       customer_email: input.customerEmail,
-      customer_phone: input.customerPhone || "9999999999",
+      customer_phone: input.customerPhone || "0000000000",
       customer_name: input.customerName,
     },
     order_meta: {

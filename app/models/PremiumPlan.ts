@@ -69,7 +69,6 @@ const PremiumPlanSchema = new Schema<IPremiumPlan>(
 PremiumPlanSchema.index({ isActive: 1, displayOrder: 1 });
 
 export const PremiumPlan: Model<IPremiumPlan> =
-  mongoose.models.PremiumPlan ||
-  mongoose.model<IPremiumPlan>("PremiumPlan", PremiumPlanSchema);
+  mongoose.models.PremiumPlan || mongoose.model<IPremiumPlan>("PremiumPlan", PremiumPlanSchema);
 
 export default PremiumPlan;
