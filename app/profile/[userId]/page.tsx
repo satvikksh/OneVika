@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { AnimatePresence, motion, useInView } from "framer-motion";
 import {
+  Activity,
   ArrowLeft,
   Award,
   BadgeCheck,
@@ -13,7 +14,6 @@ import {
   Bookmark,
   Briefcase,
   Calendar,
-  Camera,
   Check,
   ChevronDown,
   CircleDot,
@@ -32,7 +32,6 @@ import {
   Languages,
   Linkedin,
   Link as LinkIcon,
-  Lock,
   Mail,
   MapPin,
   MessageCircle,
@@ -58,6 +57,7 @@ import {
   Upload,
   Video,
   X,
+  Zap,
 } from "lucide-react";
 import { useSocket } from "../../context/SocketContext";
 import ProfilePostMedia from "../../components/ProfilePostMedia";
@@ -219,26 +219,7 @@ interface PremiumStatus {
   } | null;
 }
 
-interface GenericPaymentResponse {
-  transactionId: string;
-  amount: number;
-  currency: string;
-  status: string;
-  provider: string;
-}
-
-interface GenericPaymentOptions {
-  transactionId: string;
-  amount: number;
-  currency: string;
-  name: string;
-  description: string;
-  provider: "orbitbyte" | "manual" | "upi";
-  onComplete?: (response: GenericPaymentResponse) => void;
-  onCancel?: () => void;
-}
-
-const activityTabs = ["Posts", "Reels", "Media", "Articles", "Likes", "Comments", "Bookmarks"] as const;
+const activityTabs = ["Posts", "Reels", "Media"] as const;
 const VALID_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/avif"];
 const MAX_PROFILE_IMAGE_SIZE = 5 * 1024 * 1024;
 const MAX_COVER_IMAGE_SIZE = 8 * 1024 * 1024;
@@ -585,30 +566,36 @@ export default function UserProfilePage() {
 
   const theme = isPremiumProfile
     ? {
-        page: "bg-[#080705] text-stone-50",
-        surface: "border-amber-200/15 bg-[linear-gradient(145deg,rgba(24,20,15,.94),rgba(7,10,18,.96))] shadow-[0_28px_90px_rgba(217,119,6,.12)]",
-        softSurface: "border-amber-200/15 bg-amber-100/[0.055]",
-        text: "text-stone-50",
-        muted: "text-stone-300",
-        border: "border-amber-200/15",
-        accent: "text-amber-300",
-        accentBg: "bg-gradient-to-r from-amber-300 via-yellow-200 to-stone-100 text-stone-950",
-        chip: "border-amber-200/15 bg-amber-200/[0.08] text-amber-100",
-        iconBox: "bg-amber-300/10 text-amber-200",
-        avatar: "bg-[conic-gradient(from_160deg,#fef3c7,#d97706,#111827,#fbbf24,#fef3c7)]",
+        page: "bg-[#080b12] text-stone-100",
+        bar: "border-[#c9992c]/20 bg-[#0a0d14]/85",
+        surface: "border-[#caa03d]/15 bg-[#141207]/[0.35] shadow-[0_24px_80px_rgba(0,0,0,0.5)]",
+        softSurface: "border-[#caa03d]/10 bg-[#171208]/[0.25]",
+        text: "text-stone-100",
+        muted: "text-stone-400",
+        mutedSoft: "bg-white/10",
+        border: "border-[#caa03d]/15",
+        accent: "text-[#e6c35c]",
+        accentBg: "bg-gradient-to-b from-[#d4a72c] via-[#b8860b] to-[#8a6404] text-stone-950",
+        accentGradient: "bg-gradient-to-r from-[#c49b1f] to-[#8a6404]",
+        chip: "border-[#d4a72c]/40 bg-[#b8860b]/[0.16] text-[#f0d687]",
+        iconBox: "bg-[#b8860b]/[0.22] text-[#e6c35c]",
+        avatar: "bg-[conic-gradient(from_160deg,#f7e7b3,#caa03d,#101010,#d4a72c,#f7e7b3)]",
       }
     : {
-        page: "bg-[#f5f8ff] text-slate-950 dark:bg-[#070a12] dark:text-white",
-        surface: "border-white/80 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.08)] dark:border-white/10 dark:bg-white/[0.045]",
-        softSurface: "border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-white/[0.04]",
-        text: "text-slate-950 dark:text-white",
-        muted: "text-slate-600 dark:text-slate-300",
-        border: "border-slate-200 dark:border-white/10",
-        accent: "text-blue-700 dark:text-blue-300",
-        accentBg: "bg-gradient-to-r from-blue-600 to-cyan-500 text-white",
-        chip: "border-blue-100 bg-blue-50 text-blue-800 dark:border-blue-400/15 dark:bg-blue-400/10 dark:text-blue-200",
-        iconBox: "bg-blue-50 text-blue-700 dark:bg-blue-400/10 dark:text-blue-200",
-        avatar: "bg-gradient-to-br from-blue-500 via-cyan-400 to-indigo-600",
+        page: "bg-[#070b14] text-white",
+        bar: "border-white/10 bg-[#070b14]/85",
+        surface: "border-white/10 bg-white/[0.045] shadow-[0_24px_80px_rgba(0,0,0,0.45)]",
+        softSurface: "border-white/10 bg-white/[0.04]",
+        text: "text-white",
+        muted: "text-slate-300",
+        mutedSoft: "bg-white/10",
+        border: "border-white/10",
+        accent: "text-slate-200",
+        accentBg: "bg-gradient-to-b from-slate-100 to-slate-400 text-slate-950",
+        accentGradient: "bg-gradient-to-r from-slate-300 to-slate-400",
+        chip: "border-white/15 bg-white/[0.06] text-slate-100",
+        iconBox: "bg-white/10 text-slate-200",
+        avatar: "bg-gradient-to-br from-slate-400 via-slate-200 to-slate-600",
       };
 
   const openEdit = () => {
@@ -899,14 +886,31 @@ export default function UserProfilePage() {
 
   const saveEdit = async (postId: string) => {
     if (!editPostText.trim()) return;
+    const originalPosts = posts;
     setPosts((prev) =>
       prev.map((post) => (post.id === postId ? { ...post, content: editPostText } : post)),
     );
     setEditingPostId(null);
     setEditPostText("");
+    try {
+      const res = await fetch(`/api/posts/${postId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: editPostText }),
+      });
+      if (!res.ok) throw new Error("Failed to update post");
+      const data = await res.json();
+      setPosts((prev) =>
+        prev.map((post) => (post.id === postId ? { ...post, content: data.content || editPostText } : post)),
+      );
+    } catch {
+      setPosts(originalPosts);
+      alert("Failed to save post edit");
+    }
   };
 
-  const toggleLike = (postId: string) => {
+  const toggleLike = async (postId: string) => {
+    const prevPosts = posts;
     setPosts((prev) =>
       prev.map((post) =>
         post.id === postId
@@ -918,6 +922,24 @@ export default function UserProfilePage() {
           : post,
       ),
     );
+    try {
+      const res = await fetch(`/api/posts/${postId}/like`, { method: "POST" });
+      if (!res.ok) throw new Error("Failed to toggle like");
+      const data = await res.json();
+      setPosts((prev) =>
+        prev.map((post) =>
+          post.id === postId
+            ? {
+                ...post,
+                likes: data.likes?.length ?? (post.likes || 0),
+                isLiked: data.liked,
+              }
+            : post,
+        ),
+      );
+    } catch {
+      setPosts(prevPosts);
+    }
   };
 
   const shareProfile = async () => {
@@ -964,6 +986,26 @@ export default function UserProfilePage() {
     return normalized.length > 96 ? `${normalized.slice(0, 93).trimEnd()}...` : normalized;
   };
 
+  const sectionRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
+  const [activeSection, setActiveSection] = useState("Overview");
+
+  const scrollToSection = (section: string) => {
+    setActiveSection(section);
+    sectionRefs.current[section]?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  };
+
+  const navSections = [
+    "Overview",
+    "Activity",
+    "Portfolio",
+    "Connections",
+    "Analytics",
+    "Settings",
+  ];
+
   if (loading) {
     return <ProfileSkeleton />;
   }
@@ -996,7 +1038,7 @@ export default function UserProfilePage() {
     ? undefined
     : {
         backgroundImage: isPremiumProfile
-          ? "radial-gradient(circle at 18% 12%, rgba(251,191,36,.34), transparent 30%), radial-gradient(circle at 82% 26%, rgba(120,53,15,.38), transparent 28%), linear-gradient(135deg, #080705 0%, #1c1917 48%, #030712 100%)"
+          ? "radial-gradient(circle at 20% 12%, rgba(212,167,44,0.22), transparent 36%), radial-gradient(circle at 82% 24%, rgba(160,120,24,0.16), transparent 32%), linear-gradient(135deg, #120e06 0%, #241a09 40%, #080b12 100%)"
           : "radial-gradient(circle at 18% 10%, rgba(59,130,246,.42), transparent 30%), radial-gradient(circle at 86% 28%, rgba(6,182,212,.34), transparent 26%), linear-gradient(135deg, #07111f 0%, #1d4ed8 48%, #111827 100%)",
       };
 
@@ -1044,81 +1086,101 @@ export default function UserProfilePage() {
 
   return (
     <div className={`min-h-screen overflow-x-hidden ${theme.page}`}>
-      <div className={`sticky top-0 z-40 max-w-full border-b backdrop-blur-2xl ${isPremiumProfile ? "border-amber-200/10 bg-[#080705]/82" : "border-white/70 bg-white/80 dark:border-white/10 dark:bg-[#070a12]/80"}`}>
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-3 py-3 sm:px-4">
+      {isPremiumProfile && (
+        <div
+          className="fixed inset-0 pointer-events-none select-none z-0"
+          style={{
+            background:
+              "radial-gradient(ellipse 70% 45% at 50% 12%, rgba(212,167,44,0.13) 0%, transparent 70%), radial-gradient(circle at 85% 25%, rgba(184,134,11,0.08) 0%, transparent 32%), radial-gradient(circle at 12% 32%, rgba(160,120,24,0.07) 0%, transparent 32%), radial-gradient(circle at 90% 65%, rgba(184,134,11,0.05) 0%, transparent 35%), radial-gradient(ellipse 60% 40% at 50% 88%, rgba(160,120,24,0.07) 0%, transparent 65%), radial-gradient(ellipse 80% 60% at 50% 55%, rgba(150,120,40,0.05) 0%, transparent 75%)",
+            filter: "blur(110px)",
+          }}
+        />
+      )}
+      {/* ============ STICKY TOP BAR ============ */}
+      <div className={`sticky top-0 z-40 border-b backdrop-blur-2xl ${theme.bar}`}>
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-3 py-3 sm:px-6">
           <button
             onClick={() => router.back()}
-            className={`inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full px-2.5 py-2 text-sm font-semibold transition sm:px-3 ${isPremiumProfile ? "text-stone-300 hover:bg-amber-200/10 hover:text-amber-100" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"}`}
+            aria-label="Go back"
+            className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold transition hover:scale-[1.02] ${theme.chip}`}
           >
             <ArrowLeft className="h-4 w-4" />
-            Back
+            <span className="hidden sm:inline">Back</span>
           </button>
+
           <div className="hidden min-w-0 items-center gap-3 md:flex">
             <Avatar name={user.name} src={user.avatar} size="small" />
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold">{user.name}</p>
+              <p className="truncate text-sm font-semibold text-white">{user.name}</p>
               <p className={`truncate text-xs ${theme.muted}`}>{headline || user.username || "Profile"}</p>
             </div>
           </div>
+
           <div className="flex min-w-0 items-center gap-2">
             {isCurrentUser ? (
-              <button onClick={openEdit} className={`inline-flex min-h-11 items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold transition sm:px-4 ${theme.accentBg}`}>
+              <button onClick={openEdit} className={`inline-flex min-h-10 items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold transition hover:scale-[1.02] sm:px-4 ${theme.accentBg} ${isPremiumProfile ? "shadow-[0_0_0_1px_rgba(212,167,44,0.25),0_6px_20px_-6px_rgba(212,167,44,0.45)]" : ""}`}>
                 <Edit3 className="h-4 w-4" />
-                Edit
+                <span className="hidden sm:inline">Edit</span>
               </button>
             ) : (
-              <button onClick={handleFollowToggle} disabled={followLoading} className={`inline-flex min-h-11 items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold transition disabled:opacity-60 sm:px-4 ${theme.accentBg}`}>
+              <button onClick={handleFollowToggle} disabled={followLoading} className={`inline-flex min-h-10 items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold transition hover:scale-[1.02] disabled:opacity-60 sm:px-4 ${theme.accentBg}`}>
                 {user.isFollowing ? <UserCheck className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
-                {user.isFollowing ? "Following" : "Connect"}
+                <span className="hidden sm:inline">{user.isFollowing ? "Following" : "Follow"}</span>
               </button>
             )}
-            <button onClick={shareProfile} aria-label="Share profile" className={`rounded-full border p-2.5 transition ${theme.softSurface}`}>
+            <button onClick={shareProfile} aria-label="Share profile" className={`rounded-full border p-2.5 transition hover:scale-[1.05] ${theme.softSurface}`}>
               <Share2 className="h-4 w-4" />
             </button>
           </div>
         </div>
       </div>
 
-      <main className="mx-auto max-w-7xl px-3 py-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:px-4 sm:py-5 lg:pb-12">
+      <main className="mx-auto max-w-7xl px-3 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-2 sm:px-6 lg:pb-12">
+        {/* ============ PROFILE HERO CARD ============ */}
         <motion.section
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className={`max-w-full overflow-hidden rounded-2xl border sm:rounded-[2rem] ${theme.surface}`}
+          className={`max-w-full overflow-hidden rounded-3xl border sm:rounded-[2rem] ${theme.surface}`}
         >
-          <div className="relative h-48 overflow-hidden sm:h-72 lg:h-80" style={coverStyle}>
+          {/* Cover */}
+          <div className="relative h-44 overflow-hidden sm:h-60 lg:h-72" style={coverStyle}>
             {user.cover && (
               <SafeProfileImage src={user.cover} alt={`${user.name} cover`} fill priority sizes="100vw" className="object-cover" />
             )}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/78 via-black/16 to-transparent" />
-            <div className="absolute left-3 top-3 flex max-w-[calc(100%-1.5rem)] flex-wrap gap-1.5 sm:left-5 sm:top-5 sm:gap-2">
+            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent" />
+            <div className="absolute left-4 top-4 flex max-w-[calc(100%-2rem)] flex-wrap gap-1.5 sm:left-6 sm:top-6 sm:gap-2">
               {isPremiumProfile && <Badge icon={Sparkles} label="Premium Member" premium />}
               {user.isVerified && <Badge icon={BadgeCheck} label="Verified" />}
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold text-white ring-1 ring-white/25 backdrop-blur">
-                <span className={`h-2 w-2 rounded-full ${isUserOnline ? "bg-emerald-400" : "bg-slate-300"}`} />
+              <span className={`inline-flex items-center gap-1.5 rounded-full bg-black/40 px-3 py-1 text-xs font-semibold text-white ring-1 ring-white/20 backdrop-blur`}>
+                <span className={`h-2 w-2 rounded-full ${isUserOnline ? "bg-emerald-400" : "bg-slate-400"}`} />
                 {isUserOnline ? "Online" : formatLastSeen(user.lastSeen)}
               </span>
             </div>
           </div>
 
-          <div className="relative px-3 pb-5 sm:px-8 sm:pb-6 lg:px-10">
+          {/* Identity + actions */}
+          <div className="px-4 pb-5 sm:px-8 sm:pb-6 lg:px-10">
             <div className="-mt-12 flex flex-col gap-4 sm:-mt-16 sm:gap-5 lg:-mt-20 lg:flex-row lg:items-end lg:justify-between">
               <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-end">
-                <div className={`relative h-24 w-24 shrink-0 rounded-full p-1 shadow-2xl min-[390px]:h-28 min-[390px]:w-28 sm:h-32 sm:w-32 sm:p-1.5 lg:h-44 lg:w-44 ${theme.avatar} ${isPremiumProfile ? "shadow-amber-500/20" : ""}`}>
+                <div className={`relative h-24 w-24 shrink-0 rounded-full p-1 shadow-2xl ring-4 ring-black/40 sm:h-32 sm:w-32 sm:p-1.5 lg:h-40 lg:w-40 ${theme.avatar}`}>
+                  {isPremiumProfile && (
+                    <span aria-hidden className="pointer-events-none absolute -inset-3 -z-10 rounded-full blur-xl" style={{ background: "radial-gradient(circle, rgba(212,167,44,0.35), transparent 70%)" }} />
+                  )}
                   <Avatar name={user.name} src={user.avatar} size="large" />
-                  <span className={`absolute bottom-5 right-3 h-5 w-5 rounded-full border-4 ${isPremiumProfile ? "border-[#080705]" : "border-white dark:border-[#070a12]"} ${isUserOnline ? "bg-emerald-500" : "bg-slate-400"}`} />
+                  <span className={`absolute bottom-5 right-3 h-5 w-5 rounded-full border-4 border-black/60 ${isUserOnline ? "bg-emerald-500" : "bg-slate-400"}`} />
                 </div>
 
                 <div className="min-w-0 max-w-3xl pb-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h1 className={`max-w-full break-words text-2xl font-bold tracking-normal sm:text-3xl lg:text-4xl ${theme.text}`}>{user.name}</h1>
+                    <h1 className={`max-w-full break-words text-2xl font-black tracking-tight text-white sm:text-3xl lg:text-4xl`}>{user.name}</h1>
                     {user.isVerified && <BadgeCheck className={`h-6 w-6 ${theme.accent}`} />}
                   </div>
                   <p className={`mt-1 max-w-full truncate text-sm font-medium ${theme.muted}`}>
                     @{user.username || user.name.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/\.$/, "")}
                   </p>
                   {headline ? (
-                    <p className={`mt-3 max-w-2xl break-words text-base font-semibold sm:text-lg ${theme.text}`}>{headline}</p>
+                    <p className={`mt-3 max-w-2xl break-words text-base font-bold sm:text-lg ${theme.text}`}>{headline}</p>
                   ) : (
                     <InlineEmpty text={isCurrentUser ? "Add a professional headline." : "No headline added."} />
                   )}
@@ -1127,10 +1189,10 @@ export default function UserProfilePage() {
                   ) : (
                     <InlineEmpty text={isCurrentUser ? "Add a bio to introduce your profile." : "No bio added."} />
                   )}
-                  <div className={`mt-4 flex min-w-0 flex-wrap gap-3 text-sm ${theme.muted}`}>
+                  <div className={`mt-4 flex min-w-0 flex-wrap gap-x-4 gap-y-2 text-sm ${theme.muted}`}>
+                    <MetaItem icon={MapPin} value={user.location} emptyLabel={isCurrentUser ? "Add location" : undefined} />
                     <MetaItem icon={Briefcase} value={user.company} emptyLabel={isCurrentUser ? "Add company" : undefined} />
                     <MetaItem icon={GraduationCap} value={user.education} emptyLabel={isCurrentUser ? "Add education" : undefined} />
-                    <MetaItem icon={MapPin} value={user.location} emptyLabel={isCurrentUser ? "Add location" : undefined} />
                     {user.website && (
                       <a href={normalizeUrl(user.website)} target="_blank" rel="noreferrer" className={`inline-flex min-w-0 max-w-full items-center gap-1.5 font-semibold hover:underline ${theme.accent}`}>
                         <Globe className="h-4 w-4" />
@@ -1145,21 +1207,22 @@ export default function UserProfilePage() {
                 </div>
               </div>
 
-              <div className="flex w-full flex-wrap gap-2 pb-1 lg:w-auto lg:justify-end">
+              {/* Action buttons */}
+              <div className="flex w-full flex-wrap items-center gap-2 pb-1 lg:w-auto lg:justify-end">
                 {!isCurrentUser && (
                   <>
-                    <button onClick={handleFollowToggle} disabled={followLoading} className={`inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-bold shadow-lg transition hover:scale-[1.02] disabled:opacity-60 sm:flex-none ${theme.accentBg}`}>
+                    <button onClick={handleFollowToggle} disabled={followLoading} className={`inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-bold shadow-lg transition hover:scale-[1.02] disabled:opacity-60 sm:flex-none ${theme.accentBg} ${isPremiumProfile ? "shadow-[0_0_0_1px_rgba(212,167,44,0.25),0_6px_24px_-8px_rgba(212,167,44,0.55)]" : ""}`}>
                       {user.isFollowing ? <UserCheck className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
-                      {user.isFollowing ? "Following" : "Connect"}
+                      {user.isFollowing ? "Following" : "Follow"}
                     </button>
                     {canShowMessageButton && (
-                      <button onClick={() => router.push(`/chat?userId=${userId}`)} className={`inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full border px-5 py-3 text-sm font-bold transition sm:flex-none ${theme.softSurface}`}>
+                      <button onClick={() => router.push(`/chat?userId=${userId}`)} className={`inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full border px-5 py-3 text-sm font-bold transition hover:scale-[1.02] sm:flex-none ${theme.softSurface}`}>
                         <MessageCircle className="h-4 w-4" />
                         Message
                       </button>
                     )}
                     {canShowVideoButton && (
-                      <button className={`inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full border px-5 py-3 text-sm font-bold transition sm:flex-none ${theme.softSurface}`}>
+                      <button className={`inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full border px-5 py-3 text-sm font-bold transition hover:scale-[1.02] sm:flex-none ${theme.softSurface}`}>
                         <Video className="h-4 w-4" />
                         Video
                       </button>
@@ -1167,14 +1230,14 @@ export default function UserProfilePage() {
                   </>
                 )}
                 {isCurrentUser && (
-                  <button onClick={openEdit} className={`inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-bold shadow-lg transition hover:scale-[1.02] sm:flex-none ${theme.accentBg}`}>
+                  <button onClick={openEdit} className={`inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-bold shadow-lg transition hover:scale-[1.02] sm:flex-none ${theme.accentBg} ${isPremiumProfile ? "shadow-[0_0_0_1px_rgba(212,167,44,0.25),0_6px_24px_-8px_rgba(212,167,44,0.55)]" : ""}`}>
                     <Edit3 className="h-4 w-4" />
                     Edit Profile
                   </button>
                 )}
-                <button onClick={() => setContactOpen(true)} className={`inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full border px-4 py-3 text-sm font-bold transition sm:flex-none ${theme.softSurface}`}>
-                  <Mail className="h-4 w-4" />
-                  Contact
+                <button onClick={shareProfile} className={`inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full border px-4 py-3 text-sm font-bold transition hover:scale-[1.02] sm:flex-none ${theme.softSurface}`}>
+                  <Share2 className="h-4 w-4" />
+                  Share
                 </button>
                 <MoreMenu
                   open={moreOpen}
@@ -1187,28 +1250,43 @@ export default function UserProfilePage() {
               </div>
             </div>
 
-            <div className="mt-5 grid gap-2 sm:mt-6 sm:gap-3 sm:grid-cols-3">
+            {/* Premium membership + completion status row */}
+            <div className="mt-5 grid gap-2 sm:mt-6 sm:grid-cols-3 sm:gap-3">
               <InfoTile theme={theme} label="Profile Completion" icon={Target}>
-                <div className="mt-2 flex items-center justify-between">
+                <div className="mt-3 flex items-center justify-between gap-2">
                   <span className="text-2xl font-black">{completionPercent}%</span>
+                  <span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold capitalize ${theme.muted}`}>
+                    {completionPercent === 100 ? "Complete" : "In progress"}
+                  </span>
                 </div>
-                <div className={`mt-3 h-2 overflow-hidden rounded-full ${isPremiumProfile ? "bg-amber-50/10" : "bg-slate-200 dark:bg-white/10"}`}>
-                  <motion.div initial={{ width: 0 }} animate={{ width: `${completionPercent}%` }} transition={{ duration: 0.9 }} className={`h-full rounded-full ${isPremiumProfile ? "bg-gradient-to-r from-amber-400 to-yellow-100" : "bg-gradient-to-r from-blue-600 to-cyan-400"}`} />
+                <div className={`mt-3 h-2 overflow-hidden rounded-full ${theme.mutedSoft}`}>
+                  <motion.div initial={{ width: 0 }} animate={{ width: `${completionPercent}%` }} transition={{ duration: 0.9 }} className={`h-full rounded-full ${theme.accentGradient}`} style={isPremiumProfile ? { boxShadow: "0 0 12px rgba(212,167,44,0.55)" } : undefined} />
                 </div>
               </InfoTile>
               <InfoTile theme={theme} label="Availability" icon={CircleDot}>
-                <p className="mt-2 text-lg font-black">{user.status || (isUserOnline ? "Online now" : "Not specified")}</p>
+                <p className="mt-3 text-lg font-black">{user.status || (isUserOnline ? "Online now" : "Not specified")}</p>
+                <span className={`mt-2 inline-block rounded-full border px-2 py-0.5 text-[11px] font-bold uppercase ${theme.muted}`}>
+                  {user.status ? "Open to work" : "—"}
+                </span>
               </InfoTile>
               <InfoTile theme={theme} label="Company" icon={Briefcase}>
-                <p className="mt-2 text-lg font-black">{user.company || "Not added"}</p>
+                <p className="mt-3 text-lg font-black">{user.company || "Not added"}</p>
+                {user.company && <span className={`mt-2 inline-block rounded-full border px-2 py-0.5 text-[11px] font-bold uppercase ${theme.muted}`}>Current</span>}
               </InfoTile>
             </div>
           </div>
         </motion.section>
 
-        <section className="mt-4 grid grid-cols-2 gap-2 sm:mt-5 sm:grid-cols-3 sm:gap-3 lg:grid-cols-3 xl:grid-cols-9">
+        {/* ============ STATS ROW ============ */}
+        <section className="mt-4 grid grid-cols-2 gap-2 sm:mt-5 sm:grid-cols-4 sm:gap-3 lg:grid-cols-7">
           {stats.map(({ label, value, icon: Icon, action }, index) => (
-            <motion.button key={label} {...cardMotion} transition={{ duration: 0.35, delay: index * 0.025 }} onClick={action} className={`group min-w-0 rounded-2xl border p-3 text-left transition hover:-translate-y-1 hover:shadow-xl sm:p-4 ${theme.surface}`}>
+            <motion.button
+              key={label}
+              {...cardMotion}
+              transition={{ duration: 0.35, delay: index * 0.025 }}
+              onClick={action}
+              className={`group min-w-0 rounded-2xl border p-3 text-left transition hover:-translate-y-1 hover:shadow-xl sm:p-4 ${theme.surface}`}
+            >
               <Icon className={`mb-3 h-5 w-5 ${theme.accent}`} />
               <p className="break-words text-xl font-black sm:text-2xl">{typeof value === "number" ? <CountUp value={value} /> : <span className="text-sm sm:text-base">Not available</span>}</p>
               <p className={`mt-1 text-xs font-bold uppercase ${theme.muted}`}>{label}</p>
@@ -1216,216 +1294,336 @@ export default function UserProfilePage() {
           ))}
         </section>
 
-        <div className="mt-5 grid min-w-0 gap-5 sm:mt-6 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <div className="min-w-0 space-y-5 sm:space-y-6">
-            <motion.section {...cardMotion} className={`rounded-3xl border p-4 sm:p-6 ${theme.surface}`}>
-              <div className="scrollbar-hide -mx-1 flex snap-x snap-mandatory gap-2 overflow-x-auto overscroll-x-contain scroll-smooth px-1 pb-1 sm:flex-wrap sm:overflow-visible">
+        {/* ============ HORIZONTAL NAV ============ */}
+        <nav className={`sticky top-[64px] z-30 mt-5 rounded-2xl border backdrop-blur-xl ${theme.surface} lg:top-[66px]`}>
+          <div className="scrollbar-hide -mx-1 flex snap-x snap-mandatory gap-1 overflow-x-auto overscroll-x-contain scroll-smooth px-1 py-2 sm:px-2">
+            {navSections.map((section) => (
+              <button
+                key={section}
+                onClick={() => scrollToSection(section)}
+                className={`min-h-11 shrink-0 snap-start rounded-full px-4 py-2 text-sm font-bold transition sm:px-5 ${activeSection === section ? theme.accentBg : theme.chip}`}
+              >
+                {section}
+              </button>
+            ))}
+          </div>
+        </nav>
+
+        {/* ============ MAIN TWO-COLUMN LAYOUT ============ */}
+        <div className="mt-5 grid min-w-0 gap-5 sm:mt-6 sm:gap-6 lg:grid-cols-[360px_minmax(0,1fr)] lg:gap-6">
+          {/* ---------- RIGHT SIDEBAR (mirrored to the left on desktop) ---------- */}
+          <aside className="order-1 hidden space-y-5 lg:order-none lg:sticky lg:top-[200px] lg:block lg:self-start">
+            <div ref={(node) => { sectionRefs.current["Connections"] = node; }} className="scroll-mt-40 space-y-5">
+              {isCurrentUser && (
+<SidebarCard title="Premium Membership" icon={Sparkles} theme={theme} glow={isPremiumProfile}>
+                  <p className={`text-sm ${theme.muted}`}>
+                    {premiumLoading
+                      ? "Checking premium status..."
+                      : premiumStatus?.isPremium
+                        ? `Active, ${premiumStatus.daysRemaining} day(s) left`
+                        : "Inactive"}
+                  </p>
+                  {premiumStatus?.paymentMethod?.last4 && (
+                    <p className={`mt-2 text-xs ${theme.muted}`}>
+                      {premiumStatus.paymentMethod.brand || "Card"} ending in {premiumStatus.paymentMethod.last4}
+                    </p>
+                  )}
+                  {canRenewPremium && (
+                    <button onClick={handleActivatePremium} disabled={premiumActionLoading || premiumLoading} className={`mt-4 w-full rounded-full px-4 py-2.5 text-sm font-black disabled:opacity-60 ${theme.accentBg} ${isPremiumProfile ? "shadow-[0_0_0_1px_rgba(212,167,44,0.25),0_6px_24px_-8px_rgba(212,167,44,0.55)]" : ""}`}>
+                      {premiumActionLoading ? "Redirecting..." : premiumStatus?.isPremium ? "Renew Premium" : "Activate Premium"}
+                    </button>
+                  )}
+                  {premiumError && <p className="mt-3 text-xs text-red-400">{premiumError}</p>}
+                  {premiumMessage && <p className="mt-3 text-xs text-gray-400">{premiumMessage}</p>}
+                </SidebarCard>
+              )}
+
+<ProfileStrength theme={theme} isPremium={isPremiumProfile} completionPercent={completionPercent} completionItems={completionItems} />
+
+              <div ref={(node) => { sectionRefs.current["Analytics"] = node; }} className="scroll-mt-40">
+                <SidebarCard title="Analytics" icon={BarChart3} theme={theme}>
+                  <div className="grid grid-cols-2 gap-3">
+                    <SidebarStat label="Profile Views" value={user.profileViews} icon={Eye} theme={theme} />
+                    <SidebarStat label="Connections" value={typeof connectionCount === "number" ? connectionCount : undefined} icon={LinkIcon} theme={theme} />
+                    <SidebarStat label="Followers" value={user.followersCount} icon={Users} theme={theme} />
+                    <SidebarStat label="Posts" value={posts.length} icon={FileText} theme={theme} />
+                  </div>
+                </SidebarCard>
+              </div>
+            </div>
+
+            <div ref={(node) => { sectionRefs.current["Settings"] = node; }} className="scroll-mt-40">
+              <SidebarCard title="Actions" icon={Zap} theme={theme}>
                 {actionButtons.filter((button) => button.show !== false).map(({ Icon, label, action }) => (
-                  <button key={label} onClick={action} disabled={!action && !["QR Code"].includes(label)} className={`inline-flex min-h-11 shrink-0 snap-start items-center gap-2 rounded-full border px-4 py-2.5 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${theme.chip}`}>
+                  <button key={label} onClick={action} disabled={!action} className={`mb-2 flex w-full items-center gap-3 rounded-full border px-4 py-2.5 text-sm font-bold transition hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-50 ${theme.chip}`}>
                     <Icon className="h-4 w-4" />
                     {label}
                   </button>
                 ))}
+                {isCurrentUser && (
+                  <button onClick={() => router.push("/settings")} className={`flex w-full items-center gap-3 rounded-full border px-4 py-2.5 text-sm font-bold transition hover:scale-[1.01] ${theme.chip}`}>
+                    <Settings className="h-4 w-4" />
+                    Settings
+                  </button>
+                )}
+              </SidebarCard>
+            </div>
+
+            <SidebarCard title="Recent Activity" icon={Activity} theme={theme}>
+              {posts[0] ? (
+                <button onClick={() => router.push(`/feed?postId=${encodeURIComponent(posts[0].id)}`)} className={`w-full rounded-2xl border p-3 text-left text-sm ${theme.softSurface}`}>
+                  <p className="font-bold text-white">Latest post</p>
+                  <p className={`mt-1 line-clamp-2 ${theme.muted}`}>{getPostPreviewText(posts[0].content) || "Media post"}</p>
+                </button>
+              ) : (
+                <EmptyMini title="No recent activity" />
+              )}
+            </SidebarCard>
+
+            <SidebarCard title="Social Links" icon={LinkIcon} theme={theme}>
+              <div className="grid grid-cols-2 gap-2">
+                {user.social?.github && <SocialLink theme={theme} href={normalizeUrl(user.social.github)} icon={Github} label="GitHub" />}
+                {user.social?.linkedin && <SocialLink theme={theme} href={normalizeUrl(user.social.linkedin)} icon={Linkedin} label="LinkedIn" />}
+                {user.social?.twitter && <SocialLink theme={theme} href={normalizeUrl(user.social.twitter)} icon={LinkIcon} label="X / Twitter" />}
+                {user.social?.instagram && <SocialLink theme={theme} href={normalizeUrl(user.social.instagram)} icon={LinkIcon} label="Instagram" />}
+                {user.website && <SocialLink theme={theme} href={normalizeUrl(user.website)} icon={Globe} label="Website" />}
               </div>
-            </motion.section>
-
-            <InstagramPanel
-              theme={theme}
-              posts={posts}
-              mediaItems={mediaItems}
-              photoItems={photoItems}
-              reelItems={reelItems}
-              isCurrentUser={isCurrentUser}
-              routerPush={(postId) => router.push(`/feed?postId=${encodeURIComponent(postId)}`)}
-              getPostPreviewText={getPostPreviewText}
-            />
-
-            <CollapsibleSection title="About" icon={User} theme={theme} defaultOpen>
-              {user.bio ? (
-                <p className={`whitespace-pre-line leading-7 ${theme.muted}`}>{user.bio}</p>
-              ) : (
-                <EmptyState icon={User} title="No about section yet" description={isCurrentUser ? "Add a bio to help visitors understand your story and goals." : "This member has not added an about section."} />
+              {!Object.values(user.social || {}).some(Boolean) && !user.website && (
+                <EmptyMini title="No social links added" />
               )}
-            </CollapsibleSection>
+            </SidebarCard>
+          </aside>
 
-            <CollapsibleSection title="Experience" icon={Briefcase} theme={theme}>
-              {user.experiences?.length ? (
-                <div className="space-y-5">
-                  {user.experiences.map((item, index) => (
-                    <TimelineItem key={`${item.company || item.companyName || index}`} theme={theme} logo={item.logo} fallback={item.company || item.companyName || item.position || item.title} title={item.position || item.title || "Untitled role"} subtitle={item.company || item.companyName || "Company not added"} meta={[item.employmentType, item.duration, item.location].filter(Boolean).join(" · ")} description={item.description} achievements={item.achievements} />
-                  ))}
-                </div>
-              ) : (
-                <EmptyState icon={Briefcase} title="No experience added" description={isCurrentUser ? "Add work experience to make your profile more professional." : "This member has not added experience."} />
-              )}
-            </CollapsibleSection>
+          {/* ---------- MAIN CONTENT COLUMN (mirrored to the right on desktop) ---------- */}
+          <div className="order-2 min-w-0 space-y-5 sm:space-y-6 lg:order-none">
+            {/* Overview section */}
+            <div ref={(node) => { sectionRefs.current["Overview"] = node; }} className="scroll-mt-40 space-y-5 sm:space-y-6">
+              <CollapsibleSection title="About" icon={User} theme={theme} defaultOpen>
+                {user.bio ? (
+                  <p className={`whitespace-pre-line leading-7 ${theme.muted}`}>{user.bio}</p>
+                ) : (
+                  <EmptyState icon={User} title="No about section yet" description={isCurrentUser ? "Add a bio to help visitors understand your story and goals." : "This member has not added an about section."} />
+                )}
+              </CollapsibleSection>
 
-            <CollapsibleSection title="Education" icon={GraduationCap} theme={theme}>
-              {user.educationHistory?.length ? (
-                <div className="space-y-5">
-                  {user.educationHistory.map((item, index) => (
-                    <TimelineItem key={`${item.institute || item.school || index}`} theme={theme} logo={item.logo} fallback={item.institute || item.instituteName || item.school || item.degree} title={item.degree || "Degree not added"} subtitle={item.institute || item.instituteName || item.school || "Institute not added"} meta={[item.field, item.duration, item.grade].filter(Boolean).join(" · ")} description={item.activities} />
-                  ))}
-                </div>
-              ) : user.education ? (
-                <TimelineItem theme={theme} fallback={user.education} title={user.education} subtitle="Education" />
-              ) : (
-                <EmptyState icon={GraduationCap} title="No education added" description={isCurrentUser ? "Add your education to complete your professional background." : "This member has not added education."} />
-              )}
-            </CollapsibleSection>
-
-            <CollapsibleSection title="Skills" icon={Code2} theme={theme}>
-              {user.skills?.length ? (
-                <div className="flex flex-wrap gap-2">
-                  {user.skills.map((skill, index) => {
-                    const name = typeof skill === "string" ? skill : skill.name || skill.title;
-                    const endorsements = typeof skill === "string" ? undefined : skill.endorsements;
-                    if (!name) return null;
-                    return (
-                      <span key={`${name}-${index}`} className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-bold ${theme.chip}`}>
-                        {name}
-                        {typeof endorsements === "number" && <span className="rounded-full bg-black/10 px-2 py-0.5 text-xs dark:bg-white/10">{endorsements}</span>}
-                      </span>
-                    );
-                  })}
-                </div>
-              ) : (
-                <EmptyState icon={Code2} title="No skills added" description={isCurrentUser ? "Add skills so people can understand what you do best." : "This member has not added skills."} />
-              )}
-            </CollapsibleSection>
-
-            <CollapsibleSection title="Certifications" icon={Award} theme={theme}>
-              {user.certifications?.length ? (
-                <div className="grid gap-4 md:grid-cols-2">
-                  {user.certifications.map((cert, index) => (
-                    <DataCard key={`${cert.title || cert.name || index}`} theme={theme} icon={Award} title={cert.title || cert.name || "Untitled certificate"} subtitle={[cert.issuer, cert.issueDate].filter(Boolean).join(" · ")} href={cert.credentialUrl} />
-                  ))}
-                </div>
-              ) : (
-                <EmptyState icon={Award} title="No certifications added" description={isCurrentUser ? "Add certificates or credentials to strengthen your profile." : "This member has not added certifications."} />
-              )}
-            </CollapsibleSection>
-
-            <CollapsibleSection title="Projects" icon={Rocket} theme={theme}>
-              {user.projects?.length ? (
-                <div className="grid gap-4 md:grid-cols-2">
-                  {user.projects.map((project, index) => (
-                    <ProjectCard key={`${project.title || project.name || index}`} project={project} theme={theme} />
-                  ))}
-                </div>
-              ) : (
-                <EmptyState icon={Rocket} title="No projects added" description={isCurrentUser ? "Add projects to showcase what you have built." : "This member has not added projects."} />
-              )}
-            </CollapsibleSection>
-
-            <CollapsibleSection title="Achievements" icon={Trophy} theme={theme}>
-              {user.achievements?.length ? (
-                <div className="grid gap-4 md:grid-cols-2">
-                  {user.achievements.map((achievement, index) => (
-                    <DataCard key={`${achievement.title || achievement.name || index}`} theme={theme} icon={Trophy} title={achievement.title || achievement.name || "Untitled achievement"} subtitle={[achievement.issuer, achievement.date].filter(Boolean).join(" · ")} description={achievement.description} />
-                  ))}
-                </div>
-              ) : (
-                <EmptyState icon={Trophy} title="No achievements added" description={isCurrentUser ? "Add awards, badges, hackathons, or competitions." : "This member has not added achievements."} />
-              )}
-            </CollapsibleSection>
-
-            <CollapsibleSection title="Languages & Interests" icon={Languages} theme={theme}>
-              {user.languages?.length || user.interests?.length ? (
-                <div className="grid gap-6 md:grid-cols-2">
-                  <div className="space-y-3">
-                    {user.languages?.map((language, index) => (
-                      <div key={`${language.name || language.language || index}`} className={`rounded-2xl border p-4 ${theme.softSurface}`}>
-                        <p className="font-black">{language.name || language.language || "Language"}</p>
-                        {language.proficiency && <p className={`mt-1 text-sm ${theme.muted}`}>{language.proficiency}</p>}
-                      </div>
-                    ))}
+              {/* Portfolio / Visual Profile */}
+              <div ref={(node) => { sectionRefs.current["Portfolio"] = node; }} className="scroll-mt-40">
+                <motion.section {...cardMotion} className={`rounded-3xl border p-5 sm:p-6 ${theme.surface}`}>
+                <div className="mb-5 flex items-center gap-3">
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-2xl ${theme.iconBox}`}>
+                    <Grid3X3 className="h-5 w-5" />
                   </div>
-                  <div className="flex flex-wrap content-start gap-2">
-                    {user.interests?.map((interest) => (
-                      <span key={interest} className={`rounded-full border px-3 py-2 text-sm font-bold ${theme.chip}`}>{interest}</span>
-                    ))}
+                  <div>
+                    <h2 className="text-xl font-black text-white">Portfolio</h2>
+                    <p className={`text-sm ${theme.muted}`}>Photos, reels and media from your posts.</p>
                   </div>
                 </div>
-              ) : (
-                <EmptyState icon={Languages} title="No languages or interests added" description={isCurrentUser ? "Add languages and interests to make your profile more discoverable." : "This member has not added languages or interests."} />
-              )}
-            </CollapsibleSection>
-
-            <CollapsibleSection title="Resume & Portfolio" icon={Download} theme={theme}>
-              {user.resume || user.portfolio || user.website ? (
-                <div className="grid gap-4 md:grid-cols-2">
-                  <DataCard theme={theme} icon={FileText} title="Resume" subtitle={user.resume ? "Available" : "Not added"} href={user.resume ? normalizeUrl(user.resume) : undefined} />
-                  <DataCard theme={theme} icon={Globe} title="Portfolio" subtitle={user.portfolio || user.website || "Not added"} href={normalizeUrl(user.portfolio || user.website)} />
+                <div className="grid gap-4 lg:grid-cols-3">
+                  <MediaPreview title="Photos" items={photoItems} theme={theme} routerPush={(id) => router.push(`/feed?postId=${encodeURIComponent(id)}`)} empty="No photos yet" />
+                  <MediaPreview title="Reels" items={reelItems} theme={theme} routerPush={(id) => router.push(`/feed?postId=${encodeURIComponent(id)}`)} empty="No reels yet" />
+                  <MediaPreview title="Media" items={mediaItems} theme={theme} routerPush={(id) => router.push(`/feed?postId=${encodeURIComponent(id)}`)} empty="No media yet" />
                 </div>
-              ) : (
-                <EmptyState icon={Download} title="No resume or portfolio added" description={isCurrentUser ? "Add a resume or portfolio link for visitors." : "This member has not added a resume or portfolio."} />
-              )}
-            </CollapsibleSection>
-
-            <CollapsibleSection title="Recommendations" icon={Star} theme={theme}>
-              {user.recommendations?.length ? (
-                <div className="space-y-4">
-                  {user.recommendations.map((item, index) => (
-                    <DataCard key={`${item.name || item.author || index}`} theme={theme} icon={Star} title={item.name || item.author || "Recommendation"} subtitle={item.headline || formatDate(item.createdAt)} description={item.text} />
-                  ))}
-                </div>
-              ) : (
-                <EmptyState icon={Star} title="No recommendations yet" description={isCurrentUser ? "Recommendations you receive will appear here." : "This member has not received recommendations yet."} />
-              )}
-            </CollapsibleSection>
-
-            <CollapsibleSection title="Activity Feed" icon={BarChart3} theme={theme} defaultOpen>
-              <div className="scrollbar-hide -mx-1 overflow-x-auto overscroll-x-contain scroll-smooth px-1 pb-2">
-                <div className="flex w-max snap-x snap-mandatory gap-2">
-                  {activityTabs.map((tab) => (
-                    <button
-                      key={tab}
-                      ref={(node) => {
-                        activityTabRefs.current[tab] = node;
-                      }}
-                      onClick={() => selectActivityTab(tab)}
-                      className={`min-h-11 shrink-0 snap-center rounded-full px-4 py-2 text-sm font-bold transition ${activeTab === tab ? theme.accentBg : theme.chip}`}
-                    >
-                      {tab}
-                    </button>
-                  ))}
-                </div>
+                </motion.section>
               </div>
 
-              <AnimatePresence mode="wait">
-                <motion.div key={activeTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.22 }} className="mt-5">
-                  {activeTab === "Posts" && (
-                    <PostActivity
-                      posts={posts}
-                      isCurrentUser={isCurrentUser}
-                      isPrivatePostsLocked={isPrivatePostsLocked}
-                      editingPostId={editingPostId}
-                      editPostText={editPostText}
-                      deletingId={deletingId}
-                      setEditingPostId={setEditingPostId}
-                      setEditPostText={setEditPostText}
-                      saveEdit={saveEdit}
-                      deletePost={deletePost}
-                      toggleLike={toggleLike}
-                      routerPush={(postId) => router.push(`/feed?postId=${encodeURIComponent(postId)}`)}
-                      formatDate={formatDate}
-                      getPostPreviewText={getPostPreviewText}
-                    />
-                  )}
-                  {activeTab === "Reels" && <MediaGrid items={reelItems} routerPush={(postId) => router.push(`/feed?postId=${encodeURIComponent(postId)}`)} emptyTitle="No reels yet" emptyDescription={isCurrentUser ? "Video posts will appear here." : "This member has not shared reels."} />}
-                  {activeTab === "Media" && <MediaGrid items={mediaItems} routerPush={(postId) => router.push(`/feed?postId=${encodeURIComponent(postId)}`)} emptyTitle="No media yet" emptyDescription={isCurrentUser ? "Photos and videos from posts will appear here." : "This member has not shared media."} />}
-                  {["Articles", "Likes", "Comments", "Bookmarks"].includes(activeTab) && (
-                    <EmptyState icon={Lock} title={`No ${activeTab.toLowerCase()} available`} description={activeTab === "Bookmarks" ? "Saved posts are private." : "This tab has no available data yet."} />
-                  )}
-                </motion.div>
-              </AnimatePresence>
-            </CollapsibleSection>
+              <CollapsibleSection title="Services" icon={Briefcase} theme={theme}>
+                {user.skills?.length ? (
+                  <div className="flex flex-wrap gap-2">
+                    {user.skills.map((skill, index) => {
+                      const name = typeof skill === "string" ? skill : skill.name || skill.title;
+                      if (!name) return null;
+                      return (
+                        <span key={`svc-${name}-${index}`} className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-bold ${theme.chip}`}>
+                          <Check className="h-4 w-4 opacity-70" />
+                          {name}
+                        </span>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <EmptyState icon={Briefcase} title="No services listed" description={isCurrentUser ? "Add skills to showcase the services you offer." : "This member hasn't listed services yet."} />
+                )}
+              </CollapsibleSection>
 
+              <CollapsibleSection title="Experience" icon={Briefcase} theme={theme}>
+                {user.experiences?.length ? (
+                  <div className="space-y-5">
+                    {user.experiences.map((item, index) => (
+                      <TimelineItem key={`${item.company || item.companyName || index}`} theme={theme} logo={item.logo} fallback={item.company || item.companyName || item.position || item.title} title={item.position || item.title || "Untitled role"} subtitle={item.company || item.companyName || "Company not added"} meta={[item.employmentType, item.duration, item.location].filter(Boolean).join(" · ")} description={item.description} achievements={item.achievements} />
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState icon={Briefcase} title="No experience added" description={isCurrentUser ? "Add work experience to make your profile more professional." : "This member has not added experience."} />
+                )}
+              </CollapsibleSection>
+
+              <CollapsibleSection title="Education" icon={GraduationCap} theme={theme}>
+                {user.educationHistory?.length ? (
+                  <div className="space-y-5">
+                    {user.educationHistory.map((item, index) => (
+                      <TimelineItem key={`${item.institute || item.school || index}`} theme={theme} logo={item.logo} fallback={item.institute || item.instituteName || item.school || item.degree} title={item.degree || "Degree not added"} subtitle={item.institute || item.instituteName || item.school || "Institute not added"} meta={[item.field, item.duration, item.grade].filter(Boolean).join(" · ")} description={item.activities} />
+                    ))}
+                  </div>
+                ) : user.education ? (
+                  <TimelineItem theme={theme} fallback={user.education} title={user.education} subtitle="Education" />
+                ) : (
+                  <EmptyState icon={GraduationCap} title="No education added" description={isCurrentUser ? "Add your education to complete your professional background." : "This member has not added education."} />
+                )}
+              </CollapsibleSection>
+
+              <CollapsibleSection title="Skills" icon={Code2} theme={theme}>
+                {user.skills?.length ? (
+                  <div className="flex flex-wrap gap-2">
+                    {user.skills.map((skill, index) => {
+                      const name = typeof skill === "string" ? skill : skill.name || skill.title;
+                      const endorsements = typeof skill === "string" ? undefined : skill.endorsements;
+                      if (!name) return null;
+                      return (
+                        <span key={`${name}-${index}`} className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-bold ${theme.chip}`}>
+                          {name}
+                          {typeof endorsements === "number" && <span className="rounded-full bg-black/20 px-2 py-0.5 text-xs">{endorsements}</span>}
+                        </span>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <EmptyState icon={Code2} title="No skills added" description={isCurrentUser ? "Add skills so people can understand what you do best." : "This member has not added skills."} />
+                )}
+              </CollapsibleSection>
+
+              <CollapsibleSection title="Certifications" icon={Award} theme={theme}>
+                {user.certifications?.length ? (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {user.certifications.map((cert, index) => (
+                      <DataCard key={`${cert.title || cert.name || index}`} theme={theme} icon={Award} title={cert.title || cert.name || "Untitled certificate"} subtitle={[cert.issuer, cert.issueDate].filter(Boolean).join(" · ")} href={cert.credentialUrl} />
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState icon={Award} title="No certifications added" description={isCurrentUser ? "Add certificates or credentials to strengthen your profile." : "This member has not added certifications."} />
+                )}
+              </CollapsibleSection>
+
+              <CollapsibleSection title="Projects" icon={Rocket} theme={theme}>
+                {user.projects?.length ? (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {user.projects.map((project, index) => (
+                      <ProjectCard key={`${project.title || project.name || index}`} project={project} theme={theme} />
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState icon={Rocket} title="No projects added" description={isCurrentUser ? "Add projects to showcase what you have built." : "This member has not added projects."} />
+                )}
+              </CollapsibleSection>
+
+              <CollapsibleSection title="Achievements" icon={Trophy} theme={theme}>
+                {user.achievements?.length ? (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {user.achievements.map((achievement, index) => (
+                      <DataCard key={`${achievement.title || achievement.name || index}`} theme={theme} icon={Trophy} title={achievement.title || achievement.name || "Untitled achievement"} subtitle={[achievement.issuer, achievement.date].filter(Boolean).join(" · ")} description={achievement.description} />
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState icon={Trophy} title="No achievements added" description={isCurrentUser ? "Add awards, badges, hackathons, or competitions." : "This member has not added achievements."} />
+                )}
+              </CollapsibleSection>
+
+              <CollapsibleSection title="Languages & Interests" icon={Languages} theme={theme}>
+                {user.languages?.length || user.interests?.length ? (
+                  <div className="grid gap-6 md:grid-cols-2">
+                    <div className="space-y-3">
+                      {user.languages?.map((language, index) => (
+                        <div key={`${language.name || language.language || index}`} className={`rounded-2xl border p-4 ${theme.softSurface}`}>
+                          <p className="font-black text-white">{language.name || language.language || "Language"}</p>
+                          {language.proficiency && <p className={`mt-1 text-sm ${theme.muted}`}>{language.proficiency}</p>}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap content-start gap-2">
+                      {user.interests?.map((interest) => (
+                        <span key={interest} className={`rounded-full border px-3 py-2 text-sm font-bold ${theme.chip}`}>{interest}</span>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <EmptyState icon={Languages} title="No languages or interests added" description={isCurrentUser ? "Add languages and interests to make your profile more discoverable." : "This member has not added languages or interests."} />
+                )}
+              </CollapsibleSection>
+
+              <CollapsibleSection title="Resume & Portfolio" icon={Download} theme={theme}>
+                {user.resume || user.portfolio || user.website ? (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <DataCard theme={theme} icon={FileText} title="Resume" subtitle={user.resume ? "Available" : "Not added"} href={user.resume ? normalizeUrl(user.resume) : undefined} />
+                    <DataCard theme={theme} icon={Globe} title="Portfolio" subtitle={user.portfolio || user.website || "Not added"} href={normalizeUrl(user.portfolio || user.website)} />
+                  </div>
+                ) : (
+                  <EmptyState icon={Download} title="No resume or portfolio added" description={isCurrentUser ? "Add a resume or portfolio link for visitors." : "This member has not added a resume or portfolio."} />
+                )}
+              </CollapsibleSection>
+
+              <CollapsibleSection title="Recommendations" icon={Star} theme={theme}>
+                {user.recommendations?.length ? (
+                  <div className="space-y-4">
+                    {user.recommendations.map((item, index) => (
+                      <DataCard key={`${item.name || item.author || index}`} theme={theme} icon={Star} title={item.name || item.author || "Recommendation"} subtitle={item.headline || formatDate(item.createdAt)} description={item.text} />
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState icon={Star} title="No recommendations yet" description={isCurrentUser ? "Recommendations you receive will appear here." : "This member has not received recommendations yet."} />
+                )}
+              </CollapsibleSection>
+            </div>
+
+            {/* Activity Feed section */}
+            <div ref={(node) => { sectionRefs.current["Activity"] = node; }} className="scroll-mt-40">
+              <CollapsibleSection title="Activity Feed" icon={BarChart3} theme={theme} defaultOpen>
+                <div className="scrollbar-hide -mx-1 overflow-x-auto overscroll-x-contain scroll-smooth px-1 pb-2">
+                  <div className="flex w-max snap-x snap-mandatory gap-2">
+                    {activityTabs.map((tab) => (
+                      <button
+                        key={tab}
+                        ref={(node) => { activityTabRefs.current[tab] = node; }}
+                        onClick={() => selectActivityTab(tab)}
+                        className={`min-h-11 shrink-0 snap-center rounded-full px-4 py-2 text-sm font-bold transition ${activeTab === tab ? theme.accentBg : theme.chip}`}
+                      >
+                        {tab}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <AnimatePresence mode="wait">
+                  <motion.div key={activeTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.22 }} className="mt-5">
+                    {activeTab === "Posts" && (
+                      <PostActivity
+                        posts={posts}
+                        isCurrentUser={isCurrentUser}
+                        isPrivatePostsLocked={isPrivatePostsLocked}
+                        editingPostId={editingPostId}
+                        editPostText={editPostText}
+                        deletingId={deletingId}
+                        setEditingPostId={setEditingPostId}
+                        setEditPostText={setEditPostText}
+                        saveEdit={saveEdit}
+                        deletePost={deletePost}
+                        toggleLike={toggleLike}
+                        routerPush={(postId) => router.push(`/feed?postId=${encodeURIComponent(postId)}`)}
+                        formatDate={formatDate}
+                        getPostPreviewText={getPostPreviewText}
+                      />
+                    )}
+                    {activeTab === "Reels" && <MediaGrid items={reelItems} routerPush={(postId) => router.push(`/feed?postId=${encodeURIComponent(postId)}`)} emptyTitle="No reels yet" emptyDescription={isCurrentUser ? "Video posts will appear here." : "This member has not shared reels."} />}
+                    {activeTab === "Media" && <MediaGrid items={mediaItems} routerPush={(postId) => router.push(`/feed?postId=${encodeURIComponent(postId)}`)} emptyTitle="No media yet" emptyDescription={isCurrentUser ? "Photos and videos from posts will appear here." : "This member has not shared media."} />}
+                  </motion.div>
+                </AnimatePresence>
+              </CollapsibleSection>
+            </div>
+
+            {/* Mobile-only insight sections */}
             <div className="space-y-5 lg:hidden">
               <MobileInsightSections
                 theme={theme}
                 isCurrentUser={isCurrentUser}
+                isPremiumProfile={isPremiumProfile}
                 completionPercent={completionPercent}
                 completionItems={completionItems}
                 premiumLoading={premiumLoading}
@@ -1439,68 +1637,14 @@ export default function UserProfilePage() {
             </div>
           </div>
 
-          <aside className="hidden space-y-5 lg:sticky lg:top-20 lg:block lg:self-start">
-            {isCurrentUser && (
-              <SidebarCard title="Premium Membership" icon={Sparkles} theme={theme}>
-                <p className={`text-sm ${theme.muted}`}>
-                  {premiumLoading
-                    ? "Checking premium status..."
-                    : premiumStatus?.isPremium
-                      ? `Active, ${premiumStatus.daysRemaining} day(s) left`
-                      : "Inactive"}
-                </p>
-                {premiumStatus?.paymentMethod?.last4 && (
-                  <p className={`mt-2 text-xs ${theme.muted}`}>
-                    {premiumStatus.paymentMethod.brand || "Card"} ending in {premiumStatus.paymentMethod.last4}
-                  </p>
-                )}
-                {canRenewPremium && (
-                  <button onClick={handleActivatePremium} disabled={premiumActionLoading || premiumLoading} className={`mt-4 w-full rounded-full px-4 py-2.5 text-sm font-black disabled:opacity-60 ${theme.accentBg}`}>
-                    {premiumActionLoading ? "Redirecting..." : premiumStatus?.isPremium ? "Renew Premium" : "Activate Premium"}
-                  </button>
-                )}
-                {premiumError && <p className="mt-3 text-xs text-red-500">{premiumError}</p>}
-                {premiumMessage && <p className="mt-3 text-xs text-gray-500">{premiumMessage}</p>}
-              </SidebarCard>
-            )}
-
-            <ProfileStrength theme={theme} completionPercent={completionPercent} completionItems={completionItems} />
-            <SidebarCard title="Recent Visitors" icon={Eye} theme={theme}>
-              <EmptyMini title="No visitor data available" />
-            </SidebarCard>
-            <SidebarCard title="Suggested Connections" icon={Users} theme={theme}>
-              <EmptyMini title="No suggestions available" />
-            </SidebarCard>
-            <SidebarCard title="Communities" icon={CircleDot} theme={theme}>
-              <EmptyMini title="No communities joined" />
-            </SidebarCard>
-            <SidebarCard title="Trending Topics" icon={TrendingUp} theme={theme}>
-              <EmptyMini title="No trending topics available" />
-            </SidebarCard>
-            <SidebarCard title="Recent Activity" icon={BarChart3} theme={theme}>
-              {posts[0] ? (
-                <button onClick={() => router.push(`/feed?postId=${encodeURIComponent(posts[0].id)}`)} className={`w-full rounded-2xl border p-3 text-left text-sm ${theme.softSurface}`}>
-                  <p className="font-bold">Latest post</p>
-                  <p className={`mt-1 line-clamp-2 ${theme.muted}`}>{getPostPreviewText(posts[0].content) || "Media post"}</p>
-                </button>
-              ) : (
-                <EmptyMini title="No recent activity" />
-              )}
-            </SidebarCard>
-            <SidebarCard title="AI Suggestions" icon={Sparkles} theme={theme}>
-              <EmptyMini title={isCurrentUser ? "AI suggestions will appear when profile analysis data is available" : "No AI suggestions available"} />
-            </SidebarCard>
-            <SidebarCard title="Upcoming Events" icon={Calendar} theme={theme}>
-              <EmptyMini title="No upcoming events" />
-            </SidebarCard>
-          </aside>
         </div>
       </main>
 
-      <div className={`"border-slate-200 bg-white/90 dark:border-white/10 dark:bg-[#070a12]/90"}`}>
-        <div className="mx-auto grid max-w-md grid-cols-3 gap-2">
+      {/* ============ MOBILE BOTTOM ACTION BAR ============ */}
+      <div className={`fixed bottom-0 left-0 right-0 z-30 border-t backdrop-blur-2xl lg:hidden ${isPremiumProfile ? "border-white/10 bg-black/90" : "border-white/10 bg-[#0a0f1e]/90"}`}>
+        <div className="mx-auto grid max-w-md grid-cols-3 gap-2 px-3 py-2">
           <button onClick={isCurrentUser ? openEdit : handleFollowToggle} className={`min-h-11 truncate rounded-full px-2 py-3 text-sm font-bold ${theme.accentBg}`}>
-            {isCurrentUser ? "Edit" : user.isFollowing ? "Following" : "Connect"}
+            {isCurrentUser ? "Edit" : user.isFollowing ? "Following" : "Follow"}
           </button>
           <button onClick={() => setContactOpen(true)} className={`min-h-11 truncate rounded-full border px-2 py-3 text-sm font-bold ${theme.softSurface}`}>
             Contact
@@ -1511,6 +1655,7 @@ export default function UserProfilePage() {
         </div>
       </div>
 
+      {/* ============ CONTACT MODAL ============ */}
       <Modal open={contactOpen} onClose={() => setContactOpen(false)} title="Contact Information" theme={theme}>
         <div className="space-y-3">
           <ContactRow icon={Mail} label="Email" value={user.email} href={user.email ? `mailto:${user.email}` : undefined} theme={theme} />
@@ -1527,6 +1672,7 @@ export default function UserProfilePage() {
         </div>
       </Modal>
 
+      {/* ============ EDIT PROFILE MODAL ============ */}
       <Modal open={editOpen} onClose={() => setEditOpen(false)} title="Edit Profile" theme={theme}>
         <div className="grid max-h-[72vh] gap-4 overflow-y-auto pr-1">
           <div className={`rounded-2xl border p-4 ${theme.softSurface}`}>
@@ -1534,7 +1680,7 @@ export default function UserProfilePage() {
             <div className="flex items-center gap-3">
               <Avatar name={editForm.name || user.name} src={avatarPreview || user.avatar} size="preview" />
               <div>
-                <p className="font-black">{editForm.name || user.name}</p>
+                <p className="font-black text-white">{editForm.name || user.name}</p>
                 <p className={`text-sm ${theme.muted}`}>{editForm.profession || "Professional headline"}</p>
               </div>
             </div>
@@ -1568,7 +1714,7 @@ export default function UserProfilePage() {
             />
           </div>
           {imageError && (
-            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-200">
+            <div className="rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-300">
               {imageError}
             </div>
           )}
@@ -1577,7 +1723,7 @@ export default function UserProfilePage() {
           <Input label="X / Twitter" name="social.twitter" value={editForm.social.twitter} onChange={handleProfileInputChange} theme={theme} />
           <Input label="Instagram" name="social.instagram" value={editForm.social.instagram} onChange={handleProfileInputChange} theme={theme} />
 
-          <div className={`sticky bottom-0 flex gap-3 border-t pt-4 ${isPremiumProfile ? "border-amber-200/10 bg-[#10100d]" : "border-slate-200 bg-white dark:border-white/10 dark:bg-[#101624]"}`}>
+          <div className={`sticky bottom-0 flex gap-3 border-t pt-4 ${isPremiumProfile ? "border-white/10 bg-[#0b0f1e]" : "border-white/10 bg-[#0b0f1e]"}`}>
             <button onClick={saveProfile} disabled={savingProfile} className={`inline-flex flex-1 items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-black disabled:opacity-60 ${theme.accentBg}`}>
               <Save className="h-4 w-4" />
               {savingProfile ? "Saving..." : "Save Changes"}
@@ -1591,7 +1737,6 @@ export default function UserProfilePage() {
     </div>
   );
 }
-
 function ProfileSkeleton() {
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-8 text-slate-900 dark:bg-[#080b12] dark:text-white">
@@ -1762,7 +1907,7 @@ function Badge({
   premium?: boolean;
 }) {
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold shadow-lg ${premium ? "bg-amber-300 text-stone-950" : "bg-white/90 text-slate-950"}`}>
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${premium ? "bg-[#D4A72C] text-stone-950 shadow-[0_0_0_1px_rgba(212,167,44,0.30),0_0_12px_-4px_rgba(212,167,44,0.55)]" : "bg-white/90 text-slate-950 shadow-lg"}`}>
       <Icon className="h-3.5 w-3.5" />
       {label}
     </span>
@@ -1793,13 +1938,16 @@ function InlineEmpty({ text }: { text: string }) {
 
 type Theme = {
   page: string;
+  bar: string;
   surface: string;
   softSurface: string;
   text: string;
   muted: string;
+  mutedSoft: string;
   border: string;
   accent: string;
   accentBg: string;
+  accentGradient: string;
   chip: string;
   iconBox: string;
   avatar: string;
@@ -1866,74 +2014,6 @@ function MoreMenu({
         )}
       </AnimatePresence>
     </div>
-  );
-}
-
-function InstagramPanel({
-  theme,
-  posts,
-  mediaItems,
-  photoItems,
-  reelItems,
-  isCurrentUser,
-  routerPush,
-  getPostPreviewText,
-}: {
-  theme: Theme;
-  posts: Post[];
-  mediaItems: Array<{ src: string; postId: string; isVideo: boolean }>;
-  photoItems: Array<{ src: string; postId: string; isVideo: boolean }>;
-  reelItems: Array<{ src: string; postId: string; isVideo: boolean }>;
-  isCurrentUser: boolean;
-  routerPush: (postId: string) => void;
-  getPostPreviewText: (content?: string) => string;
-}) {
-  return (
-    <motion.section {...cardMotion} className={`rounded-3xl border p-5 sm:p-6 ${theme.surface}`}>
-      <div className="mb-5 flex items-center gap-3">
-        <div className={`flex h-10 w-10 items-center justify-center rounded-2xl ${theme.iconBox}`}>
-          <Grid3X3 className="h-5 w-5" />
-        </div>
-        <div>
-          <h2 className="text-xl font-black">Visual Profile</h2>
-          <p className={`text-sm ${theme.muted}`}>Posts, media, reels, tagged, and saved surfaces.</p>
-        </div>
-      </div>
-
-      <div className="mb-5 flex gap-3 overflow-x-auto pb-2">
-        {posts.slice(0, 8).map((post) => (
-          <button key={post.id} onClick={() => routerPush(post.id)} className="w-20 shrink-0 text-center">
-            <div className={`mx-auto flex h-16 w-16 items-center justify-center rounded-full border p-1 ${theme.avatar}`}>
-              <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-slate-950 text-white">
-                {post.media[0] && !isVideoMediaUrl(post.media[0]) ? (
-                  <SafeProfileImage src={post.media[0]} alt="Story highlight" width={64} height={64} className="h-full w-full object-cover" fallback={<FileText className="h-5 w-5" />} />
-                ) : (
-                  <FileText className="h-5 w-5" />
-                )}
-              </div>
-            </div>
-            <p className={`mt-2 truncate text-xs font-bold ${theme.muted}`}>{getPostPreviewText(post.content) || "Post"}</p>
-          </button>
-        ))}
-        {!posts.length && (
-          <div className={`w-full rounded-2xl border p-5 ${theme.softSurface}`}>
-            <EmptyState icon={CircleDot} title="No story highlights" description={isCurrentUser ? "Highlights will appear after you share posts." : "This member has no highlights."} compact />
-          </div>
-        )}
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-3">
-        <MediaPreview title="Photo Grid" items={photoItems} theme={theme} routerPush={routerPush} empty="No photos yet" />
-        <MediaPreview title="Reels Grid" items={reelItems} theme={theme} routerPush={routerPush} empty="No reels yet" />
-        <MediaPreview title="Media Gallery" items={mediaItems} theme={theme} routerPush={routerPush} empty="No media yet" />
-      </div>
-
-      <div className="mt-4 grid gap-4 md:grid-cols-3">
-        <EmptyCompact theme={theme} icon={Users} title="Mutual followers" description="No mutual follower data available." />
-        <EmptyCompact theme={theme} icon={User} title="Tagged posts" description="No tagged posts available." />
-        <EmptyCompact theme={theme} icon={Bookmark} title="Saved posts" description="Saved posts are private." />
-      </div>
-    </motion.section>
   );
 }
 
@@ -2049,15 +2129,21 @@ function SidebarCard({
   title,
   icon: Icon,
   theme,
+  glow = false,
   children,
 }: {
   title: string;
   icon: React.ComponentType<{ className?: string }>;
   theme: Theme;
+  glow?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <motion.section {...cardMotion} className={`rounded-3xl border p-5 ${theme.surface}`}>
+    <motion.section
+      {...cardMotion}
+      className={`relative rounded-3xl border p-5 ${glow ? "border-[#d4a72c]/40 shadow-[0_0_0_1px_rgba(212,167,44,0.12),0_0_36px_-12px_rgba(212,167,44,0.45)]" : `border ${theme.surface}`}`}
+    >
+      {glow && <GoldGlow />}
       <div className="mb-4 flex items-center gap-3">
         <Icon className={`h-5 w-5 ${theme.accent}`} />
         <h2 className="font-black">{title}</h2>
@@ -2067,23 +2153,52 @@ function SidebarCard({
   );
 }
 
+function GoldGlow() {
+  return (
+    <span aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden rounded-3xl">
+      <span
+        className="pointer-events-none absolute -inset-px rounded-3xl"
+        style={{
+          background:
+            "radial-gradient(110% 90% at 50% 0%, rgba(212,167,44,0.12), transparent 60%), radial-gradient(70% 70% at 100% 100%, rgba(184,134,11,0.09), transparent 55%)",
+        }}
+      />
+      <span
+        className="pointer-events-none absolute inset-x-8 top-0 h-px"
+        style={{ background: "linear-gradient(90deg, transparent, rgba(214,186,102,0.55), transparent)" }}
+      />
+      <span
+        className="pointer-events-none absolute inset-x-12 bottom-0 h-px"
+        style={{ background: "linear-gradient(90deg, transparent, rgba(160,120,24,0.30), transparent)" }}
+      />
+    </span>
+  );
+}
+
 function ProfileStrength({
   theme,
+  isPremium,
   completionPercent,
   completionItems,
 }: {
   theme: Theme;
+  isPremium: boolean;
   completionPercent: number;
   completionItems: readonly (readonly [string, boolean])[];
 }) {
   return (
-    <SidebarCard title="Profile Completion" icon={TrendingUp} theme={theme}>
+    <SidebarCard title="Profile Completion" icon={TrendingUp} theme={theme} glow={isPremium}>
       <div className="mb-3 flex items-end justify-between">
         <span className="text-3xl font-black">{completionPercent}%</span>
         <span className={`rounded-full border px-2 py-1 text-xs font-bold ${theme.chip}`}>
           {completionPercent === 100 ? "Complete" : "In progress"}
         </span>
       </div>
+      {completionPercent > 0 && (
+        <div className="mb-4 h-2 overflow-hidden rounded-full">
+          <motion.div initial={{ width: 0 }} animate={{ width: `${completionPercent}%` }} transition={{ duration: 0.9 }} className={`h-full rounded-full ${theme.accentGradient}`} style={isPremium ? { boxShadow: "0 0 12px rgba(212,167,44,0.55)" } : undefined} />
+        </div>
+      )}
       <div className="space-y-2">
         {completionItems.map(([label, complete]) => (
           <div key={label} className="flex items-center justify-between text-sm">
@@ -2099,6 +2214,7 @@ function ProfileStrength({
 function MobileInsightSections({
   theme,
   isCurrentUser,
+  isPremiumProfile,
   completionPercent,
   completionItems,
   premiumLoading,
@@ -2111,6 +2227,7 @@ function MobileInsightSections({
 }: {
   theme: Theme;
   isCurrentUser: boolean;
+  isPremiumProfile: boolean;
   completionPercent: number;
   completionItems: readonly (readonly [string, boolean])[];
   premiumLoading: boolean;
@@ -2124,7 +2241,7 @@ function MobileInsightSections({
   return (
     <>
       {isCurrentUser && (
-        <SidebarCard title="Premium Membership" icon={Sparkles} theme={theme}>
+        <SidebarCard title="Premium Membership" icon={Sparkles} theme={theme} glow={isPremiumProfile}>
           <div className="flex flex-col gap-4">
             <div className="min-w-0">
               <p className={`text-sm ${theme.muted}`}>
@@ -2149,7 +2266,7 @@ function MobileInsightSections({
                 type="button"
                 onClick={onActivatePremium}
                 disabled={premiumActionLoading || premiumLoading}
-                className={`min-h-11 w-full rounded-full px-4 py-2.5 text-sm font-black transition active:scale-[0.98] disabled:opacity-60 ${theme.accentBg}`}
+                className={`min-h-11 w-full rounded-full px-4 py-2.5 text-sm font-black transition active:scale-[0.98] disabled:opacity-60 ${theme.accentBg} ${isPremiumProfile ? "shadow-[0_0_0_1px_rgba(212,167,44,0.25),0_6px_24px_-8px_rgba(212,167,44,0.55)]" : ""}`}
               >
                 {premiumActionLoading ? "Redirecting..." : premiumStatus?.isPremium ? "Renew Premium" : "Activate Premium"}
               </button>
@@ -2164,11 +2281,7 @@ function MobileInsightSections({
           </div>
         </SidebarCard>
       )}
-      <ProfileStrength theme={theme} completionPercent={completionPercent} completionItems={completionItems} />
-      <SidebarCard title="Recent Visitors" icon={Eye} theme={theme}><EmptyMini title="No visitor data available" /></SidebarCard>
-      <SidebarCard title="Suggested Connections" icon={Users} theme={theme}><EmptyMini title="No suggestions available" /></SidebarCard>
-      <SidebarCard title="Communities" icon={CircleDot} theme={theme}><EmptyMini title="No communities joined" /></SidebarCard>
-      <SidebarCard title="AI Suggestions" icon={Sparkles} theme={theme}><EmptyMini title="No AI suggestions available" /></SidebarCard>
+      <ProfileStrength theme={theme} isPremium={isPremiumProfile} completionPercent={completionPercent} completionItems={completionItems} />
     </>
   );
 }
@@ -2312,26 +2425,6 @@ function EmptyState({
       </div>
       <h3 className="font-black">{title}</h3>
       <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500 dark:text-slate-400">{description}</p>
-    </div>
-  );
-}
-
-function EmptyCompact({
-  theme,
-  icon: Icon,
-  title,
-  description,
-}: {
-  theme: Theme;
-  icon: React.ComponentType<{ className?: string }>;
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className={`rounded-2xl border p-4 ${theme.softSurface}`}>
-      <Icon className={`mb-3 h-5 w-5 ${theme.accent}`} />
-      <p className="font-black">{title}</p>
-      <p className={`mt-1 text-sm ${theme.muted}`}>{description}</p>
     </div>
   );
 }
@@ -2575,5 +2668,45 @@ function Textarea({
       <span className={`mb-1.5 block text-xs font-bold uppercase ${theme.muted}`}>{label}</span>
       <textarea name={name} value={value} onChange={onChange} rows={4} className={`w-full rounded-2xl border px-4 py-3 text-sm outline-none ring-blue-500 transition focus:ring-2 ${theme.softSurface}`} />
     </label>
+  );
+}
+
+function SidebarStat({
+  label,
+  value,
+  icon: Icon,
+  theme,
+}: {
+  label: string;
+  value?: number;
+  icon: React.ComponentType<{ className?: string }>;
+  theme: Theme;
+}) {
+  return (
+    <div className={`rounded-2xl border p-3 ${theme.softSurface}`}>
+      <Icon className={`mb-2 h-4 w-4 ${theme.accent}`} />
+      <p className="text-lg font-black">{typeof value === "number" ? value.toLocaleString() : "—"}</p>
+      <p className={`mt-0.5 text-[11px] font-bold uppercase ${theme.muted}`}>{label}</p>
+    </div>
+  );
+}
+
+function SocialLink({
+  theme,
+  href,
+  icon: Icon,
+  label,
+}: {
+  theme: Theme;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+}) {
+  if (!href) return null;
+  return (
+    <a href={href} target="_blank" rel="noreferrer" className={`flex items-center gap-2 rounded-2xl border px-3 py-2.5 text-sm font-semibold transition hover:scale-[1.02] ${theme.softSurface}`}>
+      <Icon className={`h-4 w-4 ${theme.accent}`} />
+      <span className="truncate">{label}</span>
+    </a>
   );
 }

@@ -109,3 +109,13 @@ body {
     transform: translateY(-6px);
   }
 }
+
+/* Indeterminate progress sweep for the post media-upload indicator */
+@keyframes postprogress {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(420%);
+  }
+}

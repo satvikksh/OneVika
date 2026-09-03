@@ -187,17 +187,38 @@ export async function GET(
     const canMessage =
       !isCurrentUser && (isPrivateProfile ? Boolean(isFollowing) : hasActiveFollowRelationship);
 
+    /* ---------------- CONNECTIONS COUNT (dynamic intersection) ---------------- */
+    const connectionsCount = await db.collection("follows").countDocuments({
+      followerId: { $in: await db.collection("follows").distinct("followerId", { followingId: profileObjectId, status: "active" }) },
+      followingId: { $in: await db.collection("follows").distinct("followingId", { followerId: profileObjectId, status: "active" }) },
+      status: "active",
+    });
+
+    /* ---------------- PROFILE VIEWS (increment for non-owner) ---------------- */
+    if (!isCurrentUser) {
+      try {
+        await db.collection("users").updateOne(
+          { _id: profileObjectId },
+          { $inc: { profileViews: 1 } },
+          { upsert: false }
+        );
+      } catch {
+        // Non-critical — don't fail the request
+      }
+    }
+
     /* ---------------- FORMAT RESPONSE ---------------- */
+    const isOwner = isCurrentUser;
     const formattedProfile = {
       id: userProfile._id.toString(),
       name: userProfile.name,
       username: userProfile.username,
-      email: userProfile.email,
+      email: isOwner ? userProfile.email : undefined,
       avatar: userProfile.avatar,
       cover: userProfile.cover,
       bio: userProfile.bio,
       location: userProfile.location,
-      phone: userProfile.phone,
+      phone: isOwner ? userProfile.phone : undefined,
       website: userProfile.website,
       status: userProfile.status,
       profession: userProfile.profession,
@@ -215,13 +236,13 @@ export async function GET(
       languages: userProfile.languages || [],
       interests: userProfile.interests || [],
       recommendations: userProfile.recommendations || [],
-      profileViews: userProfile.profileViews,
-      connectionsCount: userProfile.connectionsCount,
-      isVerified: Boolean(userProfile.isVerified || userProfile.emailVerified),
+      profileViews: userProfile.profileViews || 0,
+      connectionsCount,
+      isVerified: Boolean(userProfile.isVerified),
       joinedDate: userProfile.createdAt.toISOString(),
       lastSeen: userProfile.lastSeen ? userProfile.lastSeen.toISOString() : null,
       social: userProfile.social || {},
-      isActive: userProfile.lastSeen ? 
+      isActive: userProfile.lastSeen ?
         (Date.now() - new Date(userProfile.lastSeen).getTime()) < 5 * 60 * 1000 : false,
       createdAt: userProfile.createdAt.toISOString(),
       updatedAt: userProfile.updatedAt.toISOString(),
@@ -309,25 +330,53 @@ export async function PATCH(
     }
 
     const updates = await req.json();
-    
-    // Define allowed fields that can be updated
+
+    // Define allowed fields and their constraints
     const allowedUpdates = [
       'name', 'avatar', 'cover', 'bio', 'location', 'phone',
       'website', 'status', 'profession', 'headline', 'company',
       'education', 'resume', 'portfolio', 'social'
     ];
 
-    // Filter updates to only include allowed fields
+    const MAX_LENGTHS: Record<string, number> = {
+      name: 100, bio: 2000, location: 200, phone: 20, website: 500,
+      status: 100, profession: 200, headline: 200, company: 200,
+      education: 200, resume: 500, portfolio: 500,
+    };
+
+    // Filter updates to only include allowed fields and validate
     const filteredUpdates: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(updates)) {
-      if (allowedUpdates.includes(key)) {
-        if ((key === "avatar" || key === "cover") && !isSafeStoredImageUrl(value)) {
+      if (!allowedUpdates.includes(key)) continue;
+
+      if ((key === "avatar" || key === "cover") && !isSafeStoredImageUrl(value)) {
+        return NextResponse.json(
+          { error: "Invalid image. Please upload a valid image file." },
+          { status: 400 }
+        );
+      }
+
+      if (key === "social") {
+        if (typeof value !== "object" || value === null || Array.isArray(value)) {
           return NextResponse.json(
-            { error: "Invalid image. Please upload a valid image file." },
+            { error: "Invalid social links" },
             { status: 400 }
           );
         }
-        filteredUpdates[key] = value;
+        const socialFields = ["instagram", "twitter", "linkedin", "github"];
+        const sanitized: Record<string, string> = {};
+        for (const field of socialFields) {
+          const v = (value as Record<string, unknown>)[field];
+          if (typeof v === "string") sanitized[field] = v.slice(0, 500);
+        }
+        filteredUpdates.social = sanitized;
+        continue;
+      }
+
+      if (typeof value === "string") {
+        const trimmed = value.trim();
+        const limit = MAX_LENGTHS[key] ?? 500;
+        filteredUpdates[key] = trimmed.slice(0, limit);
       }
     }
 

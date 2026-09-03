@@ -4,7 +4,72 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/lib/authOptions";
 import { dbConnect } from "@/app/lib/mongodb";
 import Post from "@/app/models/Post";
-import mongoose from "mongoose";
+
+export async function PATCH(
+  req: Request,
+  props: { params: Promise<{ id: string }> }
+) {
+  try {
+    const params = await props.params;
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { content } = await req.json();
+
+    if (typeof content !== "string" || !content.trim()) {
+      return NextResponse.json(
+        { error: "Post content is required" },
+        { status: 400 }
+      );
+    }
+
+    const trimmedContent = content.trim().slice(0, 5000);
+
+    await dbConnect();
+
+    const post = await Post.findById(params.id).select("userId").lean();
+
+    if (!post) {
+      return NextResponse.json({ error: "Post not found" }, { status: 404 });
+    }
+
+    let postUserId: string;
+    if (post.userId && typeof post.userId === "object" && "_id" in post.userId) {
+      postUserId = (post.userId as any)._id.toString();
+    } else if (post.userId) {
+      postUserId = String(post.userId);
+    } else {
+      return NextResponse.json({ error: "Post has no owner" }, { status: 400 });
+    }
+
+    if (postUserId !== session.user.id) {
+      return NextResponse.json(
+        { error: "You are not authorized to edit this post" },
+        { status: 403 }
+      );
+    }
+
+    await Post.updateOne(
+      { _id: params.id },
+      { $set: { content: trimmedContent, updatedAt: new Date() } }
+    );
+
+    return NextResponse.json({
+      success: true,
+      message: "Post updated successfully",
+      content: trimmedContent,
+    });
+  } catch (error: any) {
+    console.error("Error editing post:", error);
+    return NextResponse.json(
+      { error: error.message || "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
 
 export async function DELETE(
   req: Request,
