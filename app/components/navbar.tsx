@@ -27,6 +27,7 @@ import {
   PenSquare, // Added post icon
   Receipt,
   Compass,
+  Briefcase,
 } from "lucide-react";
 import Image from "next/image";
 import { useSession, signOut } from "next-auth/react";
@@ -336,7 +337,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
       icon: <Zap size={18} />,
       badge: "New",
     },
-    { path: "/gallery", label: "Gallery", icon: <ImageIcon size={18} /> },
+    { path: "/jobs", label: "Jobs", icon: <Briefcase size={18} /> },
     { path: "/discover", label: "Discover", icon: <Compass size={18} /> },
     { path: "/feed", label: "Feed", icon: <PlaySquare size={18} /> },
     { path: "/analytics", label: "Analytics", icon: <BarChart size={18} /> },
@@ -899,6 +900,12 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                         className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-sm font-medium text-gray-700 dark:text-gray-300"
                       >
                         <MessageSquare size={16} /> Chat
+                      </Link>
+                      <Link
+                        href="/gallery"
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-sm font-medium text-gray-700 dark:text-gray-300"
+                      >
+                        <ImageIcon size={16} /> Gallery
                       </Link>
                       <div className="h-px bg-gray-100 dark:bg-gray-800 my-1 mx-2" />
                       <button
