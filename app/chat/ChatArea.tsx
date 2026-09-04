@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useLayoutEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ChatAttachment, Message, User } from "../types/socket";
 import { Session } from "next-auth";
+import { PremiumAmbient } from "@/app/components/premium-ambient";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AtSign,
@@ -1990,7 +1991,7 @@ function ChatArea({
     [chatMode]
   );
 
-  return (
+return (
     <div
       className={`flex h-full w-full min-w-0 flex-col overflow-x-hidden ${
         isAiConversation
@@ -1998,6 +1999,7 @@ function ChatArea({
           : "bg-white dark:bg-black"
       }`}
     >
+      <PremiumAmbient />
       {polishedPreview && (
         <div className="fixed inset-0 z-[95] flex items-end justify-center bg-black/55 p-3 sm:items-center sm:p-4">
           <div className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-gray-800 dark:bg-gray-950">

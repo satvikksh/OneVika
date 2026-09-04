@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { User } from "../types/socket";
+import { PremiumAmbient } from "@/app/components/premium-ambient";
 import {
   Archive,
   ArrowLeft,
@@ -181,6 +182,7 @@ const ChatActionMenu: React.FC<{
   if (isMobile) {
     return (
       <>
+        <PremiumAmbient />
         <div className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-[2px]" onClick={onClose} />
         <div className="fixed inset-x-0 bottom-0 z-[71] animate-chatSheet rounded-t-[28px] border border-white/10 bg-white px-4 pb-6 pt-3 shadow-2xl dark:bg-gray-950">
           <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-gray-300 dark:bg-gray-700" />
@@ -224,6 +226,7 @@ const ChatActionMenu: React.FC<{
 
   return (
     <>
+      <PremiumAmbient />
       <div className="fixed inset-0 z-[70]" onClick={onClose} />
       <div className="fixed z-[71] min-w-[280px] max-w-[320px] animate-chatPopover rounded-2xl border border-gray-200 bg-white p-2 shadow-2xl dark:border-gray-800 dark:bg-gray-950" style={{ left, top }} role="menu">
         <div className="border-b border-gray-100 px-3 py-2 dark:border-gray-800">

@@ -30,6 +30,7 @@ export function BackButton({ className = "" }: { className?: string }) {
 
 const PAGE_TITLES: Record<string, string> = {
   "/analytics": "Analytics",
+  "/discover": "Discover",
   "/notifications": "Notifications",
   "/settings": "Settings",
   "/gallery": "Gallery",

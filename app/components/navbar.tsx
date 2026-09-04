@@ -26,6 +26,7 @@ import {
   BarChart,
   PenSquare, // Added post icon
   Receipt,
+  Compass,
 } from "lucide-react";
 import Image from "next/image";
 import { useSession, signOut } from "next-auth/react";
@@ -336,6 +337,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
       badge: "New",
     },
     { path: "/gallery", label: "Gallery", icon: <ImageIcon size={18} /> },
+    { path: "/discover", label: "Discover", icon: <Compass size={18} /> },
     { path: "/feed", label: "Feed", icon: <PlaySquare size={18} /> },
     { path: "/analytics", label: "Analytics", icon: <BarChart size={18} /> },
   ];
@@ -345,7 +347,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
     { path: "/", label: "Home", icon: <Home size={24} /> },
     { path: "/feed", label: "Feed", icon: <PlaySquare size={24} /> },
     { path: "/chat", label: "Chat", icon: <MessageSquare size={24} /> },
-    { path: "/analytics", label: "Analytics", icon: <BarChart size={24} /> },
+    { path: "/discover", label: "Discover", icon: <Compass size={24} /> },
     {
       path: "/profile",
       label: "Profile",
@@ -627,14 +629,16 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                 href={item.path}
                 className={`relative flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-300 group ${
                   pathname === item.path
-                    ? "bg-white dark:bg-gray-800 text-blue-500 dark:text-gray-400 shadow-sm"
+                    ? (isPremium
+                        ? "bg-white dark:bg-gray-800 text-amber-400 shadow-[0_0_0_1px_rgba(184,134,11,0.25),0_6px_18px_-6px_rgba(184,134,11,0.35)]"
+                        : "bg-white dark:bg-gray-800 text-blue-500 dark:text-gray-400 shadow-sm")
                     : "text-gray-600 dark:text-gray-400 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-white"
                 }`}
               >
                 <span
                   className={`transition-transform duration-300 group-hover:scale-110 ${
                     pathname === item.path
-                      ? "text-blue-500 dark:text-gray-400"
+                      ? (isPremium ? "text-amber-400" : "text-blue-500 dark:text-gray-400")
                       : ""
                   }`}
                 >
@@ -1091,7 +1095,9 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                       }}
                       className={`flex items-center justify-between px-4 py-3.5 rounded-2xl transition-all ${
                         pathname === "/settings"
-                          ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400"
+                          ? (isPremium
+                              ? "bg-none dark:bg-gray-900 text-amber-400 shadow-[0_0_0_1px_rgba(184,134,11,0.25),0_6px_18px_-6px_rgba(184,134,11,0.3)]"
+                              : "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400")
                           : "hover:bg-gray-50 dark:hover:bg-gray-900 text-gray-700 dark:text-gray-300"
                       }`}
                     >
@@ -1120,7 +1126,9 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                       }}
                       className={`flex items-center justify-between px-4 py-3.5 rounded-2xl transition-all ${
                         pathname === item.path
-                          ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400"
+                          ? (isPremium
+                              ? "bg-none dark:bg-gray-900 text-amber-400 shadow-[0_0_0_1px_rgba(184,134,11,0.25),0_6px_18px_-6px_rgba(184,134,11,0.3)]"
+                              : "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400")
                           : "hover:bg-gray-50 dark:hover:bg-gray-900 text-gray-700 dark:text-gray-300"
                       }`}
                     >
@@ -1241,7 +1249,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                       
                       {/* Active Indicator */}
                       {isActive && (
-                        <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 bg-green-700 dark:bg-green-700 rounded-full"></div>
+                        <div className={`absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 rounded-full ${isPremium ? "bg-amber-400" : "bg-green-700 dark:bg-green-700"}`}></div>
                       )}
                     </div>
                   </div>

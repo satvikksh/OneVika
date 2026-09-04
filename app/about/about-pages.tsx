@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { motion, useInView, useMotionValue, useTransform, animate, type Variants } from "framer-motion";
+import { PremiumAmbient } from "@/app/components/premium-ambient";
 import {
   ArrowRight,
   Bell,
@@ -98,6 +99,7 @@ const navigationCards: LinkCard[] = [
 function PageShell({ children }: { children: React.ReactNode }) {
   return (
     <main className="min-h-screen overflow-hidden bg-[#f6f7fb] text-slate-950 dark:bg-[#05070b] dark:text-white">
+      <PremiumAmbient />
       <div className="pointer-events-none fixed inset-0 -z-0 bg-[radial-gradient(circle_at_15%_10%,rgba(34,197,94,.13),transparent_28%),radial-gradient(circle_at_85%_5%,rgba(59,130,246,.16),transparent_32%),linear-gradient(180deg,rgba(255,255,255,.65),rgba(255,255,255,0))] dark:bg-[radial-gradient(circle_at_18%_12%,rgba(16,185,129,.18),transparent_30%),radial-gradient(circle_at_88%_8%,rgba(14,165,233,.18),transparent_32%),linear-gradient(180deg,rgba(15,23,42,.68),rgba(2,6,23,0))]" />
       <div className="relative z-10">{children}</div>
     </main>

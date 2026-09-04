@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { Providers } from "./providers";
 import Navbar from "./components/navbar";
@@ -18,6 +19,18 @@ export default function ClientLayout({
   const pathname = usePathname();
   const isAdminRoute = pathname?.startsWith("/admin");
   const isHomeRoute = pathname === "/";
+
+  // The Admin Panel intentionally keeps its own theme. Gate the global
+  // Premium ambient layer off on admin routes (PremiumThemeProvider still
+  // toggles <html class="premium">; only the ambient background is excluded).
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (isAdminRoute) {
+      document.body.setAttribute("data-ambient", "off");
+    } else {
+      document.body.removeAttribute("data-ambient");
+    }
+  }, [isAdminRoute]);
 
   // Pages that already render their own working Back button (or are fullscreen
   // with their own top controls) must not get a duplicate one.

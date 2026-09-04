@@ -586,7 +586,7 @@ function ViewersPanel({
 }) {
   return (
     <div
-      className={`fixed inset-x-0 bottom-0 z-[110] max-h-[72vh] rounded-t-3xl bg-white text-stone-950 shadow-2xl transition-transform duration-300 ease-out dark:bg-stone-950 dark:text-white ${
+      className={`fixed inset-x-0 bottom-0 z-[110] max-h-[72vh] rounded-t-3xl bg-stone-950 text-white shadow-2xl transition-transform duration-300 ease-out ${
         open ? 'translate-y-0' : 'translate-y-full'
       }`}
       onClick={(event) => event.stopPropagation()}
@@ -595,8 +595,8 @@ function ViewersPanel({
       }}
     >
       <div className="mx-auto h-full w-full max-w-xl">
-        <div className="sticky top-0 z-10 rounded-t-3xl border-b border-stone-200 bg-white px-4 pb-3 pt-4 dark:border-stone-800 dark:bg-stone-950">
-          <div className="mx-auto mb-3 h-1 w-12 rounded-full bg-stone-300 dark:bg-stone-700" />
+        <div className="sticky top-0 z-10 rounded-t-3xl border-b border-stone-800 bg-stone-950 px-4 pb-3 pt-4">
+          <div className="mx-auto mb-3 h-1 w-12 rounded-full bg-stone-700" />
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <Eye className="h-5 w-5" />
@@ -612,7 +612,7 @@ function ViewersPanel({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full p-2 text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-900"
+              className="rounded-full p-2 text-stone-500 hover:bg-stone-800"
               aria-label="Close viewers"
             >
               <X size={18} />
@@ -633,7 +633,7 @@ function ViewersPanel({
               No viewers yet.
             </p>
           ) : (
-            <div className="divide-y divide-stone-100 dark:divide-stone-900">
+            <div className="divide-y divide-stone-800">
               {state.viewers.map((viewer) => (
                 <div key={viewer.viewerId} className="flex items-center gap-3 py-3">
                   {viewer.viewerProfilePicture ? (
@@ -666,7 +666,7 @@ function ViewersPanel({
               type="button"
               onClick={onLoadMore}
               disabled={state.loading}
-              className="my-3 flex w-full items-center justify-center gap-2 rounded-xl border border-stone-200 px-4 py-2 text-sm font-medium disabled:opacity-60 dark:border-stone-800"
+              className="my-3 flex w-full items-center justify-center gap-2 rounded-xl border border-stone-800 px-4 py-2 text-sm font-medium disabled:opacity-60"
             >
               {state.loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Load more

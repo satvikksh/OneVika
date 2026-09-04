@@ -7,6 +7,7 @@ import Thoughts from "./components/home/Thoughts";
 import FeedToggle from "./components/home/FeedToggle";
 import RoomModal from "./components/room/RoomModal";
 import { useUserAvatar } from "@/app/hooks/useUserAvatar";
+import { PremiumAmbient } from "@/app/components/premium-ambient";
 
 /* ============================
    SHARED UI HELPERS
@@ -14,15 +15,6 @@ import { useUserAvatar } from "@/app/hooks/useUserAvatar";
 function cx(...values: (string | false | null | undefined)[]) {
   return values.filter(Boolean).join(" ");
 }
-
-/* Layered, low-opacity golden ambient glows (premium only).
-   Deep-gold tones keep the effect sophisticated, never neon. */
-const PREMIUM_AMBIENT_BG =
-  "radial-gradient(circle at 12% 6%, rgba(212,167,44,0.10), transparent 40%)," +
-  "radial-gradient(circle at 90% 8%, rgba(184,134,11,0.08), transparent 38%)," +
-  "radial-gradient(circle at 52% 42%, rgba(202,160,61,0.06), transparent 46%)," +
-  "radial-gradient(circle at 6% 92%, rgba(184,134,11,0.07), transparent 42%)," +
-  "radial-gradient(circle at 96% 92%, rgba(138,100,4,0.05), transparent 44%)";
 
 export default function Home() {
   const { isPremium } = useUserAvatar();
@@ -55,49 +47,21 @@ export default function Home() {
   if (!currentTime) return null;
 
   return (
-    <main className="relative overflow-hidden min-h-screen bg-stone-60 text-stone-950 transition-colors dark:bg-black dark:text-stone-100 flex justify-center">
-      {/* ===== PREMIUM-ONLY: golden ambient glow across the page ===== */}
-      {isPremium && (
-        <div
-          aria-hidden
-          className="pointer-events-none fixed inset-0 z-0"
-          style={{ background: PREMIUM_AMBIENT_BG, filter: "blur(18px)" }}
-        />
-      )}
+    <main className="relative overflow-hidden min-h-screen dark:bg-black bg-black transition-colors text-stone-100 flex justify-center">
+      <PremiumAmbient />
 
       <div className="w-full max-w-7xl px-5 py-8 flex flex-col gap-8 relative z-10">
-        {/* ===== PREMIUM-ONLY: soft gold diffusion behind header + feed ===== */}
-        {isPremium && (
-          <>
-            <div
-              aria-hidden
-              className="pointer-events-none absolute -top-6 -left-8 h-72 w-80 rounded-full"
-              style={{ background: "radial-gradient(circle, rgba(212,167,44,0.12), transparent 70%)", filter: "blur(16px)" }}
-            />
-            <div
-              aria-hidden
-              className="pointer-events-none absolute inset-x-0 top-[24rem] h-64 sm:top-[22rem] md:top-[26rem]"
-              style={{ background: "radial-gradient(ellipse at 78% 30%, rgba(184,134,11,0.08), transparent 72%)", filter: "blur(14px)" }}
-            />
-            <div
-              aria-hidden
-              className="pointer-events-none absolute -right-10 top-[40rem] h-72 w-96 rounded-full"
-              style={{ background: "radial-gradient(circle, rgba(184,134,11,0.07), transparent 72%)", filter: "blur(18px)" }}
-            />
-          </>
-        )}
-
         {/*
             Header
         */}
         <header className="flex items-start justify-between">
           {/* Left Side - Greeting + Time */}
           <div>
-            <h1 className="text-2xl font-bold text-stone-950 dark:text-stone-100">
+            <h1 className="text-2xl font-bold text-stone-100">
               {greeting}.
             </h1>
 
-            <p className={cx("text-xs", isPremium ? "text-amber-200/90" : "text-stone-500 dark:text-stone-500")}>
+            <p className={cx("text-xs", isPremium ? "text-amber-200/90" : "text-stone-400")}>
               {currentTime.toLocaleDateString("en-US", {
                 weekday: "long",
                 month: "short",
@@ -154,7 +118,7 @@ export default function Home() {
 
         {/* Footer */}
         <footer className="text-center pt-6">
-          <p className="text-xs text-stone-500 dark:text-stone-600">Designed by Satvik&#39;s Group.</p>
+          <p className="text-xs text-stone-500">Designed by Satvik's Group.</p>
         </footer>
 
         <RoomModal

@@ -14,7 +14,7 @@ const premiumRingClass =
   "bg-[conic-gradient(from_180deg_at_50%_50%,#fde68a_0deg,#f59e0b_90deg,#f8fafc_180deg,#fbbf24_270deg,#fde68a_360deg)] p-[2px] shadow-[0_0_24px_rgba(251,191,36,0.32)]";
 
 const premiumBadgeClass =
-  "inline-flex items-center gap-1 rounded-full border border-amber-300/35 bg-gradient-to-r from-amber-300/25 via-yellow-100/15 to-slate-200/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-200";
+  "inline-flex items-center gap-1 rounded-full border border-amber-300/35 bg-gradient-to-r from-amber-300/25 via-yellow-100/15 to-slate-200/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-200 premium-badge-glow";
 
 const premiumNameClass =
   "bg-gradient-to-r from-yellow-200 via-amber-300 to-slate-200 bg-clip-text text-transparent";

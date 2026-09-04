@@ -14,6 +14,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { PremiumAvatar, PremiumName } from "../premium-ui";
+import { usePremiumTheme } from "@/app/premium-theme-provider";
 import {
   readSavedPosts,
   persistSavedPosts,
@@ -65,6 +66,7 @@ function commentAuthor(comment: Comment) {
 export default function NewPosts() {
   const router = useRouter();
   const { data: session } = useSession();
+  const { isPremium } = usePremiumTheme();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -234,7 +236,7 @@ export default function NewPosts() {
               onKeyDown={(event) => {
                 if (event.key === "Enter") openPost(post._id);
               }}
-              className="h-fit cursor-pointer overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-stone-800 dark:bg-stone-950"
+              className={`h-fit cursor-pointer overflow-hidden rounded-2xl border border-stone-800 bg-stone-950 shadow-sm transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${isPremium ? "premium-card" : ""}`}
             >
               <div className="p-4">
                 <div className="mb-3 flex items-center gap-3">
@@ -251,7 +253,7 @@ export default function NewPosts() {
                         <PremiumName
                           name={authorName}
                           isPremium={Boolean(post.userId.isPremium)}
-                          textClassName="truncate text-sm font-semibold text-stone-900 dark:text-stone-100"
+                          textClassName="truncate text-sm font-semibold text-stone-100"
                         />
                       </Link>
                     ) : (
@@ -269,14 +271,14 @@ export default function NewPosts() {
                 </div>
 
                 {post.content && (
-                  <p className="mb-3 whitespace-pre-wrap text-sm leading-relaxed text-stone-800 dark:text-stone-200">
+                  <p className="mb-3 whitespace-pre-wrap text-sm leading-relaxed text-stone-200">
                     {post.content}
                   </p>
                 )}
               </div>
 
               {post.images?.length > 0 && (
-                <div className="grid grid-cols-1 gap-px bg-stone-200 dark:bg-stone-800">
+                <div className="grid grid-cols-1 gap-px bg-stone-800">
                   {post.images.map((src, index) => (
                     <div
                       key={`${src}-${index}`}
@@ -306,7 +308,7 @@ export default function NewPosts() {
               )}
 
               <div className="p-4">
-                <div className="flex items-center gap-1 border-b border-stone-100 pb-3 dark:border-stone-800">
+                <div className="flex items-center gap-1 border-b border-stone-800 pb-3">
                   <button
                     onClick={() => toggleLike(post)}
                     className={`flex items-center gap-1.5 rounded-full p-2 text-xs transition hover:bg-red-50 dark:hover:bg-red-950/30 ${
@@ -351,7 +353,7 @@ export default function NewPosts() {
                     {recentComments.map((comment) => {
                       const author = commentAuthor(comment);
                       return (
-                        <p key={comment._id} className="text-stone-700 dark:text-stone-300">
+                        <p key={comment._id} className="text-stone-300">
                           <span className="mr-2 font-semibold">
                             {author?.name || "User"}
                           </span>
@@ -384,7 +386,7 @@ export default function NewPosts() {
                     }
                     placeholder="Add a comment..."
                     aria-label="Add a comment"
-                    className="min-w-0 flex-1 rounded-full bg-stone-100 px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/30 dark:bg-stone-900"
+                    className="min-w-0 flex-1 rounded-full bg-stone-900 px-4 py-2 text-sm text-stone-100 outline-none placeholder:text-stone-500 focus:ring-2 focus:ring-amber-500/30"
                   />
                   <button
                     type="submit"

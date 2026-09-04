@@ -8,6 +8,7 @@ import { Message, User } from "../types/socket";
 import ChatSidebar from "./ChatSidebar";
 import ChatTopBar from "./ChatTopBar";
 import ChatArea from "./ChatArea";
+import { PremiumAmbient } from "@/app/components/premium-ambient";
 import GroupInfoPanel, {
   GroupInfoData,
   GroupInfoMember,
@@ -51,6 +52,7 @@ type ConfirmDialogState = {
 const ChatSkeleton = () => {
   return (
     <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-950 overflow-hidden">
+      <PremiumAmbient />
       {/* Top Bar Skeleton */}
       <div className="h-16 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 flex items-center px-4 justify-between shrink-0">
         <div className="flex items-center gap-3">

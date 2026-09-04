@@ -119,3 +119,49 @@ body {
     transform: translateX(420%);
   }
 }
+
+/* =====================================================================
+   PREMIUM THEME SYSTEM  (controlled per-page via PremiumAmbient component)
+   Reusable utility classes for Premium members (opt-in via className).
+   Normal users never receive these styles.
+   ===================================================================== */
+
+/* ----- Reusable Premium utility classes (opt-in via className) ----- */
+/* Subtle gold-tinted card surface + faint ambient reflection */
+.premium-card {
+  border-color: rgba(184, 134, 11, 0.28);
+  box-shadow:
+    0 0 0 1px rgba(184, 134, 11, 0.12),
+    0 10px 34px -12px rgba(184, 134, 11, 0.28);
+}
+/* Softest treatment for secondary cards (underscore only, no ring) */
+.premium-card-soft {
+  box-shadow: 0 8px 26px -12px rgba(184, 134, 11, 0.16);
+}
+
+/* Gold hairline divider / rule */
+.premium-rule {
+  background: linear-gradient(to right, rgba(230, 195, 92, 0.9), rgba(184, 134, 11, 0.4), transparent);
+}
+
+/* Gold active-state treatment for nav/tabs/filters */
+.premium-active {
+  color: #d4a72c;
+  box-shadow: 0 0 0 1px rgba(184, 134, 11, 0.35), 0 6px 18px -6px rgba(184, 134, 11, 0.4);
+}
+
+/* Polished glow for Premium badges / indicators */
+.premium-badge-glow {
+  box-shadow: 0 0 0 1px rgba(212, 167, 44, 0.35), 0 0 16px -2px rgba(212, 167, 44, 0.4);
+}
+
+/* Premium CTA / primary button treatment (gold gradient + soft glow) */
+.premium-button {
+  background-image: linear-gradient(to right, #caa03d, #b8860b 45%, #8a6404);
+  color: #1f1710;
+  border-color: rgba(184, 134, 11, 0.3);
+  box-shadow: 0 0 0 1px rgba(184, 134, 11, 0.25), 0 10px 30px -10px rgba(184, 134, 11, 0.45);
+}
+.premium-button:hover {
+  background-image: linear-gradient(to right, #b8860b, #8a6404 45%, #6f5203);
+}

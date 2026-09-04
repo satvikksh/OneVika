@@ -328,95 +328,126 @@ export default function CallModal() {
     return (
       <>
         <style>{`
-          @keyframes call-enter { from { opacity: 0; transform: translateY(24px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
-          @keyframes ring-pulse { 0% { transform: scale(1); opacity: 0.55; } 100% { transform: scale(1.55); opacity: 0; } }
-          @keyframes arrow-bob { 0%, 100% { transform: translateY(0); opacity: 0.9; } 50% { transform: translateY(-4px); opacity: 0.5; } }
-          @keyframes glow-drift { 0%, 100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-18px,12px) scale(1.15); } }
-          .call-enter { animation: call-enter 420ms cubic-bezier(0.22,1,0.36,1) both; }
-          .ring-pulse-a { animation: ring-pulse 2.2s cubic-bezier(0.22,1,0.36,1) infinite; }
-          .ring-pulse-b { animation: ring-pulse 2.2s cubic-bezier(0.22,1,0.36,1) 1.1s infinite; }
-          .call-arrow-bob { animation: arrow-bob 1.3s ease-in-out infinite; }
-          .call-glow-drift { animation: glow-drift 8s ease-in-out infinite; }
+          @keyframes call-enter { from { opacity: 0; transform: translateY(32px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+          @keyframes ring-pulse { 0% { transform: scale(1); opacity: 0.45; } 100% { transform: scale(1.65); opacity: 0; } }
+          @keyframes avatar-breathe { 0%, 100% { box-shadow: 0 0 40px rgba(16,185,129,0.25), 0 0 80px rgba(16,185,129,0.08); } 50% { box-shadow: 0 0 55px rgba(16,185,129,0.35), 0 0 100px rgba(16,185,129,0.14); } }
+          @keyframes ambient-drift { 0%, 100% { transform: translate(0,0) scale(1); opacity: 0.7; } 50% { transform: translate(-24px,16px) scale(1.12); opacity: 1; } }
+          @keyframes accept-thumb-pulse { 0%, 100% { box-shadow: 0 0 20px rgba(16,185,129,0.4); } 50% { box-shadow: 0 0 32px rgba(16,185,129,0.6); } }
+          .call-enter { animation: call-enter 500ms cubic-bezier(0.22,1,0.36,1) both; }
+          .ring-pulse-a { animation: ring-pulse 2.4s cubic-bezier(0.22,1,0.36,1) infinite; }
+          .ring-pulse-b { animation: ring-pulse 2.4s cubic-bezier(0.22,1,0.36,1) 1.2s infinite; }
+          .avatar-breathe { animation: avatar-breathe 4s ease-in-out infinite; }
+          .ambient-drift { animation: ambient-drift 12s ease-in-out infinite; }
+          .accept-thumb-idle { animation: accept-thumb-pulse 2.5s ease-in-out infinite; }
         `}</style>
-        <div className="call-enter fixed inset-0 z-[100] touch-none select-none overflow-hidden bg-black text-white">
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(16,185,129,0.18),transparent_55%)]" />
-          <div className="call-glow-drift pointer-events-none absolute -left-24 top-1/4 h-72 w-72 rounded-full bg-emerald-500/10 blur-3xl" />
-          <div className="call-glow-drift pointer-events-none absolute -right-24 top-1/2 h-72 w-72 rounded-full bg-blue-500/10 blur-3xl" />
 
-          <div className="relative flex h-full flex-col items-center px-6 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(3rem,env(safe-area-inset-top))]">
+        {/* ── Full-screen container ── */}
+        <div className="call-enter fixed inset-0 z-[100] flex flex-col overflow-hidden bg-[#060608] text-white touch-none select-none">
+          {/* ── Ambient background layers ── */}
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_50%_40%_at_50%_30%,rgba(16,185,129,0.14),transparent_70%)]" />
+          <div className="ambient-drift pointer-events-none absolute -left-28 top-[18%] h-80 w-80 rounded-full bg-emerald-500/8 blur-[100px]" />
+          <div className="ambient-drift pointer-events-none absolute -right-24 top-[48%] h-72 w-72 rounded-full bg-teal-400/6 blur-[90px]" style={{ animationDelay: "4s" }} />
+
+          {/* ── Content ── */}
+          <div className="relative flex flex-1 flex-col items-center px-7 pt-[max(3.5rem,env(safe-area-inset-top)+1rem)] pb-[max(2rem,env(safe-area-inset-bottom)+1rem)]">
+            {/* ── Center: caller info ── */}
             <div className="flex flex-1 flex-col items-center justify-center">
-              <div className="relative flex h-40 w-40 items-center justify-center">
-                <span className="ring-pulse-a absolute inset-0 rounded-full bg-white/15" />
-                <span className="ring-pulse-b absolute inset-0 rounded-full bg-emerald-400/25" />
-                <div className="relative h-32 w-32 overflow-hidden rounded-full border-4 border-white/20 bg-emerald-500/20 shadow-[0_0_50px_rgba(16,185,129,0.35)]">
+              {/* Avatar + pulse rings */}
+              <div className="relative flex h-44 w-44 items-center justify-center">
+                <span className="ring-pulse-a absolute inset-0 rounded-full bg-emerald-400/18" />
+                <span className="ring-pulse-b absolute inset-0 rounded-full bg-white/8" />
+
+                <div className="avatar-breathe relative h-32 w-32 overflow-hidden rounded-full border-[3px] border-white/15 bg-emerald-950/60 backdrop-blur-sm">
                   {incomingCall.fromAvatar && !incomingCall.isGroup ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={incomingCall.fromAvatar} alt="" className="h-full w-full object-cover" />
                   ) : incomingCall.isGroup ? (
-                    <div className="flex h-full w-full items-center justify-center">
-                      <Users size={48} className="text-white/90" />
+                    <div className="flex h-full w-full items-center justify-center bg-emerald-900/40">
+                      <Users size={44} className="text-white/85" />
+                    </div>
+                  ) : incomingCall.video ? (
+                    <div className="flex h-full w-full items-center justify-center bg-emerald-900/40">
+                      <Video size={44} className="text-white/85" />
                     </div>
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center">
-                      <Phone size={48} className="text-white/90" />
+                    <div className="flex h-full w-full items-center justify-center bg-emerald-900/40">
+                      <Phone size={44} className="text-white/85" />
                     </div>
                   )}
                 </div>
               </div>
-              <p className="mt-8 max-w-[16rem] truncate text-center text-2xl font-bold">{callerName}</p>
-              <p className="mt-2 text-sm font-medium tracking-wide text-white/60">
-                Incoming {incomingCall.video ? "Video" : "Audio"} Call
+
+              {/* Name */}
+              <p className="mt-7 max-w-[17rem] truncate text-center text-[1.65rem] font-bold tracking-tight leading-tight text-white">
+                {callerName}
               </p>
+
+              {/* Call type */}
+              <div className="mt-3 flex items-center gap-2">
+                <span className="text-[0.8rem] font-medium tracking-wide text-white/50">
+                  Incoming {incomingCall.video ? "Video" : "Audio"} Call
+                </span>
+                {incomingCall.video && (
+                  <span className="flex h-5 items-center gap-1 rounded-full bg-blue-500/15 px-2 text-[0.6rem] font-semibold tracking-wider text-blue-300 uppercase">
+                    <Video size={10} className="shrink-0" />
+                    Video
+                  </span>
+                )}
+              </div>
             </div>
 
-            <div className="flex w-full items-end justify-between gap-5">
-              <div className="flex flex-col items-center gap-3 pb-1">
+            {/* ── Bottom action area ── */}
+            <div className="flex w-full flex-col items-center gap-6">
+              {/* Accept swipe track */}
+              <div className="relative flex h-[200px] w-[72px] items-end justify-center rounded-[2.2rem] border border-white/[0.06] bg-white/[0.03] backdrop-blur-md">
+                {/* Progress fill */}
+                <div
+                  className="absolute bottom-2 left-1/2 w-[22px] -translate-x-1/2 overflow-hidden rounded-full"
+                  style={{
+                    height: `${Math.max(6, swipeProgress * 184)}px`,
+                    transition: isSwiping ? "none" : "height 350ms cubic-bezier(0.22,1,0.36,1)",
+                    background: "linear-gradient(to top, rgba(16,185,129,0.6), rgba(16,185,129,0.15))",
+                  }}
+                />
+                {/* Thumb */}
                 <button
-                  onClick={rejectIncomingCall}
-                  className="flex h-16 w-16 items-center justify-center rounded-full bg-red-600 text-white shadow-[0_8px_30px_rgba(239,68,68,0.35)] transition active:scale-95"
-                  aria-label="Decline call"
+                  ref={swipeThumbRef}
+                  type="button"
+                  aria-label="Swipe up to accept call"
+                  onPointerDown={handleSwipeStart}
+                  onPointerMove={handleSwipeMove}
+                  onPointerUp={handleSwipeEnd}
+                  onPointerCancel={handleSwipeCancel}
+                  className={`relative z-10 flex h-[68px] w-[68px] items-center justify-center rounded-full text-white transition-colors ${
+                    swipeHeld
+                      ? "bg-emerald-400"
+                      : "bg-gradient-to-b from-emerald-500 to-emerald-600 accept-thumb-idle"
+                  }`}
+                  style={{
+                    transform: `translateY(-${swipeProgress * thumbTravel}px)`,
+                    transition: isSwiping ? "none" : "transform 380ms cubic-bezier(0.22,1,0.36,1)",
+                  }}
                 >
-                  <PhoneOff size={26} />
+                  {swipeHeld ? (
+                    <Check size={30} strokeWidth={2.5} />
+                  ) : (
+                    <Phone size={26} strokeWidth={2.2} />
+                  )}
                 </button>
-                <span className="text-xs font-medium text-white/60">Decline</span>
               </div>
 
-              <div className="flex flex-1 items-end justify-center pb-1">
-                <div className="flex flex-col items-center gap-2">
-                  <div className="flex items-center gap-1.5 overflow-hidden">
-                    <ChevronUp className="call-arrow-bob h-4 w-4 text-emerald-300" style={{ animationDelay: "0ms" }} />
-                    <ChevronUp className="call-arrow-bob h-5 w-5 text-emerald-200" style={{ animationDelay: "150ms" }} />
-                    <ChevronUp className="call-arrow-bob h-7 w-7 text-white" style={{ animationDelay: "300ms" }} />
-                  </div>
-                  <p className="text-[13px] font-semibold tracking-wide text-white/80">Swipe up to accept</p>
-                </div>
-              </div>
-            </div>
+              {/* Swipe hint */}
+              <p className="text-[0.7rem] font-medium tracking-widest text-white/30 uppercase select-none">
+                Swipe up to accept
+              </p>
 
-            <div className="relative mt-4 flex h-[232px] w-28 items-end justify-center rounded-[2.5rem] border border-white/10 bg-white/5 backdrop-blur-sm">
-              <div
-                className="absolute bottom-2 left-1/2 w-6 -translate-x-1/2 overflow-hidden rounded-full bg-emerald-500/25"
-                style={{ height: `${Math.max(8, swipeProgress * 216)}px`, transition: isSwiping ? "none" : "height 300ms ease" }}
-              >
-                <div className="h-full w-full bg-gradient-to-t from-emerald-600 to-emerald-300" />
-              </div>
+              {/* Decline button */}
               <button
-                ref={swipeThumbRef}
-                type="button"
-                aria-label="Swipe up to accept call"
-                onPointerDown={handleSwipeStart}
-                onPointerMove={handleSwipeMove}
-                onPointerUp={handleSwipeEnd}
-                onPointerCancel={handleSwipeCancel}
-                className={`relative z-10 flex h-[74px] w-[74px] items-center justify-center rounded-full text-white shadow-[0_8px_30px_rgba(16,185,129,0.5)] transition-colors ${
-                  swipeHeld ? "bg-emerald-400 active:scale-95" : "bg-gradient-to-b from-emerald-500 to-emerald-600"
-                }`}
-                style={{
-                  transform: `translateY(-${swipeProgress * thumbTravel}px)`,
-                  transition: isSwiping ? "none" : "transform 350ms cubic-bezier(0.22,1,0.36,1)",
-                }}
+                onClick={rejectIncomingCall}
+                className="flex h-[3.75rem] w-[3.75rem] items-center justify-center rounded-full bg-[#dc2626]/90 text-white shadow-[0_6px_24px_rgba(220,38,38,0.35)] transition-all duration-200 active:scale-90 active:bg-[#dc2626]"
+                aria-label="Decline call"
               >
-                {swipeHeld ? <Check size={32} /> : <Phone size={28} />}
+                <PhoneOff size={24} strokeWidth={2.2} />
               </button>
             </div>
           </div>

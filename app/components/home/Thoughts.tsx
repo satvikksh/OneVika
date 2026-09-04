@@ -292,8 +292,8 @@ export default function Thoughts() {
 
   const polishedThoughtWorkflow = polishedPreview ? (
     <div className="fixed inset-0 z-[95] flex items-end justify-center bg-black/55 p-3 sm:items-center sm:p-4">
-      <div className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-stone-200 bg-white shadow-2xl dark:border-stone-800 dark:bg-stone-950">
-        <div className="border-b border-stone-100 px-4 py-3 dark:border-stone-800">
+      <div className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-stone-800 bg-stone-950 shadow-2xl">
+        <div className="border-b border-stone-800 px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <h3 className="flex items-center gap-2 text-base font-semibold text-stone-950 dark:text-white">
@@ -319,7 +319,7 @@ export default function Thoughts() {
             <p className="mb-1 text-xs font-medium text-stone-500 dark:text-stone-400">
               Original
             </p>
-            <div className="max-h-28 overflow-y-auto rounded-xl bg-stone-100 px-3 py-2 text-sm text-stone-700 dark:bg-stone-900 dark:text-stone-300">
+            <div className="max-h-28 overflow-y-auto rounded-xl bg-stone-900 px-3 py-2 text-sm text-stone-300">
               <p className="whitespace-pre-wrap break-words">{polishedPreview.originalText}</p>
             </div>
           </div>
@@ -334,7 +334,7 @@ export default function Thoughts() {
                   current ? { ...current, enhancedText: event.target.value, error: null } : current
                 )
               }
-              className="min-h-36 w-full resize-y rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm text-stone-950 outline-none focus:ring-2 focus:ring-green-500 dark:border-stone-700 dark:bg-stone-900 dark:text-white"
+              className="min-h-36 w-full resize-y rounded-xl border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-green-500"
             />
           </div>
           {polishedPreview.error ? (
@@ -380,7 +380,7 @@ export default function Thoughts() {
   ) : null;
 
   const thoughtComposer = (
-    <div className="mb-4 rounded-xl border border-stone-200 bg-white p-3 shadow-sm dark:border-stone-800 dark:bg-stone-950">
+    <div className={`mb-4 rounded-xl border border-stone-800 bg-stone-950 p-3 shadow-sm${isPremium ? " premium-card" : ""}`}>
       {polishedThoughtWorkflow}
       {showPremiumPrompt && !isPremium ? (
         <PremiumUpgradePrompt
@@ -423,7 +423,7 @@ export default function Thoughts() {
                 ? 'Polish with AI'
                 : 'Polished'}
             {!isPremium ? (
-              <span className="rounded-full bg-white px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-amber-700 dark:bg-amber-950 dark:text-amber-200">
+              <span className="rounded-full bg-amber-950 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-amber-200">
                 Premium
               </span>
             ) : null}
@@ -432,7 +432,7 @@ export default function Thoughts() {
             type="button"
             onClick={createThought}
             disabled={creating}
-            className="flex h-8 min-w-20 items-center justify-center gap-1.5 rounded-full bg-stone-900 px-3 text-xs font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-stone-950 dark:hover:bg-stone-200"
+            className="flex h-8 min-w-20 items-center justify-center gap-1.5 rounded-full bg-stone-900 px-3 text-xs font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
             Share
@@ -509,7 +509,7 @@ export default function Thoughts() {
           return (
             <div
               key={thought._id}
-              className="rounded-xl border border-stone-200 bg-gradient-to-br from-white to-stone-100 p-3 shadow-sm transition-shadow hover:shadow-md group dark:border-stone-800 dark:from-stone-950 dark:to-stone-900"
+              className={`rounded-xl border border-stone-800 bg-gradient-to-br from-stone-950 to-stone-900 p-3 shadow-sm transition-shadow hover:shadow-md group${isPremium ? " premium-card" : ""}`}
             >
               {/* Thought Header */}
               <div className="flex items-center gap-2 mb-2">
@@ -523,7 +523,7 @@ export default function Thoughts() {
                   />
                 )}
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-stone-900 text-xs truncate dark:text-stone-100">
+                  <p className="font-semibold text-stone-100 text-xs truncate">
                     {authorName}
                   </p>
                   <p className="text-xs text-stone-500 dark:text-stone-500">
@@ -570,7 +570,7 @@ export default function Thoughts() {
                     value={editDraft}
                     onChange={(event) => setEditDraft(event.target.value)}
                     maxLength={280}
-                    className="min-h-20 w-full resize-none rounded-lg border border-stone-200 bg-white p-2 text-xs text-stone-800 outline-none focus:border-stone-400 dark:border-stone-800 dark:bg-stone-950 dark:text-stone-100 dark:focus:border-stone-600"
+                    className="min-h-20 w-full resize-none rounded-lg border border-stone-800 bg-stone-950 p-2 text-xs text-stone-100 outline-none focus:border-stone-600"
                   />
                   <div className="mt-2 flex items-center justify-end gap-2">
                     <button
@@ -585,7 +585,7 @@ export default function Thoughts() {
                       type="button"
                       onClick={() => updateThought(thought._id)}
                       disabled={updatingThoughtId === thought._id}
-                      className="flex h-7 min-w-16 items-center justify-center gap-1 rounded-full bg-stone-900 px-2 text-xs text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-stone-950 dark:hover:bg-stone-200"
+                      className="flex h-7 min-w-16 items-center justify-center gap-1 rounded-full bg-stone-900 px-2 text-xs text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {updatingThoughtId === thought._id ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -597,7 +597,7 @@ export default function Thoughts() {
                   </div>
                 </div>
               ) : (
-                <p className="text-stone-700 text-xs mb-2 line-clamp-2 group-hover:line-clamp-none transition-all dark:text-stone-300">
+                <p className="text-stone-300 text-xs mb-2 line-clamp-2 group-hover:line-clamp-none transition-all">
                   {thought.content}
                 </p>
               )}
