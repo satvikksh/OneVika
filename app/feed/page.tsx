@@ -27,6 +27,8 @@ import {
   Loader2,
   ShieldAlert,
   CheckCircle2,
+  Orbit,
+  Youtube,
 } from "lucide-react";
 import { useTheme } from "../theme-provider";
 import { useSession } from "next-auth/react";
@@ -34,6 +36,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useUserAvatar } from "../hooks/useUserAvatar";
 import { useBlinkNavigation } from "../hooks/useBlinkNavigation";
 import { PremiumAvatar, PremiumName } from "../components/premium-ui";
+import YouTubeShortsFeed, {
+  type ShortsNavHandle,
+} from "../components/feeds/YouTubeShortsFeed";
 import {
   reportCreatorActivity,
   generateEventId,
@@ -1230,6 +1235,7 @@ export default function FeedPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session, status } = useSession();
+  const { isPremium } = useUserAvatar();
   const routePostId = searchParams.get("postId");
 
   const [posts, setPosts] = useState<PostType[]>(() => feedPageCache?.posts ?? []);
@@ -1250,6 +1256,11 @@ export default function FeedPage() {
     feedPageCache?.currentPostIndex ?? 0
   );
   const [direction, setDirection] = useState(0); // 1 = down/next, -1 = up/prev
+
+  // FEED SOURCE MODE (OrbitByte posts vs YouTube Shorts)
+  const [feedSource, setFeedSource] = useState<"orbit" | "youtube">("youtube");
+  const feedModeRef = useRef<"orbit" | "youtube">("youtube");
+  const shortsNavRef = useRef<ShortsNavHandle | null>(null);
 
   // NAVBAR & OPTIONS VISIBILITY STATE
   const [isNavbarVisible, setIsNavbarVisible] = useState(true);
@@ -1354,6 +1365,10 @@ export default function FeedPage() {
   useEffect(() => {
     currentPostIndexRef.current = currentPostIndex;
   }, [currentPostIndex]);
+
+  useEffect(() => {
+    feedModeRef.current = feedSource;
+  }, [feedSource]);
 
   useEffect(() => {
     setSavedPostIds(savedIds(readSavedPosts()));
@@ -1721,10 +1736,18 @@ export default function FeedPage() {
   );
 
   const handleBlinkNextReel = useCallback(() => {
+    if (feedModeRef.current === "youtube") {
+      shortsNavRef.current?.next();
+      return;
+    }
     navigateFeed(1);
   }, [navigateFeed]);
 
   const handleBlinkPreviousReel = useCallback(() => {
+    if (feedModeRef.current === "youtube") {
+      shortsNavRef.current?.prev();
+      return;
+    }
     navigateFeed(-1);
   }, [navigateFeed]);
 
@@ -1773,6 +1796,8 @@ export default function FeedPage() {
   ============================ */
   const handleWheel = useCallback(
     (e: WheelEvent) => {
+      if (feedModeRef.current !== "orbit") return;
+
       e.preventDefault();
 
       if (scrollingRef.current || posts.length === 0) return;
@@ -1805,6 +1830,8 @@ export default function FeedPage() {
 
   const handleTouchEnd = useCallback(
     (e: TouchEvent) => {
+      if (feedModeRef.current !== "orbit") return;
+
       const target = e.target as HTMLElement;
       const isInteractive =
         target.closest("button") ||
@@ -2315,10 +2342,64 @@ export default function FeedPage() {
 
       <div
         ref={feedContainerRef}
-        className={`fixed inset-0 w-screen h-[100dvh] overflow-hidden touch-none overscroll-none ${
-          isDark ? "dark bg-black" : "bg-black"
-        }`}
+className={`fixed inset-0 w-screen h-[100dvh] overflow-hidden overscroll-none ${
+            feedSource !== "orbit" ? "touch-pan-y" : "touch-none"
+          } ${isDark ? "dark bg-black" : "bg-black"}`}
       >
+        {/* FEED SOURCE TOGGLE (OrbitByte / YouTube Shorts) */}
+        <div
+          className={`absolute z-40 ${
+            feedSource === "orbit" ? "max-lg:right-4 max-lg:top-4" : "max-lg:hidden"
+          } lg:left-8 lg:top-20`}
+          style={{ paddingTop: "env(safe-area-inset-top)" }}
+        >
+          <div className="flex items-center gap-0.5 rounded-full border border-white/10 bg-black/50 p-1 shadow-xl backdrop-blur-md">
+            <button
+              type="button"
+              onClick={() => setFeedSource("orbit")}
+              aria-pressed={feedSource === "orbit"}
+              aria-label="Show OrbitByte posts"
+              title="OrbitByte posts"
+              className={`flex h-9 items-center gap-1.5 rounded-full px-2.5 text-xs font-semibold transition active:scale-95 ${
+                feedSource === "orbit"
+                  ? isPremium
+                    ? "bg-amber-400/15 text-amber-300 ring-1 ring-amber-300/30"
+                    : "bg-white/15 text-white ring-1 ring-white/25"
+                  : "text-white/50 hover:text-white/90"
+              }`}
+            >
+              <Orbit size={15} />
+              <span className="hidden lg:inline">OrbitByte</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setFeedSource("youtube")}
+              aria-pressed={feedSource === "youtube"}
+              aria-label="Show YouTube Shorts"
+              title="YouTube Shorts"
+              className={`flex h-9 items-center gap-1.5 rounded-full px-2.5 text-xs font-semibold transition active:scale-95 ${
+                feedSource === "youtube"
+                  ? "bg-red-500/20 text-red-300 ring-1 ring-red-400/40"
+                  : "text-white/50 hover:text-white/90"
+              }`}
+            >
+              <Youtube size={15} />
+              <span className="hidden lg:inline">Shorts</span>
+            </button>
+          </div>
+        </div>
+
+        <AnimatePresence mode="wait" initial={false}>
+{feedSource === "orbit" && (
+  <motion.div
+    key="orbit"
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    exit={{ opacity: 0 }}
+    transition={{ duration: 0.15 }}
+    className="absolute inset-0"
+  >
+          <>
         {/* CURRENT POST - FULL SCREEN */}
         <AnimatePresence custom={direction}>
           {currentPost ? (
@@ -2876,6 +2957,26 @@ export default function FeedPage() {
           currentPostIndex > posts.length - 3 && (
             <div ref={loadMoreRef} className="h-1" />
           )}
+          </>
+  </motion.div>
+)}
+{feedSource === "youtube" && (
+  <motion.div
+    key="youtube"
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    exit={{ opacity: 0 }}
+    transition={{ duration: 0.15 }}
+    className="absolute inset-0"
+  >
+    <YouTubeShortsFeed
+      isPremium={isPremium}
+      navRef={shortsNavRef}
+      onSwitchToOrbit={() => setFeedSource("orbit")}
+    />
+  </motion.div>
+)}
+</AnimatePresence>
       </div>
 
       {/* MODALS */}
