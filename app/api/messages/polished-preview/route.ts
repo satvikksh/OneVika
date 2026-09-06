@@ -26,10 +26,10 @@ const OPENROUTER_BASE_URL = (
   .replace(/\/chat\/completions\/?$/, "");
 
 const OPENROUTER_MODEL =
-  process.env.OPENROUTER_MODEL || "deepseek/deepseek-v4-flash:free";
+  process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini";
 
 const OPENROUTER_FALLBACK_MODELS = (
-  process.env.OPENROUTER_FALLBACK_MODELS || "cohere/north-mini-code:free"
+  process.env.OPENROUTER_FALLBACK_MODELS || ""
 )
   .split(",")
   .map((model) => model.trim())
@@ -66,12 +66,6 @@ async function callOpenRouter(messages: OpenRouterMessage[]) {
           headers: {
             Authorization: `Bearer ${apiKey}`,
             "Content-Type": "application/json",
-            "HTTP-Referer":
-              process.env.NEXT_PUBLIC_BASE_URL ||
-              process.env.NEXTAUTH_URL ||
-              "http://localhost:3000",
-            "X-OpenRouter-Title":
-              process.env.OPENROUTER_APP_TITLE || "OrbitByte",
           },
           body: JSON.stringify({
             model,

@@ -3,50 +3,32 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/lib/authOptions";
-import { getOpenAIClient } from "@/app/lib/ai";
+import { OpenRouterError, createOpenRouterCompletion } from "@/app/lib/ai";
 
 const MAX_INPUT_LENGTH = 2000;
 
-function getOpenAIErrorResponse(error: unknown) {
-  const openAIError = error as {
-    status?: number;
-    code?: string | null;
-    type?: string | null;
-    message?: string;
-    error?: {
-      code?: string | null;
-      type?: string | null;
-      message?: string;
-    };
-  };
-
-  const status = openAIError.status;
-  const code = openAIError.code ?? openAIError.error?.code;
-  const type = openAIError.type ?? openAIError.error?.type;
-
-  if (code === "insufficient_quota") {
-    return {
-      error:
-        "AI quota exhausted. Please check the OpenAI billing/quota for this project.",
-      status: 402,
-    };
-  }
-
-  if (status === 429 || type === "rate_limit_exceeded") {
-    return {
-      error: "AI preview is busy right now. Please try again in a moment.",
-      status: 429,
-    };
-  }
-
-  if (
-    error instanceof Error &&
-    error.message === "OPENAI_API_KEY is not configured"
-  ) {
-    return {
-      error: "AI preview is not configured on this server.",
-      status: 503,
-    };
+function getProviderErrorResponse(error: unknown) {
+  if (error instanceof OpenRouterError) {
+    switch (error.status) {
+      case 401:
+      case 503:
+        return {
+          error: "AI preview is not configured on this server.",
+          status: 503,
+        };
+      case 429:
+        return {
+          error: "AI preview is busy right now. Please try again in a moment.",
+          status: 429,
+        };
+      case 504:
+        return {
+          error: "AI preview timed out. Please try again.",
+          status: 504,
+        };
+      default:
+        return null;
+    }
   }
 
   return null;
@@ -84,11 +66,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const openai = getOpenAIClient();
-    const completion = await openai.chat.completions.create({
-      model: process.env.POLISHED_MODE_MODEL || "gpt-4o-mini",
-      temperature: 0.75,
-      max_tokens: 500,
+    const enhancedText = await createOpenRouterCompletion({
       messages: [
         {
           role: "system",
@@ -97,9 +75,9 @@ export async function POST(req: NextRequest) {
         },
         { role: "user", content: text },
       ],
+      temperature: 0.75,
+      maxTokens: 500,
     });
-
-    const enhancedText = completion.choices[0]?.message?.content?.trim();
 
     if (!enhancedText) {
       return NextResponse.json(
@@ -112,11 +90,11 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error("[Polished Mode] Preview generation failed:", error);
 
-    const openAIErrorResponse = getOpenAIErrorResponse(error);
-    if (openAIErrorResponse) {
+    const providerErrorResponse = getProviderErrorResponse(error);
+    if (providerErrorResponse) {
       return NextResponse.json(
-        { error: openAIErrorResponse.error },
-        { status: openAIErrorResponse.status }
+        { error: providerErrorResponse.error },
+        { status: providerErrorResponse.status }
       );
     }
 

@@ -171,9 +171,9 @@ const OPENROUTER_BASE_URL = (
   .replace(/\/chat\/completions\/?$/, "")
   .replace(/\/+$/, "");
 const OPENROUTER_MODEL =
-  process.env.OPENROUTER_MODEL || "deepseek/deepseek-v4-flash:free";
+  process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini";
 const OPENROUTER_FALLBACK_MODELS = (
-  process.env.OPENROUTER_FALLBACK_MODELS || "cohere/north-mini-code:free"
+  process.env.OPENROUTER_FALLBACK_MODELS || ""
 )
   .split(",")
   .map((model) => model.trim())
@@ -181,8 +181,6 @@ const OPENROUTER_FALLBACK_MODELS = (
 const OPENROUTER_MODELS = Array.from(
   new Set([OPENROUTER_MODEL, ...OPENROUTER_FALLBACK_MODELS])
 );
-const OPENROUTER_APP_TITLE =
-  process.env.OPENROUTER_APP_TITLE || "OrbitByte";
 const AI_CONTEXT_MESSAGE_LIMIT = Math.min(
   Math.max(Number(process.env.AI_CONTEXT_MESSAGE_LIMIT || "24"), 4),
   60
@@ -947,7 +945,7 @@ function getAiProviderFailureMessage(error: unknown) {
   }
 
   if (
-    message.includes("OpenRouter API error 429") ||
+    message.includes("API error 429") ||
     message.toLowerCase().includes("rate-limited")
   ) {
     return AI_PROVIDER_RATE_LIMIT_MESSAGE;
@@ -1471,7 +1469,7 @@ async function streamOpenRouterReply(
             messageCount: messages.length,
             baseUrl: OPENROUTER_BASE_URL,
             timeoutMs: AI_PROVIDER_TIMEOUT_MS,
-            maxTokens: Number(process.env.OPENROUTER_MAX_TOKENS || "40000"),
+            maxTokens: Number(process.env.OPENROUTER_MAX_TOKENS || "70000"),
             stream: true,
           }
         );
@@ -1481,13 +1479,11 @@ async function streamOpenRouterReply(
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-            "HTTP-Referer": APP_URL,
-            "X-OpenRouter-Title": OPENROUTER_APP_TITLE,
           },
           body: JSON.stringify({
             model,
             messages,
-            max_tokens: Number(process.env.OPENROUTER_MAX_TOKENS || "40000"),
+            max_tokens: Number(process.env.OPENROUTER_MAX_TOKENS || "70000"),
             temperature: Number(process.env.OPENROUTER_TEMPERATURE || "0.7"),
             stream: true,
           }),
@@ -1582,7 +1578,7 @@ async function streamOpenRouterReply(
                 await onDelta(delta, fullText);
               }
             } catch (error) {
-              console.warn("[AI Chat] Ignored malformed OpenRouter SSE chunk:", {
+              console.warn("[AI Chat] Ignored malformed SSE chunk:", {
                 data,
                 error,
               });
@@ -1591,7 +1587,7 @@ async function streamOpenRouterReply(
         }
 
         if (buffer.trim()) {
-          console.warn("[AI Chat] OpenRouter stream ended with unprocessed data.");
+          console.warn("[AI Chat] Stream ended with unprocessed data.");
         }
 
         if (fullText.trim()) {

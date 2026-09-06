@@ -21,13 +21,12 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_BASE_URL = (process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1")
     .replace(/\/chat\/completions\/?$/, "")
     .replace(/\/+$/, "");
-const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || "deepseek/deepseek-v4-flash:free";
-const OPENROUTER_FALLBACK_MODELS = (process.env.OPENROUTER_FALLBACK_MODELS || "cohere/north-mini-code:free")
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini";
+const OPENROUTER_FALLBACK_MODELS = (process.env.OPENROUTER_FALLBACK_MODELS || "")
     .split(",")
     .map((model) => model.trim())
     .filter(Boolean);
 const OPENROUTER_MODELS = Array.from(new Set([OPENROUTER_MODEL, ...OPENROUTER_FALLBACK_MODELS]));
-const OPENROUTER_APP_TITLE = process.env.OPENROUTER_APP_TITLE || "OrbitByte";
 const AI_CONTEXT_MESSAGE_LIMIT = Math.min(Math.max(Number(process.env.AI_CONTEXT_MESSAGE_LIMIT || "24"), 4), 60);
 const AI_RESPONSE_MAX_RETRIES = Math.min(Math.max(Number(process.env.AI_RESPONSE_MAX_RETRIES || "3"), 1), 3);
 const AI_SYSTEM_PROMPT = process.env.AI_SYSTEM_PROMPT ||
@@ -631,7 +630,7 @@ function getAiProviderFailureMessage(error) {
     if (message.includes("OPENROUTER_API_KEY")) {
         return "AI chat is not configured yet. Please add the AI provider API key on the server.";
     }
-    if (message.includes("OpenRouter API error 429") ||
+    if (message.includes("API error 429") ||
         message.toLowerCase().includes("rate-limited")) {
         return AI_PROVIDER_RATE_LIMIT_MESSAGE;
     }
@@ -994,7 +993,7 @@ async function streamOpenRouterReply(messages, onDelta) {
                     messageCount: messages.length,
                     baseUrl: OPENROUTER_BASE_URL,
                     timeoutMs: AI_PROVIDER_TIMEOUT_MS,
-                    maxTokens: Number(process.env.OPENROUTER_MAX_TOKENS || "40000"),
+                    maxTokens: Number(process.env.OPENROUTER_MAX_TOKENS || "70000"),
                     stream: true,
                 });
                 const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
@@ -1002,13 +1001,11 @@ async function streamOpenRouterReply(messages, onDelta) {
                     headers: {
                         "Content-Type": "application/json",
                         Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-                        "HTTP-Referer": APP_URL,
-                        "X-OpenRouter-Title": OPENROUTER_APP_TITLE,
                     },
                     body: JSON.stringify({
                         model,
                         messages,
-                        max_tokens: Number(process.env.OPENROUTER_MAX_TOKENS || "40000"),
+                        max_tokens: Number(process.env.OPENROUTER_MAX_TOKENS || "70000"),
                         temperature: Number(process.env.OPENROUTER_TEMPERATURE || "0.7"),
                         stream: true,
                     }),
@@ -1074,7 +1071,7 @@ async function streamOpenRouterReply(messages, onDelta) {
                             }
                         }
                         catch (error) {
-                            console.warn("[AI Chat] Ignored malformed OpenRouter SSE chunk:", {
+                            console.warn("[AI Chat] Ignored malformed SSE chunk:", {
                                 data,
                                 error,
                             });
@@ -1082,7 +1079,7 @@ async function streamOpenRouterReply(messages, onDelta) {
                     }
                 }
                 if (buffer.trim()) {
-                    console.warn("[AI Chat] OpenRouter stream ended with unprocessed data.");
+                    console.warn("[AI Chat] Stream ended with unprocessed data.");
                 }
                 if (fullText.trim()) {
                     console.info("[AI Chat] OpenRouter stream completed.", {
@@ -1337,6 +1334,16 @@ io.on("connection", (socket) => {
         socket.join(`user_${resolvedUserId}`);
         socketUserIds.add(resolvedUserId);
         addSocketToActiveUser(resolvedUserId, socket.id);
+        // Stamp the user's last-active timestamp (best indicator of activity).
+        try {
+            void mongoose.connection.db
+                ?.collection("users")
+                .updateOne({ _id: new mongoose.Types.ObjectId(resolvedUserId) }, { $set: { lastSeen: new Date() } })
+                .catch(() => { });
+        }
+        catch {
+            /* non-fatal presence write */
+        }
     };
     const handshakeUserId = socket.handshake.auth?.userId;
     console.log("Socket connected:", socket.id, "user:", handshakeUserId);
@@ -1347,6 +1354,19 @@ io.on("connection", (socket) => {
     socket.on("send_message", async (message) => {
         try {
             if (!message.senderId) {
+                return;
+            }
+            // Enforcement for accounts that cannot send messages (suspended,
+            // restricted, or banned) so the socket channel cannot bypass the API.
+            const senderUser = await mongoose.connection.db
+                ?.collection("users")
+                .findOne({ _id: new mongoose.Types.ObjectId(message.senderId) }, { projection: { accountStatus: 1 } });
+            if (senderUser &&
+                ["restricted", "suspended", "banned"].includes(String(senderUser.accountStatus ?? "active"))) {
+                console.warn("[Socket] Blocked message from non-active sender.", {
+                    senderId: message.senderId,
+                    accountStatus: senderUser.accountStatus,
+                });
                 return;
             }
             if (handshakeUserId && message.senderId !== handshakeUserId) {

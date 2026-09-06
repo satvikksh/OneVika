@@ -1,17 +1,7 @@
-import OpenAI from "openai";
+import { createOpenRouterCompletion } from "./ai";
+import type { IUITheme } from "@/app/models/User";
 
-function getOpenAIClient() {
-  const apiKey = process.env.OPENAI_API_KEY;
-
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is not configured");
-  }
-
-  return new OpenAI({ apiKey });
-}
-
-export async function generateAITheme() {
-  const openai = getOpenAIClient();
+export async function generateAITheme(): Promise<IUITheme> {
   const prompt = `
 Generate a unique modern dark UI theme for a premium social app.
 
@@ -32,16 +22,14 @@ Rules:
 - No explanations
 `;
 
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
+  const raw = await createOpenRouterCompletion({
     messages: [{ role: "user", content: prompt }],
     temperature: 0.9,
+    maxTokens: 600,
   });
 
-  const raw = completion.choices[0].message.content || "{}";
-
   try {
-    return JSON.parse(raw);
+    return JSON.parse(raw) as IUITheme;
   } catch {
     throw new Error("AI theme parsing failed");
   }

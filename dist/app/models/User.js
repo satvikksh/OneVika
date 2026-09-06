@@ -101,7 +101,6 @@ const UserSchema = new Schema({
     },
     premiumPaymentProvider: {
         type: String,
-        enum: ["stripe", "razorpay"],
     },
     premiumLastPaymentAt: {
         type: Date,
@@ -123,7 +122,8 @@ const UserSchema = new Schema({
         default: null,
     },
     premiumPaymentMethod: {
-        type: Object,
+        type: Map,
+        of: Schema.Types.Mixed,
         default: null,
     },
     uiTheme: {
@@ -138,7 +138,45 @@ const UserSchema = new Schema({
         type: [String],
         default: [],
     },
+    role: {
+        type: String,
+        enum: ["USER", "ADMIN"],
+        default: "USER",
+        index: true,
+    },
+    // 🚨 MODERATION
+    accountStatus: {
+        type: String,
+        enum: ["active", "warned", "restricted", "suspended", "banned"],
+        default: "active",
+        index: true,
+    },
+    accountStatusReason: {
+        type: String,
+        trim: true,
+        default: "",
+    },
+    accountStatusAt: {
+        type: Date,
+        default: null,
+    },
+    // ✅ ACCOUNT VERIFICATION
+    verified: {
+        type: Boolean,
+        default: false,
+        index: true,
+    },
+    verifiedAt: {
+        type: Date,
+        default: null,
+    },
+    lastSeen: {
+        type: Date,
+        default: null,
+        index: true,
+    },
 }, { timestamps: true });
+UserSchema.index({ createdAt: -1 });
 /* =======================
    5️⃣ Export Model (Next.js Safe)
 ======================= */
