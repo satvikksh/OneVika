@@ -15,9 +15,9 @@ export const runtime = "nodejs";
 /**
  * GET /api/discover/news?location=Bhopal
  *
- * Fetches location-based news through SerpApi. The key stays server-side.
+ * Fetches location-based news through Serper. The key stays server-side.
  * Responses are cached in-memory for 5 minutes; requests are rate-limited
- * per user to avoid burning SerpApi credits.
+ * per user to avoid burning Serper credits.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -41,13 +41,13 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // 1) Serve from cache first (avoids both SerpApi calls and rate limiting).
+    // 1) Serve from cache first (avoids both Serper calls and rate limiting).
     const { key, data: cached } = getCachedNews(session.user.id, location);
     if (cached) {
       return NextResponse.json({ ...(cached as object), cached: true });
     }
 
-    // 2) Rate limit fresh SerpApi calls.
+    // 2) Rate limit fresh Serper calls.
     const limit = consumeRateLimit(session.user.id);
     if (!limit.allowed) {
       const retryAfterSec = limit.retryAfterSec ?? 30;
@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // 3) Hit SerpApi.
+    // 3) Hit Serper.
     const articles = await fetchNews(location);
     const payload = { location, articles };
     setCachedNews(key, payload);

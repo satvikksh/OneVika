@@ -1,17 +1,17 @@
 /**
  * Discover lib — server-side helpers for the /discover page.
  *
- * The SerpApi key is read from SERPAPI_KEY (server-only) and is NEVER
- * exposed to the client. All SerpApi and reverse-geocoding requests are
+ * The Serper key is read from SERPER_API_KEY (server-only) and is NEVER
+ * exposed to the client. All Serper and reverse-geocoding requests are
  * made from the OrbitByte backend.
  */
 
-const SERPAPI_KEY = process.env.SERPAPI_KEY || process.env.SERP_API_KEY || "";
-const SERPAPI_BASE = "https://serpapi.com/search.json";
+const SERPER_API_KEY = process.env.SERPER_API_KEY || "";
+const SERPER_BASE_URL = process.env.SERPER_BASE_URL || "https://google.serper.dev";
 const GEOCODE_BASE = "https://api.bigdatacloud.net/data/reverse-geocode-client";
 
 const NEWS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-const RATE_LIMIT_MAX = 12; // SerpApi calls per user per window
+const RATE_LIMIT_MAX = 12; // Serper calls per user per window
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const FETCH_TIMEOUT_MS = 15000;
 
@@ -40,7 +40,7 @@ const newsCache = new Map<string, CacheEntry>();
 const rateBuckets = new Map<string, number[]>();
 
 export function isSerpKeyConfigured(): boolean {
-  return Boolean(SERPAPI_KEY.trim());
+  return Boolean(SERPER_API_KEY.trim());
 }
 
 /** Validate + normalize an incoming location query param. */
@@ -59,7 +59,7 @@ export function parseCoord(raw: string | null, min: number, max: number): number
   return value;
 }
 
-/** Short city token (first comma part) used as the SerpApi query term. */
+/** Short city token (first comma part) used as the Serper query term. */
 export function cityFromLocation(location: string): string {
   const first = location.split(",")[0].trim();
   if (first) return first.slice(0, 60);
@@ -75,6 +75,40 @@ export async function fetchWithTimeout(url: string, init: RequestInit = {}): Pro
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Shared Serper client used by Discover (news), Jobs and YouTube Shorts.
+ * POSTs a JSON body to `${SERPER_BASE_URL}/${endpoint}` with the API key in
+ * the X-API-KEY header so the key never appears in URLs or on the client.
+ */
+export async function serperRequest<T = unknown>(
+  endpoint: string,
+  body: Record<string, unknown>
+): Promise<T> {
+  if (!SERPER_API_KEY.trim()) {
+    throw new Error("Search provider is not configured on the server.");
+  }
+
+  const url = `${SERPER_BASE_URL}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
+  const res = await fetchWithTimeout(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-API-KEY": SERPER_API_KEY,
+    },
+    body: JSON.stringify(body),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const message =
+      (data as { error?: string }).error ||
+      (data as { message?: string }).message ||
+      `Search request failed (${res.status})`;
+    throw new Error(message);
+  }
+  return data as T;
 }
 
 /**
@@ -120,10 +154,10 @@ export async function reverseGeocode(
   }
 }
 
-/** Map a raw SerpApi news item to our normalized shape. */
+/** Map a raw Serper news item to our normalized shape. */
 function normalizeArticles(raw: unknown[]): NewsArticle[] {
-  // google_news returns story-groups (with nested .stories) plus an optional
-  // flat top_stories list. Flatten both into individual articles.
+  // Serper's /news returns a flat list of items; tolerate grouped story
+  // structures too by flattening nested .stories into individual articles.
   const flat: unknown[] = [];
   for (const item of raw || []) {
     const entry = (item || {}) as Record<string, unknown>;
@@ -166,48 +200,29 @@ function normalizeArticles(raw: unknown[]): NewsArticle[] {
       publishedAt,
       snippet: typeof entry.snippet === "string" ? entry.snippet : "",
       thumbnail:
-        typeof entry.thumbnail === "string"
-          ? entry.thumbnail
-          : typeof entry.image === "string"
-            ? entry.image
-            : null,
+        typeof entry.imageUrl === "string"
+          ? entry.imageUrl
+          : typeof entry.thumbnail === "string"
+            ? entry.thumbnail
+            : typeof entry.image === "string"
+              ? entry.image
+              : null,
     });
   }
   return articles;
 }
 
-/** Query SerpApi's Google News engine for a location. */
+/** Query Serper's Google News endpoint for a location. */
 export async function fetchNews(location: string): Promise<NewsArticle[]> {
-  if (!SERPAPI_KEY.trim()) {
-    throw new Error("SerpApi is not configured on the server.");
-  }
-
-  const params = new URLSearchParams({
-    engine: "google_news",
+  const data = await serperRequest<{ news?: unknown[] }>("/news", {
     q: cityFromLocation(location),
-    location: location,
-    hl: "en",
     gl: "in",
-    google_domain: "google.co.in",
-    api_key: SERPAPI_KEY,
+    hl: "en",
+    num: 12,
   });
 
-  const res = await fetchWithTimeout(`${SERPAPI_BASE}?${params.toString()}`);
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const message =
-      (data as { error?: string }).error || `News request failed (${res.status})`;
-    throw new Error(message);
-  }
-
-  const newsResults = Array.isArray((data as { news_results?: unknown[] }).news_results)
-    ? (data as { news_results: unknown[] }).news_results
-    : [];
-  const topStories = Array.isArray((data as { top_stories?: unknown[] }).top_stories)
-    ? (data as { top_stories: unknown[] }).top_stories
-    : [];
-
-  return normalizeArticles([...topStories, ...newsResults]);
+  const news = Array.isArray(data.news) ? data.news : [];
+  return normalizeArticles(news);
 }
 
 /** Sliding-window rate limiter keyed by user id. */

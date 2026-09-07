@@ -1,20 +1,21 @@
 /**
  * Jobs lib — server-side helpers for the /jobs page.
  *
- * Uses SerpApi's google_jobs engine. The SerpApi key is read from
- * SERPAPI_KEY (server-only) via the shared discover helpers and is NEVER
- * exposed to the client. Generic fetch/rate-limit helpers are reused from
- * app/lib/discover.ts rather than duplicated.
+ * Uses SerpAPI's google_jobs engine. The SerpAPI key is read from
+ * SERPAPI_API_KEY (server-only) and is NEVER exposed to the client. This
+ * module is intentionally self-contained: it does NOT import from the Discover
+ * lib or share any code with the Serper-based news/search integration, so
+ * SerpAPI is used exclusively by the Jobs section and Serper exclusively by
+ * Discover.
  */
 
-import {
-  consumeRateLimit,
-  fetchWithTimeout,
-  isSerpKeyConfigured,
-} from "@/app/lib/discover";
-
+const SERPAPI_API_KEY = process.env.SERPAPI_API_KEY || "";
 const SERPAPI_BASE = "https://serpapi.com/search.json";
+
 const JOBS_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const JOBS_RATE_LIMIT_MAX = 12; // SerpAPI calls per user per window
+const JOBS_RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const JOBS_FETCH_TIMEOUT_MS = 20000;
 
 export type JobPost = {
   id: string;
@@ -71,8 +72,11 @@ const SORT_BY = new Set(["relevance", "date"]);
 
 type CacheEntry = { data: unknown; expiresAt: number };
 const jobsCache = new Map<string, CacheEntry>();
+const rateBuckets = new Map<string, number[]>();
 
-export { consumeRateLimit, isSerpKeyConfigured };
+export function isJobsApiConfigured(): boolean {
+  return Boolean(SERPAPI_API_KEY.trim());
+}
 
 /** Reference list of employment types for the UI (stable order). */
 export const EMPLOYMENT_TYPE_OPTIONS: { value: string; label: string }[] = [
@@ -93,6 +97,17 @@ export const EXPERIENCE_LEVEL_OPTIONS: { value: string; label: string }[] = [
   { value: "MANAGER", label: "Manager" },
   { value: "EXECUTIVE", label: "Executive" },
 ];
+
+/** fetch() wrapper with a hard timeout (Jobs-only; kept local for isolation). */
+async function fetchWithTimeout(url: string, init: RequestInit = {}): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), JOBS_FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, cache: "no-store", signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 /** Strictly validate + normalize incoming GET query params. */
 export function parseSearchParams(
@@ -183,7 +198,26 @@ export function setCachedJobs(cacheKey: string, data: unknown): void {
   jobsCache.set(cacheKey, { data, expiresAt: Date.now() + JOBS_CACHE_TTL_MS });
 }
 
-/** Map a raw SerpApi google_jobs item to our normalized shape. */
+/** Sliding-window rate limiter keyed by user id (Jobs-only bucket). */
+export function consumeRateLimit(
+  userId: string
+): { allowed: boolean; retryAfterSec?: number } {
+  const now = Date.now();
+  const windowStart = now - JOBS_RATE_LIMIT_WINDOW_MS;
+  const bucket = (rateBuckets.get(userId) || []).filter((t) => t > windowStart);
+
+  if (bucket.length >= JOBS_RATE_LIMIT_MAX) {
+    const oldest = bucket[0];
+    const retryAfterSec = Math.max(1, Math.ceil((oldest + JOBS_RATE_LIMIT_WINDOW_MS - now) / 1000));
+    return { allowed: false, retryAfterSec };
+  }
+
+  bucket.push(now);
+  rateBuckets.set(userId, bucket);
+  return { allowed: true };
+}
+
+/** Map a raw SerpAPI google_jobs item to our normalized shape. */
 function normalizeJobs(raw: unknown[]): JobPost[] {
   const seen = new Set<string>();
   const jobs: JobPost[] = [];
@@ -292,15 +326,19 @@ function truncateDescription(text: string): string {
   return clean.length > 420 ? `${clean.slice(0, 420).trim()}…` : clean;
 }
 
-/** Query SerpApi's google_jobs engine. */
+/** Query SerpAPI's google_jobs engine. */
 export async function fetchJobs(params: JobSearchParams): Promise<JobSearchResult> {
+  if (!isJobsApiConfigured()) {
+    throw new Error("SerpAPI is not configured on the server.");
+  }
+
   const search = new URLSearchParams({
     engine: "google_jobs",
     q: params.q,
     hl: "en",
     gl: "in",
     google_domain: "google.co.in",
-    api_key: process.env.SERPAPI_KEY || process.env.SERP_API_KEY || "",
+    api_key: SERPAPI_API_KEY,
   });
   if (params.location) search.set("location", params.location);
   if (params.remote) search.set("remote", params.remote);
@@ -311,21 +349,28 @@ export async function fetchJobs(params: JobSearchParams): Promise<JobSearchResul
   if (params.nextPageToken) search.set("next_page_token", params.nextPageToken);
 
   const res = await fetchWithTimeout(`${SERPAPI_BASE}?${search.toString()}`);
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
+  let data: Record<string, unknown> = {};
+  try {
+    data = (await res.json()) as Record<string, unknown>;
+  } catch {
+    data = {};
+  }
+
+  if (!res.ok || typeof data.error === "string" || typeof data.error_message === "string") {
+    const statusNote = res.status !== 200 ? ` (${res.status})` : "";
     const message =
-      (data as { error?: string }).error || `Job search failed (${res.status})`;
+      (data.error as string) ||
+      (data.error_message as string) ||
+      `Job search failed${statusNote}`;
     throw new Error(message);
   }
 
-  const jobsResults = Array.isArray((data as { jobs_results?: unknown[] }).jobs_results)
-    ? (data as { jobs_results: unknown[] }).jobs_results
-    : [];
-  const pagination = (data as { serpapi_pagination?: { next_page_token?: string } })
-    .serpapi_pagination;
-  const nextPageToken = typeof pagination?.next_page_token === "string"
-    ? pagination.next_page_token
-    : null;
+  const jobsResults = Array.isArray(data.jobs_results) ? (data.jobs_results as unknown[]) : [];
+  const pagination = (data.serpapi_pagination || {}) as { next_page_token?: string };
+  const nextPageToken =
+    typeof pagination.next_page_token === "string" && pagination.next_page_token
+      ? pagination.next_page_token
+      : null;
 
   return {
     jobs: normalizeJobs(jobsResults),

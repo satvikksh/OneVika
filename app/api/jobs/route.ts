@@ -5,7 +5,7 @@ import {
   consumeRateLimit,
   fetchJobs,
   getCachedJobs,
-  isSerpKeyConfigured,
+  isJobsApiConfigured,
   jobParamsHash,
   parseSearchParams,
   setCachedJobs,
@@ -16,9 +16,10 @@ export const runtime = "nodejs";
 /**
  * GET /api/jobs?q=software+engineer&location=Bhopal,+India&remote=true
  *
- * Searches jobs through SerpApi's google_jobs engine. The key stays
+ * Searches jobs through SerpAPI's google_jobs engine. The SerpAPI key stays
  * server-side. Responses are cached in-memory for 10 minutes; requests are
- * rate-limited per user (shared SerpApi budget with Discover).
+ * rate-limited per user. This is intentionally isolated from Discover/news,
+ * which uses Serper.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -33,21 +34,21 @@ export async function GET(req: NextRequest) {
     }
     const searchParams = parsed.params;
 
-    if (!isSerpKeyConfigured()) {
+    if (!isJobsApiConfigured()) {
       return NextResponse.json(
         { error: "Jobs are temporarily unavailable on the server." },
         { status: 503 }
       );
     }
 
-    // 1) Serve from cache first (avoids both SerpApi calls and rate limiting).
+    // 1) Serve from cache first (avoids both SerpAPI calls and rate limiting).
     const cacheKey = `${session.user.id}::${jobParamsHash(searchParams)}`;
     const cached = getCachedJobs(cacheKey);
     if (cached) {
       return NextResponse.json({ ...(cached as object), cached: true });
     }
 
-    // 2) Rate limit fresh SerpApi calls.
+    // 2) Rate limit fresh SerpAPI calls.
     const limit = consumeRateLimit(session.user.id);
     if (!limit.allowed) {
       const retryAfterSec = limit.retryAfterSec ?? 30;
@@ -63,7 +64,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // 3) Hit SerpApi.
+    // 3) Hit SerpAPI.
     const result = await fetchJobs(searchParams);
     const payload = {
       location: searchParams.location ?? "",

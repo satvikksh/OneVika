@@ -1,21 +1,17 @@
 /**
  * YouTube lib — server-side helpers for the /feed YouTube Shorts mode.
  *
- * Uses SerpApi's youtube engine. The SerpApi key is read from SERPAPI_KEY
+ * Uses Serper's videos endpoint. The Serper key is read from SERPER_API_KEY
  * (server-only) via the shared discover helpers and is NEVER exposed to the
  * client. Generic fetch/rate-limit helpers are reused from app/lib/discover.ts
  * rather than duplicated.
  */
 
-import {
-  consumeRateLimit,
-  fetchWithTimeout,
-  isSerpKeyConfigured,
-} from "@/app/lib/discover";
+import { consumeRateLimit, isSerpKeyConfigured, serperRequest } from "@/app/lib/discover";
 
-const SERPAPI_BASE = "https://serpapi.com/search.json";
 const SHORTS_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const MAX_SHORTS_PER_FETCH = 24;
+const MAX_YOUTUBE_PAGE = 10;
 
 export type YouTubeShort = {
   id: string;
@@ -69,14 +65,15 @@ export function shortsCacheKey(
 }
 
 /**
- * Validate a SerpApi `sp` page token. Tokens are opaque base64-ish strings;
- * we only bound their length and charset so garbage can't reach the upstream.
+ * Validate a Serper page number passed as `sp`. Serper paginates the videos
+ * endpoint by integer pages; anything else is rejected (treated as page 1).
  */
 export function parseYoutubePage(rawSp: string | null): string | null {
   const sp = (rawSp || "").trim();
-  if (!sp || sp.length > 600) return null;
-  if (!/^[A-Za-z0-9_%+\-/.:=]+$/.test(sp)) return null;
-  return sp;
+  if (!sp || sp.length > 4 || !/^\d{1,4}$/.test(sp)) return null;
+  const page = Number.parseInt(sp, 10);
+  if (!Number.isInteger(page) || page < 1 || page > 100) return null;
+  return String(page);
 }
 
 /** Return cached shorts payload for a cache key if still fresh. */
@@ -118,10 +115,9 @@ function isShortDuration(raw: unknown): boolean {
 }
 
 /**
- * Normalize SerpApi youtube results into YouTubeShort[]. Prefers the dedicated
- * `shorts_results` shelf; enriches channel/duration/published from
- * `video_results` when video ids overlap (those fields are "when available").
- * Falls back to filtering `video_results` for /shorts/ links if no shelf.
+ * Normalize Serper videos results into YouTubeShort[]. Filters for Actual
+ * Shorts by preferring `/shorts/` links and one-minute-or-less runtimes, and
+ * enriches each item with the fields Serper exposes per video.
  */
 function normalizeShorts(rawShortsResults: unknown[], rawVideoResults: unknown[]): YouTubeShort[] {
   const byId = new Map<string, Record<string, unknown>>();
@@ -163,17 +159,28 @@ function normalizeShorts(rawShortsResults: unknown[], rawVideoResults: unknown[]
       thumbnail:
         typeof item.thumbnail === "string" && item.thumbnail
           ? item.thumbnail
-          : item.thumbnail && typeof item.thumbnail === "object"
-            ? ((item.thumbnail as { static?: unknown }).static as string) ?? null
-            : null,
+          : typeof item.imageUrl === "string" && item.imageUrl
+            ? item.imageUrl
+            : item.thumbnail && typeof item.thumbnail === "object"
+              ? ((item.thumbnail as { static?: unknown }).static as string) ?? null
+              : null,
       views:
         typeof item.views_original === "string"
           ? item.views_original
           : formatViews(item.views),
       channel,
-      duration: typeof enrich.length === "string" ? enrich.length : null,
+      duration:
+        typeof enrich.length === "string"
+          ? enrich.length
+          : typeof item.duration === "string"
+            ? item.duration
+            : null,
       publishedAt:
-        typeof enrich.published_date === "string" ? enrich.published_date : null,
+        typeof enrich.published_date === "string"
+          ? enrich.published_date
+          : typeof item.date === "string"
+            ? item.date
+            : null,
     });
   };
 
@@ -191,7 +198,13 @@ function normalizeShorts(rawShortsResults: unknown[], rawVideoResults: unknown[]
     for (const video of rawVideoResults || []) {
       const e = video as Record<string, unknown>;
       const link = typeof e.link === "string" ? e.link : "";
-      if (!link.includes("/shorts/") && !isShortDuration(e.length)) continue;
+      if (
+        !link.includes("/shorts/") &&
+        !isShortDuration(e.length) &&
+        !isShortDuration(e.duration)
+      ) {
+        continue;
+      }
       push(e);
       if (out.length >= MAX_SHORTS_PER_FETCH) break;
     }
@@ -205,47 +218,27 @@ export type FetchShortsResult = {
   nextPageToken: string | null;
 };
 
-/** Query SerpApi's youtube engine for Shorts-style results. */
+/** Query Serper's videos endpoint for Shorts-style results. */
 export async function fetchYouTubeShorts(
   q: string,
   num: number,
-  opts: { sp?: string | null; noCache?: boolean } = {}
+  opts: { sp?: string | null } = {}
 ): Promise<FetchShortsResult> {
-  const search = new URLSearchParams({
-    engine: "youtube",
-    search_query: q,
-    num: String(num),
-    hl: "en",
+  const page = opts.sp ? Number.parseInt(opts.sp, 10) : 1;
+
+  const data = await serperRequest<{ videos?: unknown[] }>("/videos", {
+    q,
+    num,
     gl: "in",
-    google_domain: "google.co.in",
-    api_key: process.env.SERPAPI_KEY || process.env.SERP_API_KEY || "",
+    hl: "en",
+    page,
   });
-  if (opts.sp) search.set("sp", opts.sp);
-  if (opts.noCache) search.set("no_cache", "1");
 
-  const res = await fetchWithTimeout(`${SERPAPI_BASE}?${search.toString()}`);
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const message =
-      (data as { error?: string }).error || `YouTube search failed (${res.status})`;
-    throw new Error(message);
-  }
+  const videos = Array.isArray(data.videos) ? data.videos : [];
+  const shorts = normalizeShorts([], videos);
 
-  const shortsResults = Array.isArray((data as { shorts_results?: unknown[] }).shorts_results)
-    ? (data as { shorts_results: unknown[] }).shorts_results
-    : [];
-  const videoResults = Array.isArray((data as { video_results?: unknown[] }).video_results)
-    ? (data as { video_results: unknown[] }).video_results
-    : [];
+  const hasMore = videos.length >= Math.min(num, 100) && page < MAX_YOUTUBE_PAGE;
+  const nextPageToken = hasMore ? String(page + 1) : null;
 
-  const nextPageToken =
-    (data as { serpapi_pagination?: { next_page_token?: unknown } }).serpapi_pagination
-      ?.next_page_token ?? null;
-  const nextPageTokenStr =
-    typeof nextPageToken === "string" && nextPageToken ? nextPageToken : null;
-
-  return {
-    shorts: normalizeShorts(shortsResults, videoResults),
-    nextPageToken: nextPageTokenStr ? parseYoutubePage(nextPageTokenStr) : null,
-  };
+  return { shorts, nextPageToken };
 }

@@ -15,13 +15,13 @@ import {
 export const runtime = "nodejs";
 
 /**
- * GET /api/youtube/shorts?q=trending+shorts&num=12[&sp=TOKEN][&fresh=1]
+ * GET /api/youtube/shorts?q=trending+shorts&num=12[&sp=PAGE][&fresh=1]
  *
- * Fetches YouTube Shorts through SerpApi's youtube engine. The key stays
+ * Fetches YouTube Shorts through Serper's videos endpoint. The key stays
  * server-side. Responses are cached in-memory for 10 minutes; requests are
- * rate-limited per user (shared SerpApi budget with Discover/Jobs).
+ * rate-limited per user (shared Serper budget with Discover/Jobs).
  *
- * `sp` passes a SerpApi page token to load the next batch of a query;
+ * `sp` passes a Serper page number to load the next batch of a query;
  * `fresh=1` bypasses the cache so refresh can surface new content.
  */
 export async function GET(req: NextRequest) {
@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // 1) Serve from cache first — skips both SerpApi calls and rate limiting.
+    // 1) Serve from cache first — skips both Serper calls and rate limiting.
     //    Fresh requests bypass the cache entirely.
     const cacheKey = shortsCacheKey(session.user.id, parsed.q, parsed.num, sp ?? "");
     if (!fresh) {
@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // 2) Rate limit fresh SerpApi calls (including paginated batches).
+    // 2) Rate limit fresh Serper calls (including paginated batches).
     const limit = consumeRateLimit(session.user.id);
     if (!limit.allowed) {
       const retryAfterSec = limit.retryAfterSec ?? 30;
@@ -75,11 +75,8 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // 3) Hit SerpApi.
-    const { shorts, nextPageToken } = await fetchYouTubeShorts(parsed.q, parsed.num, {
-      sp,
-      noCache: fresh,
-    });
+    // 3) Hit Serper (fresh only bypasses our in-memory cache).
+    const { shorts, nextPageToken } = await fetchYouTubeShorts(parsed.q, parsed.num, { sp });
     const payload = { q: parsed.q, shorts, nextPageToken };
     setCachedShorts(cacheKey, payload);
     return NextResponse.json({ ...payload, cached: false });
