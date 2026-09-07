@@ -26,7 +26,7 @@ const OPENROUTER_BASE_URL = (
   .replace(/\/chat\/completions\/?$/, "");
 
 const OPENROUTER_MODEL =
-  process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini";
+  process.env.OPENROUTER_MODEL || "cohere/north-mini-code:free";
 
 const OPENROUTER_FALLBACK_MODELS = (
   process.env.OPENROUTER_FALLBACK_MODELS || ""

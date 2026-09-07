@@ -651,6 +651,7 @@ const routeTitleFromPath = (path: string) => {
 const routeFromFilePath = (path: string) => {
   const normalized = normalizeArtifactPath(path).replace(/\.(tsx|jsx|ts|js|html)$/i, "");
   if (/^app\/page$/i.test(normalized)) return "/";
+  if (/^(?:src\/)?(?:app|index)$/i.test(normalized)) return "/";
   const appRouteMatch = normalized.match(/^app\/(.+)\/page$/i);
   if (appRouteMatch?.[1]) return `/${appRouteMatch[1].replace(/\([^)]*\)\//g, "").replace(/\/index$/i, "")}`;
   if (/^pages\/index$/i.test(normalized) || /^src\/pages\/index$/i.test(normalized)) return "/";
@@ -728,9 +729,25 @@ const buildPreviewRoutes = (files: ArtifactFile[]) => {
     });
   });
 
-  if (!routeMap.has("/") && routeMap.size > 0) {
-    const firstRoute = Array.from(routeMap.values())[0];
-    routeMap.set("/", { ...firstRoute, path: "/", title: "Home" });
+  if (!routeMap.has("/") && files.length > 0) {
+    const firstRoute = routeMap.size > 0 ? Array.from(routeMap.values())[0] : undefined;
+    const homeSource: PreviewRoute =
+      firstRoute ||
+      (() => {
+        const file = files[0];
+        const kind: PreviewRoute["kind"] = file.path.endsWith(".html")
+          ? "html"
+          : "react-component";
+        return {
+          path: file.path,
+          filePath: file.path,
+          title: routeTitleFromPath(file.path),
+          kind,
+          html: file.path.endsWith(".html") ? file.code : undefined,
+          code: file.code,
+        };
+      })();
+    routeMap.set("/", { ...homeSource, path: "/", title: "Home" });
   }
 
   return Array.from(routeMap.values()).sort((a, b) => a.path.localeCompare(b.path));
@@ -835,6 +852,12 @@ const buildPreviewRuntimeScript = (routes: PreviewRoute[], diagnostics: RouteDia
     document.getElementById("ob-preview-error-overlay")?.remove();
   };
 
+  const resolveRegisteredPath = (value) => {
+    const normalized = normalizePath(value);
+    if (routeByPath.has(normalized)) return normalized;
+    return routeByPath.has("/") ? "/" : normalized;
+  };
+
   const renderRoute = (path, options = {}) => {
     const normalized = normalizePath(path);
     const route = routeByPath.get(normalized);
@@ -876,7 +899,9 @@ const buildPreviewRuntimeScript = (routes: PreviewRoute[], diagnostics: RouteDia
     renderRoute(path);
   });
 
-  window.addEventListener("popstate", () => renderRoute(window.location.pathname, { skipHistory: true }));
+  window.addEventListener("popstate", () =>
+    renderRoute(resolveRegisteredPath(window.location.pathname), { skipHistory: true })
+  );
 
   window.addEventListener("error", (event) => {
     const stack = event.error?.stack || "";
@@ -896,7 +921,7 @@ const buildPreviewRuntimeScript = (routes: PreviewRoute[], diagnostics: RouteDia
     showOverlay("Unhandled preview error", stack, locationMatch?.[1] || "preview", locationMatch?.[2]);
   });
 
-  renderRoute(window.location.pathname || "/", { skipHistory: true });
+  renderRoute(resolveRegisteredPath(window.location.pathname || "/"), { skipHistory: true });
   if (diagnostics.length > 0) {
     showOverlay(
       "Preview verified with warnings",

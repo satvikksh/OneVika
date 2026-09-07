@@ -21,7 +21,7 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_BASE_URL = (process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1")
     .replace(/\/chat\/completions\/?$/, "")
     .replace(/\/+$/, "");
-const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini";
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || "cohere/north-mini-code:free";
 const OPENROUTER_FALLBACK_MODELS = (process.env.OPENROUTER_FALLBACK_MODELS || "")
     .split(",")
     .map((model) => model.trim())
@@ -630,9 +630,32 @@ function getAiProviderFailureMessage(error) {
     if (message.includes("OPENROUTER_API_KEY")) {
         return "AI chat is not configured yet. Please add the AI provider API key on the server.";
     }
+    if (message.toLowerCase().includes("unavailable for free") ||
+        (message.includes("API error 404") &&
+            message.toLowerCase().includes("unavailable"))) {
+        return "The configured AI model is no longer available for free. Update OPENROUTER_MODEL on the server to a working model slug.";
+    }
     if (message.includes("API error 429") ||
         message.toLowerCase().includes("rate-limited")) {
         return AI_PROVIDER_RATE_LIMIT_MESSAGE;
+    }
+    if (message.includes("API error 401")) {
+        return "The AI provider rejected the API key (401). Check OPENROUTER_API_KEY on the server.";
+    }
+    if (message.includes("API error 403")) {
+        return "The AI provider denied access (403). Check the API key permissions for OPENROUTER_MODEL.";
+    }
+    if (message.includes("API error 402")) {
+        return "The AI provider requires credits (402). Add funds to the OpenRouter account.";
+    }
+    if (message.includes("API error 404")) {
+        return "The configured AI model was not found or is unavailable (404). Update OPENROUTER_MODEL on the server.";
+    }
+    if (message.includes("API error 5") ||
+        message.includes("API error 4")) {
+        return `The AI provider returned an error (${message
+            .match(/API error (\d{3})/)?.[1]
+            ?.trim() || "4xx/5xx"}). Check OPENROUTER_MODEL and OPENROUTER_API_KEY.`;
     }
     if (message.toLowerCase().includes("timeout") ||
         message.toLowerCase().includes("aborted")) {
@@ -1012,9 +1035,22 @@ async function streamOpenRouterReply(messages, onDelta) {
                     signal: controller.signal,
                 });
                 clearTimeout(timeout);
+                console.info("[AI Chat] OpenRouter response received.", {
+                    model,
+                    status: response.status,
+                    ok: response.ok,
+                });
                 if (!response.ok) {
                     const providerErrorText = await response.text().catch(() => "");
                     const error = new Error(`OpenRouter API error ${response.status} from ${model}: ${providerErrorText || response.statusText}`);
+                    if (response.status === 404 && model !== OPENROUTER_MODELS.at(-1)) {
+                        lastError = error;
+                        console.warn("[AI Chat] OpenRouter model unavailable, trying fallback:", {
+                            model,
+                            error: error.message,
+                        });
+                        break;
+                    }
                     if (response.status === 429 && model !== OPENROUTER_MODELS.at(-1)) {
                         lastError = error;
                         console.warn("[AI Chat] OpenRouter model rate-limited, trying fallback:", {
@@ -1105,6 +1141,10 @@ async function streamOpenRouterReply(messages, onDelta) {
             }
         }
     }
+    console.error("[AI Chat] All OpenRouter models failed for this reply.", {
+        models: OPENROUTER_MODELS,
+        lastError: lastError instanceof Error ? lastError.message : String(lastError),
+    });
     throw lastError instanceof Error
         ? lastError
         : new Error("OpenRouter response failed.");
@@ -1620,4 +1660,5 @@ io.on("connection", (socket) => {
 const PORT = Number(process.env.PORT || 3001);
 httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`Socket server running on port ${PORT}`);
+    console.log(`[AI Chat] OpenRouter resolved model(s): ${OPENROUTER_MODELS.join(", ") || "(none)"} | baseUrl: ${OPENROUTER_BASE_URL}`);
 });

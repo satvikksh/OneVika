@@ -4,7 +4,7 @@ export type OpenRouterMessage = {
 };
 
 const DEFAULT_BASE_URL = "https://openrouter.ai/api/v1";
-const DEFAULT_MODEL = "openai/gpt-4o-mini";
+const DEFAULT_MODEL = "cohere/north-mini-code:free";
 
 export class OpenRouterError extends Error {
   readonly status: number;

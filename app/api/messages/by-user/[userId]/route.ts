@@ -284,10 +284,11 @@ export async function GET(
       : null;
 
     if (cursorIdRaw && !cursorMessage) {
-      return NextResponse.json(
-        { error: "Message cursor not found" },
-        { status: 404 }
-      );
+      console.warn("[Messages] Stale pagination cursor not found; returning empty page.", {
+        cursorId: cursorIdRaw,
+        conversationId: conversation._id.toString(),
+      });
+      return NextResponse.json({ messages: [], pageInfo: emptyPageInfo() });
     }
 
     if (beforeIdRaw && cursorMessage?.createdAt) {
