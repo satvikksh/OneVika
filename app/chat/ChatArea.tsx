@@ -1782,9 +1782,7 @@ function ChatArea({
     () => getArtifactFromMessage(latestArtifactMessage),
     [latestArtifactMessage]
   );
-  const premiumMembershipUrl = currentUserId
-    ? `/profile/${currentUserId}#premium-membership`
-    : "/profile#premium-membership";
+  const premiumMembershipUrl = "/premium";
   const handleUpgradeToPremium = React.useCallback(() => {
     router.push(premiumMembershipUrl);
   }, [premiumMembershipUrl, router]);

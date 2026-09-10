@@ -61,6 +61,10 @@ export async function applyPremiumToUser(
       vpa?: string;
     } | null;
   },
+  plan: {
+    key?: string | null;
+    durationDays?: number | null;
+  } = {},
 ) {
   const now = new Date();
   const extensionStart =
@@ -79,8 +83,11 @@ export async function applyPremiumToUser(
 
   user.isPremium = true;
   user.premiumActivatedAt = now;
-  user.premiumExpiresAt = premiumExpiryFrom(extensionStart);
-  user.premiumPlan = "monthly";
+  user.premiumExpiresAt = premiumExpiryFrom(
+    extensionStart,
+    plan.durationDays || PREMIUM_DURATION_DAYS,
+  );
+  user.premiumPlan = plan.key || "monthly";
   user.premiumPaymentProvider = payment.provider || "orbitbyte";
   user.premiumLastPaymentAt = now;
   user.premiumLastPaymentIntentId = payment.paymentIntentId || null;

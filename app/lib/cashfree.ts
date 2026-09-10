@@ -1,5 +1,7 @@
 import { createHmac } from "node:crypto";
 
+import { validateIndianPhone } from "@/lib/validation/phone";
+
 /**
  * Cashfree Payment Gateway integration (server-side only).
  *
@@ -113,6 +115,13 @@ export async function createCashfreeOrder(input: {
 }): Promise<CashfreeOrderResult> {
   const config = getCashfreeConfig();
 
+  // `customer_details.customer_phone` is always the validated phone number —
+  // never `0`, empty or undefined. Cashfree requires a valid 10-digit mobile.
+  const phone = validateIndianPhone(input.customerPhone ?? "");
+  if (phone.valid === false) {
+    throw new Error(phone.error);
+  }
+
   const body: Record<string, unknown> = {
     order_id: input.orderId,
     order_amount: paiseToRupeesNumber(input.orderAmountPaise),
@@ -121,7 +130,7 @@ export async function createCashfreeOrder(input: {
     customer_details: {
       customer_id: input.customerId,
       customer_email: input.customerEmail,
-      customer_phone: input.customerPhone || "0",
+      customer_phone: phone.phone,
       customer_name: input.customerName,
     },
     order_meta: {

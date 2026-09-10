@@ -11,6 +11,7 @@ import User from "@/app/models/User";
 import { isPremiumActive, PREMIUM_DURATION_DAYS } from "@/app/lib/premium";
 import { paiseToRupees } from "@/app/lib/earnings";
 import { validateAndApplyCoupon } from "@/app/lib/coupon";
+import { validateIndianPhone } from "@/lib/validation/phone";
 import {
   createCashfreeOrder,
   paiseToRupeesString,
@@ -23,9 +24,9 @@ import {
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
-  let body: { planKey?: string; couponCode?: string } = {};
+  let body: { planKey?: string; couponCode?: string; phone?: string } = {};
   try {
-    body = (await req.json()) as { planKey?: string; couponCode?: string };
+    body = (await req.json()) as { planKey?: string; couponCode?: string; phone?: string };
   } catch {
     // body optional
   }
@@ -48,6 +49,15 @@ export async function POST(req: Request) {
         { error: "User already has active premium membership" },
         { status: 400 }
       );
+    }
+
+    // The phone number is the only customer detail collected at purchase time.
+    // Name and email are taken automatically from the authenticated session.
+    // Validate it BEFORE creating any order, transaction or Cashfree session —
+    // an invalid phone never creates an order.
+    const phone = validateIndianPhone(body.phone ?? "");
+    if (phone.valid === false) {
+      return NextResponse.json({ error: phone.error, field: "phone" }, { status: 400 });
     }
 
     // Resolve the premium plan server-side. The client-provided price is never trusted.
@@ -233,6 +243,7 @@ export async function POST(req: Request) {
       currency: "INR",
       customerId: String(user._id),
       customerEmail: session.user.email,
+      customerPhone: phone.phone,
       customerName: user.name || session.user.name,
       returnUrl,
       notifyUrl,

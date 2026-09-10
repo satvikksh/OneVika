@@ -54,9 +54,7 @@ export default function Thoughts() {
     isGenerating: boolean;
     error: string | null;
   } | null>(null);
-  const premiumMembershipUrl = session?.user?.id
-    ? `/profile/${session.user.id}#premium-membership`
-    : '/profile#premium-membership';
+  const premiumMembershipUrl = '/premium';
 
   function handlePremiumPolishedClick() {
     if (!isPremium) {

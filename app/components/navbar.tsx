@@ -28,6 +28,7 @@ import {
   Receipt,
   Compass,
   Briefcase,
+  Crown,
 } from "lucide-react";
 import Image from "next/image";
 import { useSession, signOut } from "next-auth/react";
@@ -884,6 +885,12 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                         <User size={16} /> Profile
                       </Link>
                       <Link
+                        href="/premium"
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gradient-to-r hover:from-amber-50 hover:to-rose-50 dark:hover:from-amber-950/30 dark:hover:to-stone-950 transition-colors text-sm font-semibold text-amber-700 dark:text-amber-300"
+                      >
+                        <Crown size={16} /> Premium
+                      </Link>
+                      <Link
                         href="/settings"
                         className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-sm font-medium text-gray-700 dark:text-gray-300"
                       >
@@ -1111,6 +1118,34 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({
                       <div className="flex items-center gap-4">
                         <Settings size={18} />
                         <span className="font-medium">Settings</span>
+                      </div>
+                      <ChevronRight
+                        size={16}
+                        className="text-gray-300 dark:text-gray-600"
+                      />
+                    </Link>
+                  )}
+
+                  {session?.user && (
+                    <Link
+                      href="/premium"
+                      onClick={(event) => {
+                        if (window.matchMedia("(max-width: 767px)").matches) {
+                          event.preventDefault();
+                          navigateFromMobileMenu("/premium");
+                        } else {
+                          setIsMobileMenuOpen(false);
+                        }
+                      }}
+                      className={`flex items-center justify-between px-4 py-3.5 rounded-2xl transition-all ${
+                        pathname === "/premium"
+                          ? "bg-none dark:bg-gray-900 text-amber-400 shadow-[0_0_0_1px_rgba(184,134,11,0.25),0_6px_18px_-6px_rgba(184,134,11,0.3)]"
+                          : "hover:bg-gray-50 dark:hover:bg-gray-900 text-gray-700 dark:text-gray-300"
+                      }`}
+                    >
+                      <div className="flex items-center gap-4">
+                        <Crown size={18} className="text-amber-500 dark:text-amber-400" />
+                        <span className="font-medium">Premium</span>
                       </div>
                       <ChevronRight
                         size={16}

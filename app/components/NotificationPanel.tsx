@@ -193,7 +193,7 @@ const resolveNotificationUrl = (notification: OrbitNotification) => {
   if (type.startsWith("story")) return "/feed";
   if (type === "message") return senderId ? `/chat?userId=${senderId}` : "/chat";
   if (type.includes("call")) return "/chat";
-  if (type === "premium") return "/profile#premium-membership";
+  if (type === "premium") return "/premium";
   if (type === "ai" || type === "thought") return "/neural-nexus";
   return "/notifications";
 };

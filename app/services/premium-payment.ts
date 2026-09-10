@@ -155,12 +155,22 @@ async function runCompletion({
     const user = await User.findById(transaction.userId).session(session);
     let premiumExpiresAt: Date | undefined;
     if (user) {
-      await applyPremiumToUser(user, {
-        provider: "orbitbyte",
-        paymentIntentId: transaction.transactionId,
-        checkoutSessionId: transaction.providerOrderId,
-        paymentMethod: { type: "cashfree" },
-      });
+      const completionPlan = order.membershipPlan
+        ? await getPlanForOrder(order)
+        : null;
+      await applyPremiumToUser(
+        user,
+        {
+          provider: "orbitbyte",
+          paymentIntentId: transaction.transactionId,
+          checkoutSessionId: transaction.providerOrderId,
+          paymentMethod: { type: "cashfree" },
+        },
+        {
+          key: completionPlan?.key || order.membershipPlan || "monthly",
+          durationDays: completionPlan?.durationDays,
+        },
+      );
       await user.save({ session });
       premiumExpiresAt = user.premiumExpiresAt;
     }

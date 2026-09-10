@@ -775,7 +775,7 @@ async function sendPremiumRenewalReminders() {
     }
 
     const userId = user._id.toString();
-    const reminderUrl = `/profile/${userId}#premium-membership`;
+    const reminderUrl = "/premium";
     const reminderMessage =
       "OrbitByte Premium ends in less than 24 hours. Renew now to keep your benefits active.";
 

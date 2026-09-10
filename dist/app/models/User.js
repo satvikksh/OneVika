@@ -97,7 +97,7 @@ const UserSchema = new Schema({
     },
     premiumPlan: {
         type: String,
-        enum: ["monthly"],
+        enum: ["monthly", "halfyearly", "yearly"],
     },
     premiumPaymentProvider: {
         type: String,

@@ -2,7 +2,6 @@
 
 import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
 import { Lock } from "lucide-react";
 import PremiumUpgradePrompt from "./PremiumUpgradePrompt";
 
@@ -16,18 +15,15 @@ import PremiumUpgradePrompt from "./PremiumUpgradePrompt";
 
 export function usePremiumSearchPrompt() {
   const router = useRouter();
-  const { data: session } = useSession();
   const [open, setOpen] = useState(false);
 
   const openPrompt = useCallback(() => setOpen(true), []);
   const closePrompt = useCallback(() => setOpen(false), []);
 
   const upgrade = useCallback(() => {
-    // Existing OrbitByte upgrade flow: the checkout lives on the user's own
-    // profile (same deep-link used across chat & posts).
-    const id = session?.user?.id;
-    router.push(id ? `/profile/${id}#premium-membership` : "/profile#premium-membership");
-  }, [router, session?.user?.id]);
+    // Dedicated Premium landing page hosts the full plan + checkout flow.
+    router.push("/premium");
+  }, [router]);
 
   return { open, openPrompt, closePrompt, upgrade };
 }

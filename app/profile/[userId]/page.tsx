@@ -355,10 +355,6 @@ export default function UserProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [followLoading, setFollowLoading] = useState(false);
   const [premiumStatus, setPremiumStatus] = useState<PremiumStatus | null>(null);
-  const [premiumLoading, setPremiumLoading] = useState(false);
-  const [premiumActionLoading, setPremiumActionLoading] = useState(false);
-  const [premiumError, setPremiumError] = useState<string | null>(null);
-  const [premiumMessage, setPremiumMessage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<(typeof activityTabs)[number]>("Posts");
   const [contactOpen, setContactOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -487,24 +483,17 @@ export default function UserProfilePage() {
   const fetchPremiumStatus = useCallback(async () => {
     if (!isCurrentUser) return;
 
-    setPremiumLoading(true);
-    setPremiumError(null);
     try {
       const res = await fetch("/api/premium/status", {
         method: "GET",
         cache: "no-store",
       });
 
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to fetch premium status");
-      }
+      if (!res.ok) return;
 
       setPremiumStatus(await res.json());
-    } catch (err) {
-      setPremiumError(err instanceof Error ? err.message : "Failed to fetch premium status");
-    } finally {
-      setPremiumLoading(false);
+    } catch {
+      // non-critical: premium status refresh ignored
     }
   }, [isCurrentUser]);
 
@@ -556,7 +545,6 @@ export default function UserProfilePage() {
   const canShowMessageButton = !isCurrentUser && Boolean(user?.canMessage);
   const canShowVideoButton = !isCurrentUser && Boolean(user?.isMutualFollow);
   const isPrivatePostsLocked = !isCurrentUser && Boolean(user?.isPrivate) && !Boolean(user?.canViewPosts);
-  const canRenewPremium = !premiumStatus?.isPremium || premiumStatus.daysRemaining <= 1;
   const headline = user?.profession || user?.headline || "";
   const connectionCount =
     typeof user?.connectionsCount === "number"
@@ -718,98 +706,6 @@ export default function UserProfilePage() {
       if (coverPreview) URL.revokeObjectURL(coverPreview);
     };
   }, [avatarPreview, coverPreview]);
-
-  const handleActivatePremium = async () => {
-    setPremiumActionLoading(true);
-    setPremiumError(null);
-    setPremiumMessage(null);
-
-    try {
-      // 1) Start the real Cashfree checkout session (server-side).
-      const res = await fetch("/api/premium/create-checkout-session", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Unable to start premium checkout");
-
-      const checkout = data.checkout;
-      if (!checkout || !checkout.paymentSessionId) {
-        throw new Error(data.error || "Payment provider could not start a checkout session");
-      }
-
-      // 2) Load the Cashfree hosted-checkout JS SDK.
-      const scripts = Array.from(
-        document.querySelectorAll<HTMLScriptElement>('script[data-cashfree-checkout]')
-      );
-      if (scripts.length === 0) {
-        await new Promise<void>((resolve, reject) => {
-          const script = document.createElement("script");
-          script.src = "https://sdk.cashfree.com/js/v3/cashfree.js";
-          script.async = true;
-          script.setAttribute("data-cashfree-checkout", "1");
-          script.onload = () => resolve();
-          script.onerror = () => reject(new Error("Failed to load payment checkout"));
-          document.body.appendChild(script);
-        });
-      }
-
-      // 3) Open the Cashfree hosted checkout. Premium is NOT activated here —
-      //    it is only activated after the server verifies the payment.
-      interface CashfreeInstance {
-        checkout: (opts: { paymentSessionId: string; redirectTarget: string }) => Promise<unknown>;
-      }
-      interface CashfreeSdkConstructor {
-        new (opts: { mode: "production" | "sandbox" }): CashfreeInstance;
-      }
-      const CashfreeSdk = (window as unknown as { Cashfree?: CashfreeSdkConstructor }).Cashfree;
-      if (!CashfreeSdk) {
-        throw new Error("Payment checkout is unavailable. Please try again.");
-      }
-
-      const isProduction = String(checkout.environment || "").includes("production");
-      const cashfree = new CashfreeSdk({
-        mode: isProduction ? "production" : "sandbox",
-      });
-      await cashfree.checkout({
-        paymentSessionId: checkout.paymentSessionId,
-        redirectTarget: "_modal",
-      });
-
-      // 4) Always verify + activate server-side. The payment status is never
-      //    trusted from the client — /api/premium/activate re-fetches the
-      //    authoritative Cashfree status and only activates on PAID.
-      try {
-        const activateRes = await fetch("/api/premium/activate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            transactionId: data.transactionId,
-          }),
-        });
-        const activateData = await activateRes.json();
-        if (!activateRes.ok) {
-          if (String(activateData.code || "").toUpperCase() === "PENDING") {
-            setPremiumMessage("Waiting for payment confirmation...");
-          } else {
-            setPremiumError(activateData.error || "Payment confirmation failed");
-          }
-        } else {
-          setPremiumMessage(
-            activateData.alreadyProcessed
-              ? "Premium membership was already active."
-              : "Premium activated successfully."
-          );
-        }
-      } catch {
-        setPremiumError("Payment confirmed, but activation could not be verified right now.");
-      } finally {
-        await fetchPremiumStatus();
-        window.dispatchEvent(new Event("orbitbyte:premium-status-changed"));
-        setPremiumActionLoading(false);
-      }
-    } catch (err) {
-      setPremiumError(err instanceof Error ? err.message : "Unable to start premium checkout");
-      setPremiumActionLoading(false);
-    }
-  };
 
   const handleFollowToggle = async () => {
     if (!session || !user) return;
@@ -1314,31 +1210,7 @@ export default function UserProfilePage() {
           {/* ---------- RIGHT SIDEBAR (mirrored to the left on desktop) ---------- */}
           <aside className="order-1 hidden space-y-5 lg:order-none lg:sticky lg:top-[200px] lg:block lg:self-start">
             <div ref={(node) => { sectionRefs.current["Connections"] = node; }} className="scroll-mt-40 space-y-5">
-              {isCurrentUser && (
-<SidebarCard title="Premium Membership" icon={Sparkles} theme={theme} glow={isPremiumProfile}>
-                  <p className={`text-sm ${theme.muted}`}>
-                    {premiumLoading
-                      ? "Checking premium status..."
-                      : premiumStatus?.isPremium
-                        ? `Active, ${premiumStatus.daysRemaining} day(s) left`
-                        : "Inactive"}
-                  </p>
-                  {premiumStatus?.paymentMethod?.last4 && (
-                    <p className={`mt-2 text-xs ${theme.muted}`}>
-                      {premiumStatus.paymentMethod.brand || "Card"} ending in {premiumStatus.paymentMethod.last4}
-                    </p>
-                  )}
-                  {canRenewPremium && (
-                    <button onClick={handleActivatePremium} disabled={premiumActionLoading || premiumLoading} className={`mt-4 w-full rounded-full px-4 py-2.5 text-sm font-black disabled:opacity-60 ${theme.accentBg} ${isPremiumProfile ? "shadow-[0_0_0_1px_rgba(212,167,44,0.25),0_6px_24px_-8px_rgba(212,167,44,0.55)]" : ""}`}>
-                      {premiumActionLoading ? "Redirecting..." : premiumStatus?.isPremium ? "Renew Premium" : "Activate Premium"}
-                    </button>
-                  )}
-                  {premiumError && <p className="mt-3 text-xs text-red-400">{premiumError}</p>}
-                  {premiumMessage && <p className="mt-3 text-xs text-gray-400">{premiumMessage}</p>}
-                </SidebarCard>
-              )}
-
-<ProfileStrength theme={theme} isPremium={isPremiumProfile} completionPercent={completionPercent} completionItems={completionItems} />
+              <ProfileStrength theme={theme} isPremium={isPremiumProfile} completionPercent={completionPercent} completionItems={completionItems} />
 
               <div ref={(node) => { sectionRefs.current["Analytics"] = node; }} className="scroll-mt-40">
                 <SidebarCard title="Analytics" icon={BarChart3} theme={theme}>
@@ -1622,17 +1494,9 @@ export default function UserProfilePage() {
             <div className="space-y-5 lg:hidden">
               <MobileInsightSections
                 theme={theme}
-                isCurrentUser={isCurrentUser}
                 isPremiumProfile={isPremiumProfile}
                 completionPercent={completionPercent}
                 completionItems={completionItems}
-                premiumLoading={premiumLoading}
-                premiumStatus={premiumStatus}
-                canRenewPremium={canRenewPremium}
-                premiumActionLoading={premiumActionLoading}
-                premiumError={premiumError}
-                premiumMessage={premiumMessage}
-                onActivatePremium={handleActivatePremium}
               />
             </div>
           </div>
@@ -2213,76 +2077,17 @@ function ProfileStrength({
 
 function MobileInsightSections({
   theme,
-  isCurrentUser,
   isPremiumProfile,
   completionPercent,
   completionItems,
-  premiumLoading,
-  premiumStatus,
-  canRenewPremium,
-  premiumActionLoading,
-  premiumError,
-  premiumMessage,
-  onActivatePremium,
 }: {
   theme: Theme;
-  isCurrentUser: boolean;
   isPremiumProfile: boolean;
   completionPercent: number;
   completionItems: readonly (readonly [string, boolean])[];
-  premiumLoading: boolean;
-  premiumStatus: PremiumStatus | null;
-  canRenewPremium: boolean;
-  premiumActionLoading: boolean;
-  premiumError: string | null;
-  premiumMessage: string | null;
-  onActivatePremium: () => void;
 }) {
   return (
-    <>
-      {isCurrentUser && (
-        <SidebarCard title="Premium Membership" icon={Sparkles} theme={theme} glow={isPremiumProfile}>
-          <div className="flex flex-col gap-4">
-            <div className="min-w-0">
-              <p className={`text-sm ${theme.muted}`}>
-                {premiumLoading
-                  ? "Checking premium status..."
-                  : premiumStatus?.isPremium
-                    ? `Active, ${premiumStatus.daysRemaining} day(s) left`
-                    : "Inactive"}
-              </p>
-              {premiumStatus?.premiumPlan && (
-                <p className="mt-2 truncate text-base font-black">{premiumStatus.premiumPlan}</p>
-              )}
-              {premiumStatus?.paymentMethod?.last4 && (
-                <p className={`mt-1 truncate text-xs ${theme.muted}`}>
-                  {premiumStatus.paymentMethod.brand || "Card"} ending in {premiumStatus.paymentMethod.last4}
-                </p>
-              )}
-            </div>
-
-            {canRenewPremium ? (
-              <button
-                type="button"
-                onClick={onActivatePremium}
-                disabled={premiumActionLoading || premiumLoading}
-                className={`min-h-11 w-full rounded-full px-4 py-2.5 text-sm font-black transition active:scale-[0.98] disabled:opacity-60 ${theme.accentBg} ${isPremiumProfile ? "shadow-[0_0_0_1px_rgba(212,167,44,0.25),0_6px_24px_-8px_rgba(212,167,44,0.55)]" : ""}`}
-              >
-                {premiumActionLoading ? "Redirecting..." : premiumStatus?.isPremium ? "Renew Premium" : "Activate Premium"}
-              </button>
-            ) : (
-              <div className={`rounded-2xl border px-4 py-3 text-sm font-bold ${theme.chip}`}>
-                Premium active
-              </div>
-            )}
-
-            {premiumError && <p className="text-sm text-red-500">{premiumError}</p>}
-            {premiumMessage && <p className="text-sm text-gray-500">{premiumMessage}</p>}
-          </div>
-        </SidebarCard>
-      )}
-      <ProfileStrength theme={theme} isPremium={isPremiumProfile} completionPercent={completionPercent} completionItems={completionItems} />
-    </>
+    <ProfileStrength theme={theme} isPremium={isPremiumProfile} completionPercent={completionPercent} completionItems={completionItems} />
   );
 }
 

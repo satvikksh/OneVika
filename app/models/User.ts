@@ -52,7 +52,7 @@ export interface IUser extends Document {
   isPremium: boolean;
   premiumExpiresAt?: Date;
   premiumActivatedAt?: Date;
-  premiumPlan?: "monthly";
+  premiumPlan?: string;
   premiumPaymentProvider?: string;
   premiumLastPaymentAt?: Date;
   premiumLastPaymentIntentId?: string;
@@ -190,7 +190,7 @@ const UserSchema = new Schema<IUser>(
     },
     premiumPlan: {
       type: String,
-      enum: ["monthly"],
+      enum: ["monthly", "halfyearly", "yearly"],
     },
     premiumPaymentProvider: {
       type: String,
