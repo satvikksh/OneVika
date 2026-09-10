@@ -13,6 +13,7 @@ import {
   ExternalLink,
   Loader2,
   LocateFixed,
+  Lock,
   MapPin,
   RotateCw,
   Search,
@@ -22,6 +23,10 @@ import {
 } from "lucide-react";
 import { PremiumAmbient } from "@/app/components/premium-ambient";
 import { useUserAvatar } from "@/app/hooks/useUserAvatar";
+import {
+  PremiumSearchPromptModal,
+  usePremiumSearchPrompt,
+} from "@/app/components/premium-search-lock";
 import {
   SAVED_JOBS_KEY,
   isSavedJob,
@@ -61,6 +66,8 @@ type JobsErrorKind = "network" | "api" | "rate-limit" | "auth" | null;
 type FilterOverrides = Partial<{
   q: string;
   location: string;
+  lat: number;
+  lng: number;
   remote: "" | "true" | "false";
   employment_type: string;
   experience_level: string;
@@ -300,6 +307,12 @@ export default function JobsPage() {
   const router = useRouter();
   const { status: authStatus } = useSession();
   const { isPremium } = useUserAvatar();
+  const premiumPrompt = usePremiumSearchPrompt();
+
+  const isPremiumRef = useRef(isPremium);
+  useEffect(() => {
+    isPremiumRef.current = isPremium;
+  }, [isPremium]);
 
   const [query, setQuery] = useState("");
   const [locationText, setLocationText] = useState("");
@@ -326,6 +339,10 @@ export default function JobsPage() {
 
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestSeqRef = useRef(0);
+  // Detected device coordinates. Non-premium users can only fetch jobs for
+  // these (the server reverse-geocodes them — it never accepts a location
+  // string from a non-premium client).
+  const coordsRef = useRef<{ lat: number; lng: number } | null>(null);
 
   const runSearch = useCallback(
     async (
@@ -343,7 +360,22 @@ export default function JobsPage() {
 
       const trimmedQ = q.trim();
       const trimmedLoc = loc.trim();
-      if (!trimmedQ && !start) return;
+      const premium = isPremiumRef.current;
+
+      // Non-premium searches run against the DETECTED current location only.
+      const latOverride = typeof overrides?.lat === "number" ? overrides.lat : undefined;
+      const lngOverride = typeof overrides?.lng === "number" ? overrides.lng : undefined;
+      const coords =
+        latOverride !== undefined && lngOverride !== undefined
+          ? { lat: latOverride, lng: lngOverride }
+          : coordsRef.current;
+
+      if (premium) {
+        if (!trimmedQ && !start) return;
+      } else {
+        if (!coords) return;
+        coordsRef.current = coords;
+      }
 
       const seq = ++requestSeqRef.current;
       if (start) setLoadingMore(true);
@@ -351,13 +383,20 @@ export default function JobsPage() {
       setJobsError(null);
 
       const params = new URLSearchParams();
-      if (trimmedQ) params.set("q", trimmedQ);
-      if (trimmedLoc) params.set("location", trimmedLoc);
-      if (remoteV) params.set("remote", remoteV);
-      if (empV) params.set("employment_type", empV);
-      if (expV) params.set("experience_level", expV);
-      if (dateV) params.set("date_posted", dateV);
-      if (sortV) params.set("sort_by", sortV);
+      if (premium) {
+        if (trimmedQ) params.set("q", trimmedQ);
+        if (remoteV) params.set("remote", remoteV);
+        if (empV) params.set("employment_type", empV);
+        if (expV) params.set("experience_level", expV);
+        if (dateV) params.set("date_posted", dateV);
+        if (sortV) params.set("sort_by", sortV);
+        if (trimmedLoc) params.set("location", trimmedLoc);
+      } else {
+        // Coordinates only — no q/location/filters. The server resolves the
+        // location from these, so a non-premium user can never inject a city.
+        params.set("lat", String(coords.lat));
+        params.set("lng", String(coords.lng));
+      }
       if (start) params.set("next_page_token", start);
 
       try {
@@ -385,7 +424,7 @@ export default function JobsPage() {
         setNextPageToken(typeof data?.nextPageToken === "string" ? data.nextPageToken : null);
 
         if (!append) {
-          setSearchedQuery(trimmedQ);
+          setSearchedQuery(premium ? trimmedQ : "");
           setSearchedLocation(
             typeof data?.location === "string" && data.location ? data.location : trimmedLoc
           );
@@ -422,8 +461,11 @@ export default function JobsPage() {
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         try {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          coordsRef.current = { lat, lng };
           const res = await fetch(
-            `/api/discover/location?lat=${position.coords.latitude}&lng=${position.coords.longitude}`
+            `/api/discover/location?lat=${lat}&lng=${lng}`
           );
           const data = await res.json().catch(() => ({}));
           if (res.ok && data?.location?.label) {
@@ -431,9 +473,13 @@ export default function JobsPage() {
             const city = label.split(",")[0].trim();
             setLocationText(label);
             setGeoState("detected");
-            if (city) {
+            if (isPremiumRef.current) {
               setQuery(city);
               runSearchRef.current({ overrides: { q: city, location: label } });
+            } else {
+              // Non-premium: current-location jobs only. Send coordinates (not
+              // a location string) — the server reverse-geocodes them.
+              runSearchRef.current({ overrides: { lat, lng } });
             }
           } else {
             setLocationResolveFailed(true);
@@ -488,6 +534,10 @@ export default function JobsPage() {
 
   /* ── Inputs ── */
   const handleQueryChange = (v: string) => {
+    if (!isPremiumRef.current) {
+      premiumPrompt.openPrompt();
+      return;
+    }
     setQuery(v);
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     const trimmed = v.trim();
@@ -498,6 +548,10 @@ export default function JobsPage() {
   };
 
   const handleLocationChange = (v: string) => {
+    if (!isPremiumRef.current) {
+      premiumPrompt.openPrompt();
+      return;
+    }
     setLocationText(v);
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     const trimmed = v.trim();
@@ -510,10 +564,18 @@ export default function JobsPage() {
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    if (!isPremiumRef.current) {
+      premiumPrompt.openPrompt();
+      return;
+    }
     runSearchRef.current();
   };
 
   const applyFilters = (patch: FilterOverrides) => {
+    if (!isPremiumRef.current) {
+      premiumPrompt.openPrompt();
+      return;
+    }
     if (patch.remote !== undefined) setRemote(patch.remote);
     if (patch.employment_type !== undefined) setEmploymentType(patch.employment_type);
     if (patch.experience_level !== undefined) setExperienceLevel(patch.experience_level);
@@ -555,8 +617,9 @@ export default function JobsPage() {
   const isDetecting = geoState === "idle" || geoState === "detecting";
   const locationBlocked =
     geoState === "denied" || geoState === "unsupported" || (geoState === "failed" && !locationText);
-  const hasRunSearch = Boolean(searchedQuery);
+  const hasRunSearch = Boolean(searchedQuery || searchedLocation);
   const emptyResults = !jobsLoading && !jobsError && hasRunSearch && jobs.length === 0;
+  const emptyTerm = searchedQuery || searchedLocation;
 
   /* ── Loading / unauth gates ── */
   if (authStatus === "loading") {
@@ -652,55 +715,120 @@ export default function JobsPage() {
             {/* Search form */}
             <form onSubmit={handleSearchSubmit} className="flex flex-col gap-2.5 sm:flex-row">
               <div className="relative flex-1">
-                <Search
-                  size={16}
-                  className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40"
-                />
-                <input
-                  type="text"
-                  value={query}
-                  onChange={(e) => handleQueryChange(e.target.value)}
-                  placeholder="Role, skill, or company — e.g. software engineer"
-                  autoComplete="off"
-                  spellCheck={false}
-                  className="w-full rounded-xl border border-white/10 bg-black/40 py-2.5 pl-10 pr-3 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-amber-300/40 focus:ring-2 focus:ring-amber-300/20"
-                />
-              </div>
-              <div className="relative sm:w-56">
-                <MapPin
-                  size={16}
-                  className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40"
-                />
-                <input
-                  type="text"
-                  value={locationText}
-                  onChange={(e) => handleLocationChange(e.target.value)}
-                  placeholder="City, e.g. Bhopal"
-                  autoComplete="off"
-                  spellCheck={false}
-                  className="w-full rounded-xl border border-white/10 bg-black/40 py-2.5 pl-10 pr-24 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-amber-300/40 focus:ring-2 focus:ring-amber-300/20"
-                />
-                {locationBlocked && (
+                {!isPremium ? (
                   <button
                     type="button"
-                    onClick={() => detectLocation()}
-                    className="absolute right-1.5 top-1/2 inline-flex -translate-y-1/2 items-center gap-1 rounded-lg bg-cyan-500/15 px-2 py-1.5 text-[11px] font-semibold text-cyan-200 ring-1 ring-cyan-400/20 transition hover:bg-cyan-500/25"
+                    onClick={premiumPrompt.openPrompt}
+                    className="flex w-full items-center gap-2.5 rounded-xl border border-dashed border-amber-300/30 bg-amber-300/[0.08] py-2.5 pl-3.5 pr-3 text-left transition hover:bg-amber-300/[0.14]"
+                    aria-label="Premium Search — upgrade to search jobs by keyword"
                   >
-                    <LocateFixed size={12} />
-                    Use mine
+                    <Lock size={15} className="shrink-0 text-amber-300" />
+                    <span className="flex-1 truncate text-sm font-semibold text-white/85">
+                      Premium Search
+                    </span>
+                    <span className="hidden shrink-0 text-[11px] font-semibold text-amber-200/80 sm:inline">
+                      Locked
+                    </span>
                   </button>
+                ) : (
+                  <div className="relative">
+                    <Search
+                      size={16}
+                      className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40"
+                    />
+                    <input
+                      type="text"
+                      value={query}
+                      onChange={(e) => handleQueryChange(e.target.value)}
+                      placeholder="Role, skill, or company — e.g. software engineer"
+                      autoComplete="off"
+                      spellCheck={false}
+                      className="w-full rounded-xl border border-white/10 bg-black/40 py-2.5 pl-10 pr-3 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-amber-300/40 focus:ring-2 focus:ring-amber-300/20"
+                    />
+                  </div>
                 )}
               </div>
-              <button
-                type="submit"
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_8px_24px_-10px_rgba(168,85,247,0.5)] transition hover:opacity-90 active:scale-95 disabled:opacity-50"
-                disabled={jobsLoading}
-              >
-                <Search size={15} />
-                Search
-              </button>
+              {!isPremium ? (
+                <button
+                  type="button"
+                  onClick={premiumPrompt.openPrompt}
+                  className="flex w-full items-center gap-2.5 rounded-xl border border-dashed border-amber-300/30 bg-amber-300/[0.08] py-2.5 pl-3.5 pr-3 text-left transition hover:bg-amber-300/[0.14] sm:w-56"
+                  aria-label="Premium Location — upgrade to search or change location"
+                >
+                  <MapPin size={15} className="shrink-0 text-amber-300" />
+                  <span className="flex-1 truncate text-sm font-semibold text-white/85">
+                    {locationText || "Premium Location"}
+                  </span>
+                  <span className="hidden shrink-0 text-[11px] font-semibold text-amber-200/80 sm:inline">
+                    Locked
+                  </span>
+                </button>
+              ) : (
+                <div className="relative sm:w-56">
+                  <MapPin
+                    size={16}
+                    className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40"
+                  />
+                  <input
+                    type="text"
+                    value={locationText}
+                    onChange={(e) => handleLocationChange(e.target.value)}
+                    placeholder="City, e.g. Bhopal"
+                    autoComplete="off"
+                    spellCheck={false}
+                    className="w-full rounded-xl border border-white/10 bg-black/40 py-2.5 pl-10 pr-24 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-amber-300/40 focus:ring-2 focus:ring-amber-300/20"
+                  />
+                  {locationBlocked && (
+                    <button
+                      type="button"
+                      onClick={() => detectLocation()}
+                      className="absolute right-1.5 top-1/2 inline-flex -translate-y-1/2 items-center gap-1 rounded-lg bg-cyan-500/15 px-2 py-1.5 text-[11px] font-semibold text-cyan-200 ring-1 ring-cyan-400/20 transition hover:bg-cyan-500/25"
+                    >
+                      <LocateFixed size={12} />
+                      Use mine
+                    </button>
+                  )}
+                </div>
+              )}
+              {!isPremium ? (
+                <button
+                  type="button"
+                  onClick={premiumPrompt.openPrompt}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_8px_24px_-10px_rgba(168,85,247,0.5)] transition hover:opacity-90 active:scale-95 disabled:opacity-50"
+                >
+                  <Lock size={15} />
+                  Unlock Search
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_8px_24px_-10px_rgba(168,85,247,0.5)] transition hover:opacity-90 active:scale-95 disabled:opacity-50"
+                  disabled={jobsLoading}
+                >
+                  <Search size={15} />
+                  Search
+                </button>
+              )}
             </form>
           </div>
+
+          {!isPremium && (
+            <div className="mt-1 flex items-center gap-3 rounded-xl bg-gradient-to-r from-amber-400/12 to-violet-500/12 px-3.5 py-2.5 ring-1 ring-amber-300/20">
+              <Lock size={14} className="shrink-0 text-amber-300" />
+              <p className="flex-1 text-xs leading-relaxed text-white/70">
+                Search jobs by keyword and choose any location with{" "}
+                <span className="font-semibold text-white">Premium</span>. Current-location jobs
+                stay free.
+              </p>
+              <button
+                type="button"
+                onClick={premiumPrompt.openPrompt}
+                className="shrink-0 rounded-lg bg-amber-400/20 px-3 py-1.5 text-[11px] font-semibold text-amber-200 ring-1 ring-amber-300/30 transition hover:bg-amber-400/30"
+              >
+                Upgrade
+              </button>
+            </div>
+          )}
 
           {/* Location status hints */}
           {geoState === "detecting" && (
@@ -714,8 +842,9 @@ export default function JobsPage() {
             <div className="mt-3 flex items-start gap-2 rounded-xl bg-amber-400/10 px-3 py-2.5 text-xs text-amber-100/90 ring-1 ring-amber-300/20">
               <AlertTriangle size={14} className="mt-0.5 shrink-0 text-amber-300" />
               <span>
-                Location permission was denied. Allow location access in your browser to auto-detect
-                your city, or type a location above.
+                {isPremium
+                  ? "Location permission was denied. Allow location access in your browser to auto-detect your city, or type a location above."
+                  : "Location permission was denied. Allow location access in your browser to auto-detect your city and see current-location jobs."}
               </span>
             </div>
           )}
@@ -723,15 +852,34 @@ export default function JobsPage() {
           {geoState === "unsupported" && (
             <div className="mt-3 flex items-start gap-2 rounded-xl bg-amber-400/10 px-3 py-2.5 text-xs text-amber-100/90 ring-1 ring-amber-300/20">
               <AlertTriangle size={14} className="mt-0.5 shrink-0 text-amber-300" />
-              <span>Location detection is not supported on this device. Search for a location above.</span>
+              <span>
+                {isPremium
+                  ? "Location detection is not supported on this device. Search for a location above."
+                  : "Location detection is not supported on this device, so current-location jobs aren’t available."}
+              </span>
             </div>
           )}
 
           {(locationResolveFailed || (geoState === "failed" && !locationText)) && (
             <div className="mt-3 flex items-start gap-2 rounded-xl bg-rose-400/10 px-3 py-2.5 text-xs text-rose-100/90 ring-1 ring-rose-300/20">
               <AlertTriangle size={14} className="mt-0.5 shrink-0 text-rose-300" />
-              <span>We couldn’t resolve your coordinates. Search for a location above instead.</span>
+              <span>
+                {isPremium
+                  ? "We couldn’t resolve your coordinates. Search for a location above instead."
+                  : "We couldn’t resolve your current location. Try again or allow location access."}
+              </span>
             </div>
+          )}
+
+          {!isPremium && locationBlocked && (
+            <button
+              type="button"
+              onClick={() => detectLocation()}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-cyan-500/15 px-3 py-2 text-xs font-semibold text-cyan-200 ring-1 ring-cyan-400/20 transition hover:bg-cyan-500/25"
+            >
+              <LocateFixed size={13} />
+              Use my location
+            </button>
           )}
         </section>
 
@@ -844,16 +992,25 @@ export default function JobsPage() {
               <h2 className="text-lg font-bold tracking-tight">Open Roles</h2>
               {hasRunSearch && !isDetecting && (
                 <span className="hidden truncate text-sm text-white/40 sm:inline">
-                  for{" "}
-                  <span className="font-semibold text-white/70">
-                    {searchedQuery}
-                    {searchedLocation && (
-                      <>
-                        {" "}
-                        in <span className="text-white/70">{searchedLocation}</span>
-                      </>
-                    )}
-                  </span>
+                  {searchedQuery ? (
+                    <>
+                      for{" "}
+                      <span className="font-semibold text-white/70">
+                        {searchedQuery}
+                        {searchedLocation && (
+                          <>
+                            {" "}
+                            in <span className="text-white/70">{searchedLocation}</span>
+                          </>
+                        )}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      near{" "}
+                      <span className="font-semibold text-white/70">{searchedLocation}</span>
+                    </>
+                  )}
                 </span>
               )}
             </div>
@@ -932,8 +1089,14 @@ export default function JobsPage() {
           {!jobsLoading && !jobsError && !hasRunSearch && (
             <StateCard
               icon={<Search size={26} />}
-              title="Find your next role"
-              message="Search by role, skill, or company — and add a location to see nearby openings."
+              title={isPremium ? "Find your next role" : "Browse jobs near you"}
+              message={
+                isPremium
+                  ? "Search by role, skill, or company — and add a location to see nearby openings."
+                  : "Allow location access to see current-location jobs. Keyword search, location search and filters are Premium features."
+              }
+              actionLabel={isPremium ? undefined : "Unlock Premium Search"}
+              onAction={isPremium ? undefined : premiumPrompt.openPrompt}
             />
           )}
 
@@ -942,7 +1105,13 @@ export default function JobsPage() {
             <StateCard
               icon={<Briefcase size={26} />}
               title="No jobs found"
-              message={`We couldn’t find any openings for “${searchedQuery}”${searchedLocation ? ` in ${searchedLocation}` : ""}. Try a different search or remove some filters.`}
+              message={
+                searchedQuery
+                  ? `We couldn’t find any openings for “${searchedQuery}”${
+                      searchedLocation ? ` in ${searchedLocation}` : ""
+                    }. Try a different search or remove some filters.`
+                  : `We couldn’t find any openings near ${emptyTerm}. Try refreshing, or search by keyword or another location with Premium.`
+              }
             />
           )}
 
@@ -983,6 +1152,12 @@ export default function JobsPage() {
           )}
         </section>
       </div>
+
+      <PremiumSearchPromptModal
+        open={premiumPrompt.open}
+        onClose={premiumPrompt.closePrompt}
+        onUpgrade={premiumPrompt.upgrade}
+      />
     </main>
   );
 }

@@ -9,15 +9,29 @@ import {
   parseLocationParam,
   setCachedNews,
 } from "@/app/lib/discover";
+import {
+  isPremiumSearchAllowed,
+  premiumSearchRequiredResponse,
+} from "@/app/lib/premium-search";
 
 export const runtime = "nodejs";
 
+const LOCATION_PARAM = "location";
+
 /**
  * GET /api/discover/news?location=Bhopal
+ * GET /api/discover/news?location=Bhopal&q=finance   (premium keyword search)
  *
  * Fetches location-based news through Serper. The key stays server-side.
  * Responses are cached in-memory for 5 minutes; requests are rate-limited
  * per user to avoid burning Serper credits.
+ *
+ * Premium enforcement (never client-only):
+ * - Premium users may pass a keyword (`q`) on top of the location.
+ * - Non-premium users may only make LOCATION-BASED requests: the only accepted
+ *   query param is `location`. Any extra param (keyword, search term, filter,
+ *   etc.) is rejected with 402 PREMIUM_REQUIRED, so a non-premium user can
+ *   never turn a location request into a keyword search.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -26,7 +40,18 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const location = parseLocationParam(req.nextUrl.searchParams.get("location"));
+    const premium = await isPremiumSearchAllowed(session.user.id);
+
+    if (!premium) {
+      const forbiddenKeys = [...req.nextUrl.searchParams.keys()].filter(
+        (key) => key !== LOCATION_PARAM
+      );
+      if (forbiddenKeys.length > 0) {
+        return premiumSearchRequiredResponse();
+      }
+    }
+
+    const location = parseLocationParam(req.nextUrl.searchParams.get(LOCATION_PARAM));
     if (!location) {
       return NextResponse.json(
         { error: "A valid location query param is required." },
@@ -64,7 +89,8 @@ export async function GET(req: NextRequest) {
     }
 
     // 3) Hit Serper.
-    const articles = await fetchNews(location);
+    const keyword = premium ? (req.nextUrl.searchParams.get("q") || "").trim() : "";
+    const articles = await fetchNews(location, keyword || undefined);
     const payload = { location, articles };
     setCachedNews(key, payload);
     return NextResponse.json({ ...payload, cached: false });

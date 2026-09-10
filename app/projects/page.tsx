@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { ArrowRight, Crown, FolderKanban, Plus, Users } from "lucide-react";
 import { ProjectsShell } from "./project-ui";
+import { GitHubProjectsSection } from "./github-projects";
 
 const sections = [
   {
@@ -102,6 +103,8 @@ export default function ProjectsPage() {
           );
         })}
       </section>
+
+      <GitHubProjectsSection />
 
       <section className="mt-8 rounded-3xl border border-neutral-200 bg-neutral-100 p-8 text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-400">
         <div className="flex items-start gap-4">

@@ -5,12 +5,13 @@ import { Check, Crown, Sparkles, X } from "lucide-react";
 type PremiumUpgradePromptProps = {
   title?: string;
   description?: string;
+  benefits?: string[];
   onClose: () => void;
   onUpgrade: () => void;
   className?: string;
 };
 
-const benefits = [
+const defaultBenefits = [
   "AI Polished Messages",
   "Better Writing",
   "Faster AI Responses",
@@ -21,6 +22,7 @@ const benefits = [
 export default function PremiumUpgradePrompt({
   title = "Unlock AI Polished Chat",
   description = "Improve your messages with AI before sending.",
+  benefits = defaultBenefits,
   onClose,
   onUpgrade,
   className = "",

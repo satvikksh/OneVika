@@ -185,6 +185,19 @@ export function jobParamsHash(params: JobSearchParams): string {
   return JSON.stringify(params);
 }
 
+/**
+ * First, human-significant token of a location label (e.g. "Bhopal" from
+ * "Bhopal, Madhya Pradesh, India"). Used as the SerpAPI query term for
+ * non-premium location-based requests, where the client never supplies a
+ * keyword — the term is derived server-side from the location.
+ */
+export function jobLocationQuery(location: string): string {
+  const first = location.split(",")[0].trim();
+  return (first || location.trim()).slice(0, 60);
+}
+
+
+
 /** Return cached jobs payload for a cache key if still fresh. */
 export function getCachedJobs(cacheKey: string): unknown | null {
   const entry = jobsCache.get(cacheKey);

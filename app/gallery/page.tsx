@@ -25,8 +25,9 @@ import {
   persistSavedPosts,
   toggleSavedEntry,
 } from "../lib/savedPosts";
+import { SavedRepositoriesSection } from "./saved-repositories";
 
-type GalleryTab = "all" | "posts" | "videos";
+type GalleryTab = "all" | "posts" | "videos" | "repos";
 
 type SavedFeedPost = {
   _id: string;
@@ -95,6 +96,7 @@ export default function GalleryPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<GalleryTab>("all");
+  const [savedRepoCount, setSavedRepoCount] = useState(0);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -178,6 +180,7 @@ export default function GalleryPage() {
     { id: "all", label: "All", count: savedPosts.length },
     { id: "posts", label: "Posts", count: postCount },
     { id: "videos", label: "Videos", count: videoCount },
+    { id: "repos", label: "Repositories", count: savedRepoCount },
   ];
 
   const openPost = (postId: string) =>
@@ -239,14 +242,14 @@ export default function GalleryPage() {
                 Gallery
               </h1>
               <p className="text-xs text-stone-500 dark:text-stone-400">
-                Your saved posts and videos
+                Your saved posts, videos, and repositories
               </p>
             </div>
           </div>
 
-          {savedPosts.length > 0 && (
+          {savedPosts.length + savedRepoCount > 0 && (
             <span className="rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs font-semibold text-stone-600 dark:border-gray-800 dark:bg-white/5 dark:text-stone-300">
-              {savedPosts.length} saved
+              {savedPosts.length + savedRepoCount} saved
             </span>
           )}
         </header>
@@ -278,7 +281,9 @@ export default function GalleryPage() {
         </div>
 
         {/* Content */}
-        {loading && savedPosts.length === 0 ? (
+        {activeTab === "repos" ? (
+          <SavedRepositoriesSection onCountChange={setSavedRepoCount} />
+        ) : loading && savedPosts.length === 0 ? (
           <div className="flex items-center justify-center py-24 text-stone-400">
             <Loader2 className="h-7 w-7 animate-spin text-stone-300 dark:text-stone-500" />
             <span className="ml-2 text-sm">Loading your gallery…</span>

@@ -212,10 +212,18 @@ function normalizeArticles(raw: unknown[]): NewsArticle[] {
   return articles;
 }
 
-/** Query Serper's Google News endpoint for a location. */
-export async function fetchNews(location: string): Promise<NewsArticle[]> {
+/**
+ * Query Serper's Google News endpoint for a location. Premium users may
+ * additionally pass a keyword (`keyword`) which overrides the location-derived
+ * term; non-premium requests never supply one (enforced in the API route).
+ */
+export async function fetchNews(
+  location: string,
+  keyword?: string
+): Promise<NewsArticle[]> {
+  const term = keyword?.trim() ? keyword.trim().slice(0, 60) : cityFromLocation(location);
   const data = await serperRequest<{ news?: unknown[] }>("/news", {
-    q: cityFromLocation(location),
+    q: term,
     gl: "in",
     hl: "en",
     num: 12,

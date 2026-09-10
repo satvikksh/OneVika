@@ -10,6 +10,7 @@ import {
   ExternalLink,
   Loader2,
   LocateFixed,
+  Lock,
   MapPin,
   Newspaper,
   RotateCw,
@@ -20,6 +21,10 @@ import {
 } from "lucide-react";
 import { PremiumAmbient } from "@/app/components/premium-ambient";
 import { useUserAvatar } from "@/app/hooks/useUserAvatar";
+import {
+  PremiumSearchPromptModal,
+  usePremiumSearchPrompt,
+} from "@/app/components/premium-search-lock";
 
 type NewsArticle = {
   id: string;
@@ -164,6 +169,12 @@ export default function DiscoverPage() {
   const router = useRouter();
   const { status: authStatus } = useSession();
   const { isPremium } = useUserAvatar();
+  const premiumPrompt = usePremiumSearchPrompt();
+
+  const isPremiumRef = useRef(isPremium);
+  useEffect(() => {
+    isPremiumRef.current = isPremium;
+  }, [isPremium]);
 
   const [geoState, setGeoState] = useState<GeoState>("idle");
   const [location, setLocation] = useState<string | null>(null);
@@ -292,6 +303,10 @@ export default function DiscoverPage() {
   }, [authStatus, router]);
 
   const handleSearchChange = (value: string) => {
+    if (!isPremiumRef.current && location) {
+      premiumPrompt.openPrompt();
+      return;
+    }
     setSearchInput(value);
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     const trimmed = value.trim();
@@ -308,6 +323,10 @@ export default function DiscoverPage() {
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     const trimmed = searchInput.trim();
     if (!trimmed) return;
+    if (!isPremiumRef.current && location) {
+      premiumPrompt.openPrompt();
+      return;
+    }
     setGeoState("searched");
     void fetchNews(trimmed);
   };
@@ -329,6 +348,9 @@ export default function DiscoverPage() {
   const emptyResults = !newsLoading && !newsError && news.length === 0 && Boolean(location);
   const locationBlocked =
     geoState === "denied" || geoState === "unsupported" || (geoState === "failed" && !location);
+  // Non-premium users keep location-based news (free), but the keyword search
+  // box is replaced by a locked Premium Search affordance once a location is set.
+  const searchLocked = !isPremium && Boolean(location);
 
   /* ── Loading / unauth gates ── */
   if (authStatus === "loading") {
@@ -424,36 +446,73 @@ export default function DiscoverPage() {
             {/* Search form */}
             <form onSubmit={handleSearchSubmit} className="w-full sm:max-w-sm">
               <label className="sr-only" htmlFor="discover-location">
-                Change location
+                Search location or news
               </label>
-              <div className="relative">
-                <Search
-                  size={16}
-                  className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40"
-                />
-                <input
-                  id="discover-location"
-                  type="text"
-                  value={searchInput}
-                  onChange={(e) => handleSearchChange(e.target.value)}
-                  placeholder="Search location, e.g. Delhi"
-                  autoComplete="off"
-                  spellCheck={false}
-                  className="w-full rounded-xl border border-white/10 bg-black/40 py-2.5 pl-10 pr-20 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-amber-300/40 focus:ring-2 focus:ring-amber-300/20"
-                />
-                {locationBlocked && (
-                  <button
-                    type="button"
-                    onClick={() => detectLocation()}
-                    className="absolute right-1.5 top-1/2 inline-flex -translate-y-1/2 items-center gap-1 rounded-lg bg-cyan-500/15 px-2 py-1.5 text-[11px] font-semibold text-cyan-200 ring-1 ring-cyan-400/20 transition hover:bg-cyan-500/25"
-                  >
-                    <LocateFixed size={12} />
-                    Use mine
-                  </button>
-                )}
-              </div>
+              {searchLocked ? (
+                <button
+                  type="button"
+                  onClick={premiumPrompt.openPrompt}
+                  className="flex w-full items-center gap-2.5 rounded-xl border border-dashed border-amber-300/30 bg-amber-300/[0.08] py-2.5 pl-3.5 pr-3 text-left transition hover:bg-amber-300/[0.14]"
+                  aria-label="Premium Search — upgrade to search local news by keyword"
+                >
+                  <Lock size={15} className="shrink-0 text-amber-300" />
+                  <span className="flex-1 truncate text-sm font-semibold text-white/85">
+                    Premium Search
+                  </span>
+                  <span className="hidden shrink-0 text-[11px] font-semibold text-amber-200/80 sm:inline">
+                    Locked
+                  </span>
+                </button>
+              ) : (
+                <div className="relative">
+                  <Search
+                    size={16}
+                    className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40"
+                  />
+                  <input
+                    id="discover-location"
+                    type="text"
+                    value={searchInput}
+                    onChange={(e) => handleSearchChange(e.target.value)}
+                    placeholder={
+                      isPremium ? "Search location or topic, e.g. Delhi" : "Type a location, e.g. Delhi"
+                    }
+                    autoComplete="off"
+                    spellCheck={false}
+                    className="w-full rounded-xl border border-white/10 bg-black/40 py-2.5 pl-10 pr-20 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-amber-300/40 focus:ring-2 focus:ring-amber-300/20"
+                  />
+                  {locationBlocked && (
+                    <button
+                      type="button"
+                      onClick={() => detectLocation()}
+                      className="absolute right-1.5 top-1/2 inline-flex -translate-y-1/2 items-center gap-1 rounded-lg bg-cyan-500/15 px-2 py-1.5 text-[11px] font-semibold text-cyan-200 ring-1 ring-cyan-400/20 transition hover:bg-cyan-500/25"
+                    >
+                      <LocateFixed size={12} />
+                      Use mine
+                    </button>
+                  )}
+                </div>
+              )}
             </form>
           </div>
+
+          {!isPremium && (
+            <div className="mt-1 flex items-center gap-3 rounded-xl bg-gradient-to-r from-amber-400/12 to-violet-500/12 px-3.5 py-2.5 ring-1 ring-amber-300/20">
+              <Lock size={14} className="shrink-0 text-amber-300" />
+              <p className="flex-1 text-xs leading-relaxed text-white/70">
+                Search local news by keyword with{" "}
+                <span className="font-semibold text-white">Premium</span>. Location-based headlines
+                stay free.
+              </p>
+              <button
+                type="button"
+                onClick={premiumPrompt.openPrompt}
+                className="shrink-0 rounded-lg bg-amber-400/20 px-3 py-1.5 text-[11px] font-semibold text-amber-200 ring-1 ring-amber-300/30 transition hover:bg-amber-400/30"
+              >
+                Upgrade
+              </button>
+            </div>
+          )}
 
           {/* Location status hints */}
           {geoState === "detecting" && (
@@ -575,6 +634,17 @@ export default function DiscoverPage() {
             />
           )}
 
+          {/* Non-premium, no location chosen yet */}
+          {!newsLoading && !newsError && !isDetecting && news.length === 0 && !location && !isPremium && (
+            <StateCard
+              icon={<MapPin size={26} />}
+              title="Browse headlines near you"
+              message="Share your location (or type a city above) for location-based news. Keyword search and topics are Premium features."
+              actionLabel="Use my location"
+              onAction={detectLocation}
+            />
+          )}
+
           {/* News grid */}
           {!newsLoading && !newsError && news.length > 0 && (
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -585,6 +655,12 @@ export default function DiscoverPage() {
           )}
         </section>
       </div>
+
+      <PremiumSearchPromptModal
+        open={premiumPrompt.open}
+        onClose={premiumPrompt.closePrompt}
+        onUpgrade={premiumPrompt.upgrade}
+      />
     </main>
   );
 }
