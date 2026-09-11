@@ -16,11 +16,13 @@ import {
   OTP_RESEND_DELAY_MS,
   sendOtpEmail,
 } from "../../lib/otp";
+import { validateIndianPhone } from "@/lib/validation/phone";
 
 type SignupPayload = {
   name: string;
   email: string;
   password: string;
+  phone: string;
   securityQuestion: string;
   securityAnswer: string;
   file?: File | null;
@@ -35,6 +37,7 @@ async function parseSignupPayload(req: Request): Promise<SignupPayload> {
       name: String(form.get("name") || ""),
       email: String(form.get("email") || ""),
       password: String(form.get("password") || ""),
+      phone: String(form.get("phone") || ""),
       securityQuestion: String(form.get("securityQuestion") || ""),
       securityAnswer: String(form.get("securityAnswer") || ""),
       file: (form.get("file") as File | null) ?? null,
@@ -46,6 +49,7 @@ async function parseSignupPayload(req: Request): Promise<SignupPayload> {
     name: String(json?.name || ""),
     email: String(json?.email || ""),
     password: String(json?.password || ""),
+    phone: String(json?.phone || ""),
     securityQuestion: String(json?.securityQuestion || ""),
     securityAnswer: String(json?.securityAnswer || ""),
   };
@@ -54,7 +58,7 @@ async function parseSignupPayload(req: Request): Promise<SignupPayload> {
 export async function POST(req: Request) {
   try {
     await dbConnect();
-    const { name, email, password, securityQuestion, securityAnswer, file } =
+    const { name, email, password, phone, securityQuestion, securityAnswer, file } =
       await parseSignupPayload(req);
     const normalizedEmail = normalizeEmail(email);
     const validQuestions = new Set(["favoritePet", "favoriteColor", "nickname"]);
@@ -63,10 +67,16 @@ export async function POST(req: Request) {
       !name ||
       !normalizedEmail ||
       !password ||
+      !phone ||
       !securityQuestion ||
       !securityAnswer
     ) {
       return NextResponse.json({ error: "All fields required" }, { status: 400 });
+    }
+
+    const phoneResult = validateIndianPhone(phone);
+    if (phoneResult.valid === false) {
+      return NextResponse.json({ error: phoneResult.error, field: "phone" }, { status: 400 });
     }
 
     if (!validQuestions.has(String(securityQuestion))) {
@@ -126,6 +136,7 @@ export async function POST(req: Request) {
         name: name.trim(),
         passwordHash: hashedPassword,
         avatar: avatarUrl,
+        phone: phoneResult.phone,
         securityQuestion,
         securityAnswer: String(securityAnswer).trim().toLowerCase(),
       },

@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Sparkles, Mail, User, Lock, Eye, EyeOff, Camera } from "lucide-react";
+import { Sparkles, Mail, User, Lock, Eye, EyeOff, Camera, Phone } from "lucide-react";
+import { validateIndianPhone } from "@/app/lib/phone";
 import { signIn, useSession } from "next-auth/react";
 import { FcGoogle } from "react-icons/fc";
 import AvatarCropperModal from "../components/AvatarCropperModal";
@@ -30,8 +31,10 @@ export default function SignupPage() {
   const [form, setForm] = useState({
     name: "",
     email: "",
+    phone: "",
     password: "",
   });
+  const [phoneError, setPhoneError] = useState("");
   const [securityQuestion, setSecurityQuestion] = useState<SecurityKey | "">("");
   const [securityAnswer, setSecurityAnswer] = useState("");
   const [profileFile, setProfileFile] = useState<File | null>(null);
@@ -84,9 +87,18 @@ export default function SignupPage() {
       return;
     }
 
+    const phoneResult = validateIndianPhone(form.phone);
+    if (phoneResult.valid === false) {
+      setPhoneError(phoneResult.error);
+      setSubmitting(false);
+      return;
+    }
+    setPhoneError("");
+
     const payload = new FormData();
     payload.append("name", form.name);
     payload.append("email", form.email);
+    payload.append("phone", phoneResult.phone);
     payload.append("password", form.password);
     payload.append("securityQuestion", securityQuestion);
     payload.append("securityAnswer", securityAnswer.trim());
@@ -195,6 +207,33 @@ export default function SignupPage() {
               className="flex-1 bg-transparent outline-none"
               onChange={(e) => setForm({ ...form, email: e.target.value })}
             />
+          </div>
+
+          {/* Mobile Number */}
+          <div>
+            <div className="flex items-center gap-3 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-3">
+              <Phone className="w-5 h-5 text-gray-500" />
+              <input
+                type="tel"
+                inputMode="numeric"
+                autoComplete="tel-national"
+                placeholder="+919090407368"
+                required
+                className="flex-1 bg-transparent outline-none"
+                value={form.phone}
+                onChange={(e) => {
+                  setForm({ ...form, phone: e.target.value });
+                  setPhoneError("");
+                }}
+              />
+            </div>
+            {phoneError ? (
+              <p className="mt-1 text-sm text-red-600">{phoneError}</p>
+            ) : (
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Valid formats: 9090407368 or +919090407368
+              </p>
+            )}
           </div>
 
           {/* Password */}

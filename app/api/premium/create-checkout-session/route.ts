@@ -24,9 +24,9 @@ import {
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
-  let body: { planKey?: string; couponCode?: string; phone?: string } = {};
+  let body: { planKey?: string; couponCode?: string } = {};
   try {
-    body = (await req.json()) as { planKey?: string; couponCode?: string; phone?: string };
+    body = (await req.json()) as { planKey?: string; couponCode?: string };
   } catch {
     // body optional
   }
@@ -51,13 +51,19 @@ export async function POST(req: Request) {
       );
     }
 
-    // The phone number is the only customer detail collected at purchase time.
-    // Name and email are taken automatically from the authenticated session.
-    // Validate it BEFORE creating any order, transaction or Cashfree session —
-    // an invalid phone never creates an order.
-    const phone = validateIndianPhone(body.phone ?? "");
+    // Use the saved phone from the user's profile — never trust a client-supplied phone.
+    // Validate it BEFORE creating any order, transaction or Cashfree session.
+    const savedPhone = (user as { phone?: unknown }).phone;
+    const phone = validateIndianPhone(String(savedPhone ?? ""));
     if (phone.valid === false) {
-      return NextResponse.json({ error: phone.error, field: "phone" }, { status: 400 });
+      return NextResponse.json(
+        {
+          error: "Please add/update your mobile number in Profile → Basic Details or Settings → Basic Details before purchasing Premium",
+          code: "PHONE_REQUIRED",
+          field: "phone",
+        },
+        { status: 400 }
+      );
     }
 
     // Resolve the premium plan server-side. The client-provided price is never trusted.

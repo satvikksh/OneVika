@@ -8,6 +8,7 @@ import cloudinary from "@/app/lib/cloudinary";
 import { dbConnect } from "@/app/lib/mongodb";
 import User from "@/app/models/User";
 import { rejectIfInactive } from "@/app/lib/user-status";
+import { validateIndianPhone } from "@/lib/validation/phone";
 
 export async function POST(req: Request) {
   try {
@@ -31,12 +32,27 @@ export async function POST(req: Request) {
     const removeAvatar = formData.get("removeAvatar") === "true";
     const file = formData.get("file") as File | null;
 
+    // ✅ Validate phone (ONLY IF PRESENT in the form)
+    const phone = formData.get("phone") as string | null;
+    let validatedPhone: string | null = null;
+    if (phone !== null) {
+      const result = validateIndianPhone(phone);
+      if ("error" in result) {
+        return NextResponse.json(
+          { error: result.error, field: "phone" },
+          { status: 400 }
+        );
+      }
+      validatedPhone = result.phone;
+    }
+
     // ✅ Update text fields FIRST (SAFE)
     const user = await User.findOneAndUpdate(
       { email: session.user.email },
       {
         ...(name !== null && { name }),
         ...(bio !== null && { bio }),
+        ...(validatedPhone !== null && { phone: validatedPhone }),
         isPrivate,
         ...(removeAvatar && { avatar: "" }),
       },

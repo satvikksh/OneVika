@@ -654,24 +654,36 @@ if (postsResponse.ok) {
                     </div>
                   </div>
                 )}
-                {user.phone && (
-                  <div className="flex items-start gap-3">
-                    <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex-shrink-0">
-                      <Phone
-                        size={18}
-                        className="text-blue-600 dark:text-blue-400"
-                      />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        Phone
-                      </p>
-                      <p className="text-gray-900 dark:text-white">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex-shrink-0">
+                    <Phone
+                      size={18}
+                      className="text-blue-600 dark:text-blue-400"
+                    />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      Mobile Number
+                    </p>
+                    {user.phone ? (
+                      <p className="text-gray-900 dark:text-white break-all">
                         {user.phone}
                       </p>
-                    </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-400 dark:text-gray-500">
+                          No mobile number added
+                        </span>
+                        <button
+                          onClick={() => router.push("/profile/edit")}
+                          className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
                 {user.location && (
                   <div className="flex items-start gap-3">
                     <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg flex-shrink-0">

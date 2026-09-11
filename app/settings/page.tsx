@@ -6,12 +6,14 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "../theme-provider";
 import { Settings, Save, RotateCcw, Moon, Sun, Bell, Shield, User, Check, AlertCircle, Camera, Trash2 } from "lucide-react";
 import AvatarCropperModal from "../components/AvatarCropperModal";
+import { validateIndianPhone } from "@/app/lib/phone";
 
 type SettingsState = {
   profile: {
     name: string;
     email: string;
     bio: string;
+    phone: string;
     isPrivate: boolean;
     avatar: string;
   };
@@ -39,6 +41,7 @@ const DEFAULT_SETTINGS: SettingsState = {
     name: "",
     email: "",
     bio: "",
+    phone: "",
     isPrivate: false,
     avatar: "",
   },
@@ -70,6 +73,7 @@ export default function SettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [showSaved, setShowSaved] = useState(false);
+  const [phoneError, setPhoneError] = useState("");
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState("");
   const [removeAvatar, setRemoveAvatar] = useState(false);
@@ -100,6 +104,7 @@ export default function SettingsPage() {
                 name: user.name ?? "",
                 email: user.email ?? "",
                 bio: user.bio ?? "",
+                phone: user.phone ?? "",
                 isPrivate: Boolean(user.isPrivate),
                 avatar: user.avatar ?? user.image ?? "",
               },
@@ -150,6 +155,13 @@ export default function SettingsPage() {
   }, [cropSourceUrl]);
 
   const saveSettings = async () => {
+    const phoneResult = validateIndianPhone(settings.profile.phone);
+    if (phoneResult.valid === false) {
+      setPhoneError(phoneResult.error);
+      return;
+    }
+    setPhoneError("");
+
     setIsSaving(true);
     setSaveError("");
 
@@ -157,6 +169,7 @@ export default function SettingsPage() {
       const formData = new FormData();
       formData.append("name", settings.profile.name);
       formData.append("bio", settings.profile.bio);
+      formData.append("phone", phoneResult.phone);
       formData.append("isPrivate", String(settings.profile.isPrivate));
       formData.append("removeAvatar", String(removeAvatar));
       if (avatarFile) {
@@ -169,6 +182,15 @@ export default function SettingsPage() {
       });
 
       if (!profileRes.ok) {
+        try {
+          const err = await profileRes.json();
+          if (err?.field === "phone") {
+            setPhoneError(err.error ?? "Invalid phone number.");
+            return;
+          }
+        } catch {
+          // Non-JSON error body; fall through to generic error below.
+        }
         throw new Error("profile-save-failed");
       }
 
@@ -191,7 +213,11 @@ export default function SettingsPage() {
             refreshed?.user?.avatar ?? refreshed?.user?.image ?? "";
           setSettings((prev) => ({
             ...prev,
-            profile: { ...prev.profile, avatar: nextAvatar },
+            profile: {
+              ...prev.profile,
+              avatar: nextAvatar,
+              phone: refreshed?.user?.phone ?? prev.profile.phone,
+            },
           }));
         }
       } catch {
@@ -338,6 +364,27 @@ export default function SettingsPage() {
                 />
                 <label className="block text-sm text-white/70">Email</label>
                 <input value={settings.profile.email} disabled className="w-full rounded-xl bg-black/30 border border-white/10 px-4 py-3 text-white/60" />
+                <label className="block text-sm text-white/70">Mobile Number</label>
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  autoComplete="tel-national"
+                  value={settings.profile.phone}
+                  onChange={(e) => {
+                    setSettings((s) => ({ ...s, profile: { ...s.profile, phone: e.target.value } }));
+                    setPhoneError("");
+                  }}
+                  aria-invalid={Boolean(phoneError)}
+                  className="w-full rounded-xl bg-black/40 border border-white/10 px-4 py-3 outline-none"
+                />
+                {phoneError ? (
+                  <p className="text-sm text-rose-300 flex items-center gap-1">
+                    <AlertCircle size={14} />
+                    {phoneError}
+                  </p>
+                ) : (
+                  <p className="text-xs text-white/50">Valid formats: 9090407368 or +919090407368</p>
+                )}
                 <label className="block text-sm text-white/70">Bio</label>
                 <textarea
                   value={settings.profile.bio}

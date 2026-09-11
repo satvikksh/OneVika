@@ -19,6 +19,7 @@ export interface IOtpChallenge {
     name: string;
     passwordHash: string;
     avatar?: string;
+    phone: string;
     securityQuestion: "favoritePet" | "favoriteColor" | "nickname";
     securityAnswer: string;
   };
@@ -48,6 +49,7 @@ const OtpChallengeSchema = new Schema<IOtpChallenge>(
         name: { type: String, required: true },
         passwordHash: { type: String, required: true },
         avatar: { type: String, default: "" },
+        phone: { type: String, required: true, default: "" },
         securityQuestion: {
           type: String,
           enum: ["favoritePet", "favoriteColor", "nickname"],

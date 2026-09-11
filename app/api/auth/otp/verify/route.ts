@@ -65,6 +65,7 @@ export async function POST(req: Request) {
         password: pending.passwordHash,
         avatar: pending.avatar || "",
         image: pending.avatar || "",
+        phone: pending.phone ?? "",
         ...answerFields,
       });
 

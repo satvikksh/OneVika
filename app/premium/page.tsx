@@ -18,7 +18,6 @@ import {
 } from "lucide-react";
 
 import { PremiumBadge } from "@/app/components/premium-ui";
-import { validateIndianPhone } from "@/app/lib/phone";
 
 type Plan = {
   key: string;
@@ -136,7 +135,7 @@ function savingLabel(durationDays: number, priceRupees: number) {
 
 export default function PremiumPage() {
   const router = useRouter();
-  const { status: authStatus, data: session } = useSession();
+  const { status: authStatus } = useSession();
 
   const [plans, setPlans] = useState<Plan[]>(FALLBACK_PLANS);
   const [plansLoading, setPlansLoading] = useState(true);
@@ -144,9 +143,6 @@ export default function PremiumPage() {
   const [selectedKey, setSelectedKey] = useState<string>("yearly");
   const [buyingKey, setBuyingKey] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice>(null);
-  const [phonePromptKey, setPhonePromptKey] = useState<string | null>(null);
-  const [phoneValue, setPhoneValue] = useState("");
-  const [phoneError, setPhoneError] = useState<string | null>(null);
 
   const fetchStatus = useCallback(async () => {
     if (authStatus !== "authenticated") {
@@ -205,33 +201,15 @@ export default function PremiumPage() {
   const isAuthenticated = authStatus === "authenticated";
   const isPremiumMember = Boolean(status?.isPremium);
 
-  const onBuy = useCallback(
-    (planKey: string) => {
-      setNotice(null);
-      if (!isAuthenticated) {
-        router.push("/login?callbackUrl=/premium");
-        return;
-      }
-      if (isPremiumMember) {
-        setNotice({ kind: "info", text: "You already have active Premium." });
-        return;
-      }
-      setPhoneError(null);
-      setPhoneValue("");
-      setPhonePromptKey(planKey);
-    },
-    [isAuthenticated, isPremiumMember, router],
-  );
-
   const runCheckout = useCallback(
-    async (planKey: string, phone: string) => {
+    async (planKey: string) => {
       setNotice(null);
       setBuyingKey(planKey);
       try {
         const res = await fetch("/api/premium/create-checkout-session", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ planKey, phone }),
+          body: JSON.stringify({ planKey }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -315,42 +293,31 @@ export default function PremiumPage() {
         setNotice({ kind: "error", text: err instanceof Error ? err.message : "Unable to start premium checkout." });
       } finally {
         setBuyingKey(null);
-        setPhonePromptKey(null);
-        setPhoneValue("");
-        setPhoneError(null);
       }
     },
     [fetchStatus],
   );
 
-  const submitPhone = useCallback(
+  const onBuy = useCallback(
     (planKey: string) => {
-      const result = validateIndianPhone(phoneValue);
-      if (result.valid === false) {
-        setNotice(null);
-        setPhoneError(result.error);
+      setNotice(null);
+      if (!isAuthenticated) {
+        router.push("/login?callbackUrl=/premium");
         return;
       }
-      setPhoneError(null);
-      void runCheckout(planKey, result.phone);
+      if (isPremiumMember) {
+        setNotice({ kind: "info", text: "You already have active Premium." });
+        return;
+      }
+      void runCheckout(planKey);
     },
-    [phoneValue, runCheckout],
+    [isAuthenticated, isPremiumMember, router, runCheckout],
   );
 
   const sortedPlans = useMemo(
     () => [...plans].sort((a, b) => a.displayOrder - b.displayOrder),
     [plans],
   );
-
-  const promptedPlan = phonePromptKey ? sortedPlans.find((p) => p.key === phonePromptKey) : null;
-  const promptedPrice = promptedPlan
-    ? Number.isFinite(promptedPlan.priceRupees) && promptedPlan.priceRupees > 0
-      ? promptedPlan.priceRupees
-      : Math.round(promptedPlan.pricePaise / 100)
-    : 0;
-  const promptedLabel = promptedPlan
-    ? `${promptedPlan.name} · ₹${promptedPrice} · ${promptedPlan.durationDays} days`
-    : "";
 
   const expiryLabel = status?.premiumExpiresAt
     ? new Date(status.premiumExpiresAt).toLocaleDateString(undefined, {
@@ -597,103 +564,6 @@ export default function PremiumPage() {
                     </div>
                   );
                 })}
-              </div>
-            )}
-
-            {phonePromptKey && (
-              <div className="mx-auto mt-8 max-w-xl rounded-3xl border border-amber-300/30 bg-gradient-to-br from-amber-400/10 via-stone-950/95 to-stone-950/95 p-6 shadow-[0_0_36px_-12px_rgba(212,167,44,0.5)] sm:p-8">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-lg font-black">Almost there</p>
-                  <span className="rounded-full border border-amber-300/30 bg-amber-400/10 px-3 py-1 text-xs font-bold text-amber-200">
-                    {promptedLabel}
-                  </span>
-                </div>
-                <p className="mt-2 text-sm leading-6 text-white/65">
-                  We only need your phone number to set up the secure payment. Your name and
-                  email are taken from your OrbitByte account automatically.
-                </p>
-
-                <label htmlFor="premium-phone" className="mt-6 block text-sm font-bold text-white/80">
-                  Phone number
-                </label>
-                <div className="mt-2 flex items-stretch gap-2">
-                  <div className="flex items-center justify-center rounded-2xl border border-white/15 bg-white/5 px-4 text-sm font-bold text-white/70">
-                    +91
-                  </div>
-                  <input
-                    id="premium-phone"
-                    type="tel"
-                    inputMode="numeric"
-                    autoComplete="tel-national"
-                    placeholder="9090407368"
-                    value={phoneValue}
-                    onChange={(event) => {
-                      setPhoneValue(event.target.value);
-                      if (phoneError) setPhoneError(null);
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        submitPhone(phonePromptKey ?? "");
-                      }
-                    }}
-                    disabled={buyingKey === phonePromptKey}
-                    aria-invalid={Boolean(phoneError)}
-                    className="w-full rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-amber-300/50 focus:bg-white/10 disabled:opacity-60"
-                  />
-                </div>
-                {phoneError ? (
-                  <p className="mt-2 text-sm font-semibold text-red-300" role="alert">
-                    {phoneError}
-                  </p>
-                ) : (
-                  <p className="mt-2 text-xs text-white/40">
-                    Valid formats: 9090407368 or +919090407368
-                  </p>
-                )}
-
-                {(session?.user?.name || session?.user?.email) && (
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {session?.user?.name && (
-                      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">
-                        {session.user.name}
-                      </span>
-                    )}
-                    {session?.user?.email && (
-                      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">
-                        {session.user.email}
-                      </span>
-                    )}
-                  </div>
-                )}
-
-                <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPhonePromptKey(null);
-                      setPhoneError(null);
-                    }}
-                    disabled={buyingKey === phonePromptKey}
-                    className="rounded-full border border-white/15 bg-white/5 px-5 py-3 text-sm font-bold text-white/80 transition hover:bg-white/10 disabled:opacity-60"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => submitPhone(phonePromptKey ?? "")}
-                    disabled={buyingKey === phonePromptKey}
-                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-gradient-to-r from-amber-400 via-yellow-300 to-rose-300 px-5 py-3 text-sm font-black text-stone-950 shadow-lg shadow-amber-500/25 transition hover:brightness-105 active:scale-[0.98] disabled:opacity-60"
-                  >
-                    <Crown className="h-4 w-4" />
-                    {buyingKey === phonePromptKey
-                      ? "Starting payment..."
-                      : `Confirm & Pay ₹${promptedPrice}`}
-                  </button>
-                </div>
-                <p className="mt-3 text-center text-xs text-white/40">
-                  Securely processed by Cashfree (UPI, cards & netbanking).
-                </p>
               </div>
             )}
 

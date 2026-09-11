@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Save, Upload, Trash2, ArrowLeft } from "lucide-react";
+import { validateIndianPhone } from "@/app/lib/phone";
 
 export default function EditProfilePage() {
   const { data: session, status } = useSession();
@@ -18,7 +19,10 @@ export default function EditProfilePage() {
     bio: "",
     avatar: "",
     isPrivate: false,
+    phone: "",
   });
+
+  const [phoneError, setPhoneError] = useState<string | null>(null);
 
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [removeAvatar, setRemoveAvatar] = useState(false);
@@ -42,6 +46,7 @@ export default function EditProfilePage() {
           bio: data.user.bio ?? "",
           avatar: data.user.avatar ?? "",
           isPrivate: Boolean(data.user.isPrivate),
+          phone: data.user.phone ?? "",
         });
       } catch (err) {
         console.error("PROFILE LOAD ERROR", err);
@@ -58,10 +63,18 @@ export default function EditProfilePage() {
     try {
       setSaving(true);
 
+      const phoneResult = validateIndianPhone(form.phone);
+      if ("error" in phoneResult) {
+        setPhoneError(phoneResult.error);
+        return;
+      }
+      setPhoneError(null);
+
       const formData = new FormData();
       formData.append("name", form.name);
       formData.append("bio", form.bio);
       formData.append("isPrivate", String(form.isPrivate));
+      formData.append("phone", phoneResult.phone);
 
       if (uploadFile) {
         formData.append("file", uploadFile);
@@ -180,6 +193,26 @@ export default function EditProfilePage() {
           onChange={(e) => setForm({ ...form, bio: e.target.value })}
           className="w-full p-3 border rounded-xl h-32"
         />
+      </div>
+
+      {/* Mobile Number */}
+      <div className="mt-4">
+        <p className="mb-1 font-semibold">Mobile Number</p>
+        <input
+          type="tel"
+          inputMode="numeric"
+          autoComplete="tel-national"
+          value={form.phone}
+          onChange={(e) => {
+            setForm({ ...form, phone: e.target.value });
+            if (phoneError) setPhoneError(null);
+          }}
+          placeholder="e.g. +91 98765 43210"
+          className="w-full p-3 border rounded-xl"
+        />
+        {phoneError && (
+          <p className="mt-1 text-sm text-red-600">{phoneError}</p>
+        )}
       </div>
 
       {/* Privacy */}

@@ -21,6 +21,12 @@ export interface IUser extends Document {
   favoritePet?: string;
   favoriteColor?: string;
   nickname?: string;
+
+  // 📱 REQUIRED MOBILE NUMBER — validated Indian mobile (`validateIndianPhone`),
+  // stored on the account, editable via Profile / Settings → Basic Details,
+  // auto-reused at Premium purchase. Never `0`, empty or invalid.
+  phone: string;
+
   provider: "credentials" | "google";
   image?: string;
   isAI?: boolean;
@@ -109,6 +115,15 @@ const UserSchema = new Schema<IUser>(
       trim: true,
     },
     nickname: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    // 📱 REQUIRED MOBILE NUMBER (collected at registration, editable in
+    // Profile / Settings → Basic Details, reused automatically at Premium
+    // purchase). Never `0`, empty or invalid — validated via validateIndianPhone.
+    phone: {
       type: String,
       default: "",
       trim: true,

@@ -36,6 +36,7 @@ export async function GET() {
   return NextResponse.json({
     user: {
       ...user,
+      phone: (user as unknown as { phone?: string }).phone ?? "",
       isPremium: isPremiumActive(user as { isPremium?: boolean; premiumExpiresAt?: Date | string | null }),
       followersCount,
       followingCount,
